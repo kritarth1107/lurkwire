@@ -46,9 +46,35 @@ flowchart LR
   LLM --> Local[Ollama / LM Studio / OpenAI-compatible]
 ```
 
+## Repository layout
+
+- `apps/desktop` — Electron shell (React + Vite)
+- `crates/lurkwire-proxy` — Rust intercepting proxy sidecar
+- `docs/PROGRESS.md` — module checklist
+
+## Development
+
+Prerequisites: Node 20+, Rust (cargo/rustc), and the usual Linux desktop libraries Electron needs (GTK, NSS).
+
+```bash
+# from the repo root
+npm install
+npm test              # proxy tests + desktop unit tests
+npm run build:proxy:debug
+npm run dev           # build the sidecar, then start the desktop app
+```
+
+Useful splits:
+
+```bash
+npm run dev:proxy     # cargo run -p lurkwire-proxy
+npm run dev:ui        # Electron UI only
+npm run build         # release sidecar + packaged renderer/main
+```
+
 ## Roadmap
 
-Linux first, then macOS and Windows.
+Linux first, then macOS and Windows. See [docs/PROGRESS.md](docs/PROGRESS.md) for the module-by-module checklist.
 
 ## Disclaimer
 

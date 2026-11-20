@@ -1,0 +1,31 @@
+{
+  "name": "lurkwire",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-native security browser with a built-in intercepting proxy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kritarth1107/lurkwire.git"
+  },
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "npm run build:proxy:debug && npm run dev -w @lurkwire/desktop",
+    "dev:ui": "npm run dev -w @lurkwire/desktop",
+    "dev:proxy": "cargo run -p lurkwire-proxy",
+    "build": "npm run build:proxy && npm run build -w @lurkwire/desktop",
+    "build:proxy": "cargo build --release -p lurkwire-proxy",
+    "build:proxy:debug": "cargo build -p lurkwire-proxy",
+    "test": "npm run test:proxy && npm run test -w @lurkwire/desktop",
+    "test:proxy": "cargo test -p lurkwire-proxy"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "allowScripts": {
+    "electron@39.8.10": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true
+  }
+}

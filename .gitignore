@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+out/
+target/
+release/
+apps/desktop/release/
+*.tsbuildinfo
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Secrets and local data
+.data/
+.env
+.env.*
+!.env.example
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+
+# Databases
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+
+# Coverage
+coverage/

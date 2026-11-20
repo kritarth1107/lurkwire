@@ -1,0 +1,12 @@
+[package]
+name = "lurkwire-proxy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Lurkwire intercepting proxy sidecar"
+publish = false
+
+[[bin]]
+name = "lurkwire-proxy"
+path = "src/main.rs"
