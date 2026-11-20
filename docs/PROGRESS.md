@@ -15,4 +15,4 @@ Build order for v0.1. Checked items are on `main`.
 - [ ] 11. Passive scanner and anomaly flags
 - [ ] 12. Recon panel (crt.sh, DNS, RDAP/WHOIS, Wayback, optional Shodan BYO key)
 - [ ] 13. OOB collaborator via interactsh client
-- [ ] 14. Linux packaging (AppImage and deb via electron-builder)
+- [x] 14. Linux packaging (AppImage and deb via electron-builder)

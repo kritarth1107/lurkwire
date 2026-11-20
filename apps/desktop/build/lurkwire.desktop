@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Lurkwire
+Comment=AI-native security browser with a built-in intercepting proxy
+Exec=lurkwire %U
+Icon=lurkwire
+Terminal=false
+Type=Application
+Categories=Network;Security;Development;
+StartupWMClass=Lurkwire
+StartupNotify=true

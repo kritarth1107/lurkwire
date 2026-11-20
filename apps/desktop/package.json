@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && electron-vite build",
     "preview": "electron-vite preview",
     "test": "tsc --noEmit && vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dist:linux": "electron-builder --linux AppImage deb"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -21,10 +22,67 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@vitejs/plugin-react": "^5.1.0",
-    "electron": "^39.2.3",
+    "electron": "39.8.10",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^5.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
     "vitest": "^4.0.8"
-  }
+  },
+  "author": "Kritarth Agrawal <44940694+kritarth1107@users.noreply.github.com>",
+  "homepage": "https://lurkwire.com",
+  "build": {
+    "appId": "com.lurkwire.app",
+    "productName": "Lurkwire",
+    "copyright": "Copyright \u00a9 Kritarth Agrawal",
+    "asar": true,
+    "npmRebuild": false,
+    "directories": {
+      "output": "../../dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../target/release/lurkwire-proxy",
+        "to": "lurkwire-proxy"
+      }
+    ],
+    "afterPack": "./build/afterPack.cjs",
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Network",
+      "icon": "build/icons",
+      "executableName": "lurkwire",
+      "synopsis": "AI-native security browser with a built-in intercepting proxy",
+      "description": "Lurkwire is an AI-native security browser with a built-in intercepting proxy, Repeater, and related tooling.",
+      "desktop": {
+        "entry": {
+          "Name": "Lurkwire",
+          "Comment": "AI-native security browser with a built-in intercepting proxy",
+          "Type": "Application",
+          "Terminal": "false",
+          "Categories": "Network;Security;Development;",
+          "StartupWMClass": "Lurkwire",
+          "StartupNotify": "true",
+          "Icon": "lurkwire"
+        }
+      },
+      "syncDesktopName": true
+    },
+    "deb": {
+      "packageName": "lurkwire",
+      "priority": "optional",
+      "artifactName": "lurkwire_${version}_${arch}.${ext}"
+    },
+    "electronVersion": "39.8.10"
+  },
+  "desktopName": "Lurkwire"
 }

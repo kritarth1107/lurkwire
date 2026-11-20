@@ -86,6 +86,23 @@ curl -sS -H "Authorization: Bearer <token from the ready line>" http://127.0.0.1
 
 The per-install CA is written to `<data-dir>/ca.pem` and is intended to be trusted only inside Lurkwire, not installed system-wide. The control API requires the bearer token on every route, including `/health`.
 
+
+## Install on Linux
+
+Build the desktop packages (release sidecar, Electron app, AppImage, and deb):
+
+```bash
+npm run dist:linux
+```
+
+Artifacts are written to `dist/` at the repo root, including a `.deb` and an `.AppImage`. Install the deb (this also adds Lurkwire to the Ubuntu app menu):
+
+```bash
+sudo apt install ./dist/lurkwire_*.deb
+```
+
+Or run the AppImage in place after making it executable (`chmod +x dist/Lurkwire-*.AppImage`).
+
 ## Roadmap
 
 Linux first, then macOS and Windows. See [docs/PROGRESS.md](docs/PROGRESS.md) for the module-by-module checklist.

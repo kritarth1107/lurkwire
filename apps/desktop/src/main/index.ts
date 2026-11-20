@@ -10,6 +10,8 @@ import type {
   ToolId,
 } from "../shared/types";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
+
+app.setName(PRODUCT_NAME);
 import { ControlClient } from "./control";
 import { ProxySidecar } from "./proxy";
 import { TabManager } from "./tabs";
@@ -77,6 +79,7 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 640,
     title: PRODUCT_NAME,
+    icon: join(__dirname, "../../build/icon.png"),
     backgroundColor: "#0c0e12",
     show: false,
     autoHideMenuBar: true,
