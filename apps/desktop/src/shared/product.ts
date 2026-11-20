@@ -1,2 +1,1 @@
-export const PRODUCT_NAME = "Lurkwire";
-export const PRODUCT_VERSION = "0.1.0";
+export { PRODUCT_NAME, PRODUCT_VERSION } from "./types";
