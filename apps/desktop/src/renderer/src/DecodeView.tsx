@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CODEC_LABELS, type CodecId, decodeCodec, hashCodec } from "../../shared/codec";
 import { runRecipe, type RecipeStep } from "../../shared/codecRecipe";
 import {
@@ -9,6 +9,7 @@ import {
   unsignedJwt,
   verifyJwt,
 } from "../../shared/jwt";
+import { takeJwt } from "./pendingJwt";
 
 type Tab = "jwt" | "encode" | "recipe";
 
@@ -40,6 +41,14 @@ function JwtPane() {
   const [alg, setAlg] = useState<JwtAlg>("HS256");
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const queued = takeJwt();
+    if (queued) {
+      load(queued);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const decoded = useMemo(() => {
     const raw = token.trim();

@@ -13,6 +13,8 @@ import { useAppState } from "../useAppState";
 import type { SiteCookie, SiteInfo, SiteStorage, SiteStorageItem } from "../../../shared/siteInfo";
 import { cookiesToNetscape, cookieHeaderList } from "../../../shared/workbench";
 import type { WbCookie } from "../../../shared/workbench";
+import { isJwtLike } from "../../../shared/jwt";
+import { queueJwt } from "../pendingJwt";
 
 export function PanelApp() {
   const state = useAppState();
@@ -625,6 +627,18 @@ function Identity({
                       <button type="button" onClick={() => void window.lurkwire.copyText(`${cookie.name}=${cookie.value}`)}>
                         Copy
                       </button>
+                      {isJwtLike(cookie.value) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            queueJwt(cookie.value);
+                            void window.lurkwire.setTool("decode");
+                            close();
+                          }}
+                        >
+                          JWT
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => {

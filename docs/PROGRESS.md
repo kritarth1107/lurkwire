@@ -72,4 +72,5 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 - [x] Site info cookie manager (show/copy/delete/clear, Netscape export) and tab localStorage/sessionStorage inspector
 - [x] Client-streaming and bidirectional gRPC via a JSON array of messages
 - [x] In-scope CORS preflight retest from History (Origin: https://lurkwire.example)
+- [x] Send a captured JWT from History or a site-info cookie into the Decoder
 - [ ] Remaining ideas (routing gRPC/WS through the MITM proxy)

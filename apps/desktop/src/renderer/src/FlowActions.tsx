@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { FlowDetail, FlowSummary } from "../../shared/types";
+import type { FlowDetail, FlowSummary, HeaderPair } from "../../shared/types";
 import { HIGHLIGHT_COLORS, highlightOf, setHighlight, type HighlightColor } from "../../shared/flowMeta";
 import { addComparerItem } from "./workbench";
 import { buildCsrfPoc } from "../../shared/csrf";
@@ -7,6 +7,8 @@ import { buildClickjackPoc } from "../../shared/clickjack";
 import { base64ToBytes, fromBytes } from "../../shared/codec";
 import { flowToCurl } from "../../shared/http";
 import { analyzeCors, corsProbeHeaders } from "../../shared/corsProbe";
+import { extractJwts } from "../../shared/jwt";
+import { queueJwt } from "./pendingJwt";
 import { analyzeSecurityHeaders, formatSecurityReport } from "../../shared/securityHeaders";
 
 export type FlowSendHandlers = {
@@ -70,6 +72,41 @@ export async function copyFlowCurl(id: string): Promise<void> {
   await window.lurkwire.copyText(flowToCurl(flow, body || undefined));
 }
 
+
+
+export async function sendJwtToDecoder(id: string): Promise<void> {
+  const flow = await window.lurkwire.getFlow(id);
+  const chunks = [
+    flow.url,
+    ...flow.req_headers.map((header: HeaderPair) => `${header.name}: ${header.value}`),
+    ...flow.resp_headers.map((header: HeaderPair) => `${header.name}: ${header.value}`),
+    flow.req_preview ?? "",
+    flow.resp_preview ?? "",
+  ];
+  try {
+    const raw = await window.lurkwire.getFlowBody(id, "req");
+    if (raw) {
+      chunks.push(fromBytes(base64ToBytes(raw)));
+    }
+  } catch {
+    /* preview is enough */
+  }
+  try {
+    const raw = await window.lurkwire.getFlowBody(id, "resp");
+    if (raw) {
+      chunks.push(fromBytes(base64ToBytes(raw)));
+    }
+  } catch {
+    /* preview is enough */
+  }
+  const tokens = extractJwts(chunks.join("\n"));
+  const token = tokens[0];
+  if (!token) {
+    throw new Error("No JWT was found in this request or response.");
+  }
+  queueJwt(token);
+  await window.lurkwire.setTool("decode");
+}
 
 export async function retestCors(id: string): Promise<string> {
   const flow = await window.lurkwire.getFlow(id);
@@ -208,6 +245,9 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void retestCors(menu.flow.id).then((summary) => window.alert(summary))}>
         Retest CORS
+      </button>
+      <button type="button" onClick={() => void sendJwtToDecoder(menu.flow.id)}>
+        Send JWT to Decoder
       </button>
     </div>
   );

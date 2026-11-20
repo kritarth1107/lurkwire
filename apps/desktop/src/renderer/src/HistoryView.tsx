@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, formatTime, shortMime, statusClass } from "../../shared/http";
 import { flowTitle, highlightOf, tlsLabel } from "../../shared/flowMeta";
-import { AnnotationBar, addFlowHostToScope, copyClickjackPoc, copyCsrfPoc, copyFlowCurl, copySecurityHeaderReport, retestCors, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { AnnotationBar, addFlowHostToScope, copyClickjackPoc, copyCsrfPoc, copyFlowCurl, copySecurityHeaderReport, retestCors, sendJwtToDecoder, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
 import { flowsToHar, harToString, type HarBody, type HarFlowInput } from "../../shared/harExport";
 import { downloadText } from "./downloadText";
 import { HttpViewer } from "./HttpViewer";
@@ -290,6 +290,14 @@ export function HistoryView({ projectId, handlers }: Props) {
               }}
             >
               Retest CORS
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void sendJwtToDecoder(detail.id).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+              }}
+            >
+              Send JWT to Decoder
             </button>
           </>
         ) : null}
