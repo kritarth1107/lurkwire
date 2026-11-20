@@ -1,0 +1,239 @@
+import { useMemo, useState } from "react";
+import { CODEC_LABELS, type CodecId, decodeCodec, hashCodec } from "../../shared/codec";
+import {
+  type JwtAlg,
+  decodeJwt,
+  extractJwts,
+  signJwt,
+  unsignedJwt,
+  verifyJwt,
+} from "../../shared/jwt";
+
+type Tab = "jwt" | "encode";
+
+export function DecodeView() {
+  const [tab, setTab] = useState<Tab>("jwt");
+  return (
+    <div className="decode">
+      <div className="workbench-toolbar">
+        <button type="button" className={tab === "jwt" ? "chip active" : "chip"} onClick={() => setTab("jwt")}>
+          JWT
+        </button>
+        <button type="button" className={tab === "encode" ? "chip active" : "chip"} onClick={() => setTab("encode")}>
+          Encode
+        </button>
+      </div>
+      {tab === "jwt" ? <JwtPane /> : <EncodePane />}
+    </div>
+  );
+}
+
+function JwtPane() {
+  const [token, setToken] = useState("");
+  const [header, setHeader] = useState("{\n  \"alg\": \"HS256\",\n  \"typ\": \"JWT\"\n}");
+  const [payload, setPayload] = useState("{\n  \"sub\": \"\",\n  \"name\": \"\"\n}");
+  const [secret, setSecret] = useState("");
+  const [alg, setAlg] = useState<JwtAlg>("HS256");
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const decoded = useMemo(() => {
+    const raw = token.trim();
+    if (!raw) {
+      return null;
+    }
+    try {
+      return decodeJwt(raw);
+    } catch {
+      return null;
+    }
+  }, [token]);
+
+  function load(next: string) {
+    setToken(next);
+    setError(null);
+    try {
+      const parsed = decodeJwt(next);
+      setHeader(parsed.headerText);
+      setPayload(parsed.payloadText);
+      if (parsed.alg === "HS256" || parsed.alg === "HS384" || parsed.alg === "HS512" || parsed.alg === "none") {
+        setAlg(parsed.alg);
+      }
+      setStatus(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function onVerify() {
+    setError(null);
+    try {
+      const result = await verifyJwt(token, secret);
+      setStatus(result.ok ? `Signature OK (${result.alg})` : result.reason ?? "Signature mismatch");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function onSign() {
+    setError(null);
+    try {
+      const next = alg === "none" ? unsignedJwt(header, payload) : await signJwt(header, payload, secret, alg);
+      setToken(next);
+      setStatus(alg === "none" ? "Issued unsigned token (alg none)" : `Signed with ${alg}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const found = extractJwts(token).filter((item) => item !== token.trim());
+
+  return (
+    <div className="decode-pane">
+      <label className="intruder-label">
+        Token or cookie
+        <textarea
+          className="mono"
+          rows={5}
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          onBlur={() => {
+            if (token.trim()) {
+              load(token);
+            }
+          }}
+          spellCheck={false}
+          placeholder="Paste a JWT or a Cookie header"
+        />
+      </label>
+      {found.length > 0 ? (
+        <div className="intruder-actions">
+          {found.map((item) => (
+            <button type="button" key={item} className="chip" onClick={() => load(item)}>
+              Use found JWT
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <label className="intruder-label">
+        Header
+        <textarea className="mono" rows={5} value={header} onChange={(event) => setHeader(event.target.value)} spellCheck={false} />
+      </label>
+      <label className="intruder-label">
+        Payload
+        <textarea className="mono" rows={7} value={payload} onChange={(event) => setPayload(event.target.value)} spellCheck={false} />
+      </label>
+      {decoded?.claims.iat || decoded?.claims.exp || decoded?.claims.nbf ? (
+        <p className="muted">
+          {decoded.claims.iat ? `iat ${decoded.claims.iat}` : ""}
+          {decoded.claims.nbf ? ` · nbf ${decoded.claims.nbf}` : ""}
+          {decoded.claims.exp ? ` · exp ${decoded.claims.exp}` : ""}
+        </p>
+      ) : null}
+      <div className="intruder-controls">
+        <label>
+          Algorithm
+          <select value={alg} onChange={(event) => setAlg(event.target.value as JwtAlg)}>
+            <option value="HS256">HS256</option>
+            <option value="HS384">HS384</option>
+            <option value="HS512">HS512</option>
+            <option value="none">none</option>
+          </select>
+        </label>
+        <label>
+          HMAC secret
+          <input
+            type="text"
+            value={secret}
+            onChange={(event) => setSecret(event.target.value)}
+            placeholder="required for HS*"
+            spellCheck={false}
+          />
+        </label>
+      </div>
+      <div className="intruder-actions">
+        <button type="button" onClick={() => token.trim() && load(token)}>
+          Decode
+        </button>
+        <button type="button" onClick={() => void onVerify()} disabled={!token.trim()}>
+          Verify
+        </button>
+        <button type="button" className="primary" onClick={() => void onSign()}>
+          {alg === "none" ? "Issue unsigned" : "Re-sign"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void window.lurkwire.copyText(token);
+            setStatus("Copied token");
+          }}
+          disabled={!token}
+        >
+          Copy
+        </button>
+      </div>
+      {status ? <p className="muted">{status}</p> : null}
+      {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+function EncodePane() {
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(id: CodecId, direction: "encode" | "decode") {
+    setError(null);
+    try {
+      const meta = CODEC_LABELS.find((item) => item.id === id);
+      if (direction === "decode") {
+        setOutput(decodeCodec(id, input));
+        return;
+      }
+      setOutput(meta?.hash ? await hashCodec(id, input) : await hashCodec(id, input));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="decode-pane">
+      <label className="intruder-label">
+        Input
+        <textarea className="mono" rows={6} value={input} onChange={(event) => setInput(event.target.value)} spellCheck={false} />
+      </label>
+      <div className="codec-grid">
+        {CODEC_LABELS.map((codec) => (
+          <div key={codec.id} className="codec-row">
+            <span>{codec.label}</span>
+            <button type="button" onClick={() => void run(codec.id, "encode")}>
+              {codec.hash ? "Hash" : "Encode"}
+            </button>
+            {codec.hash ? null : (
+              <button type="button" onClick={() => void run(codec.id, "decode")}>
+                Decode
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="intruder-actions">
+        <button
+          type="button"
+          onClick={() => {
+            setInput(output);
+            setOutput(input);
+          }}
+        >
+          Swap
+        </button>
+      </div>
+      <label className="intruder-label">
+        Output
+        <textarea className="mono" rows={6} value={output} onChange={(event) => setOutput(event.target.value)} spellCheck={false} />
+      </label>
+      {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { History, Repeat, ShieldOff, Crosshair, Radar, Globe, MessageSquare, Settings, Minus, Plus } from "lucide-react";
+import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, Settings, Minus, Plus } from "lucide-react";
 import type {
   AppSnapshot,
   DownloadInfo,
@@ -240,6 +240,7 @@ function LurkwireMenu() {
     { id: "intercept", label: "Intercept", icon: ShieldOff },
     { id: "repeater", label: "Repeater", icon: Repeat },
     { id: "intruder", label: "Intruder", icon: Crosshair },
+    { id: "decode", label: "Decode", icon: KeyRound },
     { id: "scanner", label: "Scanner", icon: Radar },
     { id: "recon", label: "Recon", icon: Globe },
     { id: "ai", label: "AI", icon: MessageSquare },

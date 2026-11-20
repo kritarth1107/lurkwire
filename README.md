@@ -18,7 +18,7 @@ Lurkwire is an AI-native security browser for developers, pentesters, and bug bo
 - Intercept (pause, edit, forward, or drop)
 - Repeater
 - Intruder-lite
-- JWT/session tooling
+- JWT/session tooling and encode/decode
 - OOB collaborator
 - Passive scanner and anomaly detection
 - Recon / site-intel panel

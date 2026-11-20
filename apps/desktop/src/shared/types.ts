@@ -8,6 +8,7 @@ export type ToolId =
   | "intercept"
   | "ai"
   | "intruder"
+  | "decode"
   | "recon"
   | "scanner"
   | "settings";
@@ -19,6 +20,7 @@ export type SidebarPanel =
   | "intercept"
   | "ai"
   | "intruder"
+  | "decode"
   | "recon"
   | "scanner";
 

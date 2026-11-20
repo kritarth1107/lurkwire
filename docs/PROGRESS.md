@@ -11,7 +11,7 @@ Build order for v0.1. Checked items are on `main`.
 - [x] 7. Guardrails core: scope allowlist, rate limiter, global kill switch, append-only hash-chained audit log
 - [x] 8. LLM layer + AI side panel (explain / suggest / draft into Repeater; human sends)
 - [x] 9. Intruder-lite (sniper / pitchfork / battering ram, § positions, grep, scope and kill switch)
-- [ ] 10. JWT/session tools plus encode/decode
+- [x] 10. JWT/session tools plus encode/decode (HS* re-sign, alg none, URL/Base64/Hex/HTML/hash)
 - [ ] 11. Passive scanner and anomaly flags
 - [ ] 12. Recon panel (crt.sh, DNS, RDAP/WHOIS, Wayback, optional Shodan BYO key)
 - [ ] 13. OOB collaborator via interactsh client

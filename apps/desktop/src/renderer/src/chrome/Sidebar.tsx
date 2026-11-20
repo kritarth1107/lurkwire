@@ -1,5 +1,6 @@
 import {
   Crosshair,
+  KeyRound,
   Globe,
   History,
   MessageSquare,
@@ -16,6 +17,7 @@ import { InterceptView } from "../InterceptView";
 import { RepeaterView } from "../RepeaterView";
 import { AiView } from "./AiView";
 import { IntruderView } from "../IntruderView";
+import { DecodeView } from "../DecodeView";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "tabs", label: "Vertical tabs", icon: Columns2 },
@@ -23,6 +25,7 @@ const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "intercept", label: "Intercept", icon: ShieldOff },
   { id: "repeater", label: "Repeater", icon: Repeat },
   { id: "intruder", label: "Intruder", icon: Crosshair },
+  { id: "decode", label: "Decode", icon: KeyRound },
   { id: "scanner", label: "Scanner", icon: Radar },
   { id: "recon", label: "Recon", icon: Globe },
   { id: "ai", label: "AI", icon: MessageSquare },
@@ -118,6 +121,8 @@ export function Sidebar({
                     void window.lurkwire.setTool("repeater");
                   }}
                 />
+              ) : panel === "decode" ? (
+                <DecodeView />
               ) : (
                 <ComingSoon panel={panel} />
               )}

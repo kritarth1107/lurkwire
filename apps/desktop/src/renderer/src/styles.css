@@ -891,3 +891,8 @@ button.danger, .danger {
   border-color: transparent;
 }
 button.danger:hover { filter: brightness(1.08); }
+
+.decode { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.decode-pane { display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: auto; }
+.codec-grid { display: flex; flex-direction: column; gap: 4px; }
+.codec-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; }
