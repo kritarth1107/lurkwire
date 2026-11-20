@@ -57,6 +57,12 @@ pub struct FlowEvent {
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
+pub struct FlowAnnotation {
+    pub note: Option<String>,
+    pub tags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct FlowQuery {
     pub project_id: Option<String>,
     pub q: Option<String>,

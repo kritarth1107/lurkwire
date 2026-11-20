@@ -13,6 +13,7 @@ import type {
   Finding,
   FindingList,
   FindingQuery,
+  FlowAnnotation,
   IntruderJob,
   IntruderStart,
   RepeaterSendRequest,
@@ -55,6 +56,11 @@ export class ControlClient {
   getFlow(id: string): Promise<FlowDetail> {
     return this.json("GET", `/flows/${encodeURIComponent(id)}`);
   }
+
+  patchFlow(id: string, patch: FlowAnnotation): Promise<FlowDetail> {
+    return this.json("PATCH", `/flows/${encodeURIComponent(id)}`, patch);
+  }
+
 
   getFlowBody(id: string, which: "req" | "resp"): Promise<ArrayBuffer> {
     return this.buffer("GET", `/flows/${encodeURIComponent(id)}/body/${which}`);

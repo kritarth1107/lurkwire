@@ -6,7 +6,7 @@ use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 use futures_util::StreamExt;
 use serde::Deserialize;
@@ -36,7 +36,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/ca.pem", get(ca_pem))
         .route("/projects", get(list_projects).post(create_project))
         .route("/flows", get(list_flows))
-        .route("/flows/{id}", get(get_flow))
+        .route("/flows/{id}", get(get_flow).patch(patch_flow))
         .route("/flows/{id}/body/{which}", get(get_flow_body))
         .route("/events", get(events))
         .route("/repeater/send", post(repeater_send))
@@ -142,6 +142,18 @@ async fn get_flow(
     state
         .store
         .get_flow(&id)?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("flow not found"))
+}
+
+async fn patch_flow(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<crate::types::FlowAnnotation>,
+) -> Result<Json<crate::types::FlowDetail>, ApiError> {
+    state
+        .store
+        .update_flow_annotation(&id, body.note.as_deref(), body.tags.as_deref())?
         .map(Json)
         .ok_or_else(|| ApiError::not_found("flow not found"))
 }

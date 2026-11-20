@@ -1,13 +1,76 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, formatTime, shortMime, statusClass } from "../../shared/http";
+import { flowTitle, highlightOf, tlsLabel } from "../../shared/flowMeta";
+import { AnnotationBar, FlowContextMenu, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { HttpViewer } from "./HttpViewer";
+
+type ColId = "#" | "host" | "method" | "url" | "status" | "length" | "mime" | "title" | "tls" | "time";
+
+const COLS: { id: ColId; label: string; width: number }[] = [
+  { id: "#", label: "#", width: 48 },
+  { id: "host", label: "Host", width: 150 },
+  { id: "method", label: "Method", width: 70 },
+  { id: "url", label: "URL", width: 240 },
+  { id: "status", label: "Status", width: 64 },
+  { id: "length", label: "Length", width: 80 },
+  { id: "mime", label: "MIME", width: 110 },
+  { id: "title", label: "Title", width: 120 },
+  { id: "tls", label: "TLS", width: 90 },
+  { id: "time", label: "Time", width: 80 },
+];
+
+type Sort = { id: ColId; dir: "asc" | "desc" };
 
 type Props = {
   projectId: string | null;
-  onSendToRepeater: (flow: FlowDetail) => void;
+  handlers: FlowSendHandlers;
 };
 
-export function HistoryView({ projectId, onSendToRepeater }: Props) {
+function cell(item: FlowSummary, index: number, id: ColId): string {
+  switch (id) {
+    case "#":
+      return String(index + 1);
+    case "host":
+      return item.host;
+    case "method":
+      return item.method;
+    case "url":
+      return `${item.path}${item.query ? `?${item.query}` : ""}`;
+    case "status":
+      return item.status === null ? "" : String(item.status);
+    case "length":
+      return formatBytes(item.resp_len || item.req_len);
+    case "mime":
+      return shortMime(item.mime);
+    case "title":
+      return flowTitle(item.path, item.host);
+    case "tls":
+      return tlsLabel(item.scheme, item.http_version);
+    case "time":
+      return formatTime(item.ts);
+    default:
+      return "";
+  }
+}
+
+function sortValue(item: FlowSummary, index: number, id: ColId): string | number {
+  if (id === "#") {
+    return index;
+  }
+  if (id === "status") {
+    return item.status ?? -1;
+  }
+  if (id === "length") {
+    return item.resp_len || item.req_len;
+  }
+  if (id === "time") {
+    return item.ts;
+  }
+  return cell(item, index, id).toLowerCase();
+}
+
+export function HistoryView({ projectId, handlers }: Props) {
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [hideStatic, setHideStatic] = useState(true);
@@ -16,7 +79,12 @@ export function HistoryView({ projectId, onSendToRepeater }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FlowDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pane, setPane] = useState<"req" | "resp">("resp");
+  const [sort, setSort] = useState<Sort>({ id: "time", dir: "desc" });
+  const [widths, setWidths] = useState<Record<ColId, number>>(() =>
+    Object.fromEntries(COLS.map((col) => [col.id, col.width])) as Record<ColId, number>,
+  );
+  const [tableHeight, setTableHeight] = useState(240);
+  const { menu, setMenu } = useFlowContextMenu();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), 200);
@@ -34,7 +102,7 @@ export function HistoryView({ projectId, onSendToRepeater }: Props) {
           project_id: projectId ?? undefined,
           q: debounced || undefined,
           hide_static: hideStatic,
-          limit: 250,
+          limit: 500,
         });
         if (cancelled) {
           return;
@@ -72,139 +140,157 @@ export function HistoryView({ projectId, onSendToRepeater }: Props) {
     };
   }, [selectedId]);
 
-  const selected = useMemo(
-    () => items.find((item) => item.id === selectedId) ?? null,
-    [items, selectedId],
-  );
+  const rows = useMemo(() => {
+    const indexed = items.map((item, index) => ({ item, index }));
+    indexed.sort((a, b) => {
+      const av = sortValue(a.item, a.index, sort.id);
+      const bv = sortValue(b.item, b.index, sort.id);
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sort.dir === "asc" ? cmp : -cmp;
+    });
+    return indexed;
+  }, [items, sort]);
+
+  function toggleSort(id: ColId) {
+    setSort((prev) => (prev.id === id ? { id, dir: prev.dir === "asc" ? "desc" : "asc" } : { id, dir: "asc" }));
+  }
+
+  function startResize(id: ColId, startX: number) {
+    const start = widths[id];
+    const onMove = (event: MouseEvent) => {
+      const next = Math.min(480, Math.max(id === "#" ? 36 : 56, start + event.clientX - startX));
+      setWidths((prev) => ({ ...prev, [id]: next }));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function startSplit(startY: number) {
+    const start = tableHeight;
+    const onMove = (event: MouseEvent) => {
+      setTableHeight(Math.min(520, Math.max(120, start + event.clientY - startY)));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  function applyPatch(flow: FlowDetail) {
+    setDetail(flow);
+    setItems((prev) => prev.map((item) => (item.id === flow.id ? { ...item, tags: flow.tags, note: flow.note } : item)));
+  }
 
   return (
-    <main className="workbench">
+    <div className="workbench history-workbench">
       <div className="workbench-toolbar">
         <input
-          className="search"
+          type="search"
+          placeholder="Filter host, path, method…"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder='Filter: host:example.com method:POST status:>=400 password'
-          spellCheck={false}
         />
         <label className="check">
-          <input
-            type="checkbox"
-            checked={hideStatic}
-            onChange={(event) => setHideStatic(event.target.checked)}
-          />
+          <input type="checkbox" checked={hideStatic} onChange={(event) => setHideStatic(event.target.checked)} />
           Hide static
         </label>
-        <span className="meta">
+        <span className="muted">
           {items.length}
           {total > items.length ? ` of ${total}` : ""} flows
         </span>
+        {detail ? (
+          <>
+            <button type="button" onClick={() => void handlers.onSendToRepeater(detail)}>
+              Send to Repeater
+            </button>
+            <button type="button" onClick={() => void handlers.onSendToIntruder(detail)}>
+              Send to Intruder
+            </button>
+            <button type="button" onClick={() => void sendToComparer(detail, handlers)}>
+              Send to Comparer
+            </button>
+          </>
+        ) : null}
       </div>
       {error ? <div className="banner">{error}</div> : null}
-      <div className="history-split">
-        <div className="table-wrap">
-          <table className="history-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Status</th>
-                <th>Method</th>
-                <th>Host</th>
-                <th>Path</th>
-                <th>Type</th>
-                <th>Size</th>
-                <th>Ms</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((flow) => (
-                <tr
-                  key={flow.id}
-                  className={flow.id === selectedId ? "selected" : undefined}
-                  onClick={() => setSelectedId(flow.id)}
-                >
-                  <td className="mono">{formatTime(flow.ts)}</td>
-                  <td className={statusClass(flow.status)}>
-                    {flow.status ?? "—"}
-                  </td>
-                  <td className="method">{flow.method}</td>
-                  <td title={flow.host}>{flow.host}</td>
-                  <td className="path" title={flow.url}>
-                    {flow.path}
-                    {flow.query ? `?${flow.query}` : ""}
-                  </td>
-                  <td className="muted">{shortMime(flow.mime)}</td>
-                  <td className="mono">{formatBytes(flow.resp_len)}</td>
-                  <td className="mono">{flow.duration_ms ?? ""}</td>
-                </tr>
+      <div className="history-table-wrap" style={{ height: tableHeight }}>
+        <table className="history-table resizable">
+          <thead>
+            <tr>
+              {COLS.map((col) => (
+                <th key={col.id} style={{ width: widths[col.id] }} onClick={() => toggleSort(col.id)}>
+                  <span>
+                    {col.label}
+                    {sort.id === col.id ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                  </span>
+                  <i
+                    className="col-resizer"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      startResize(col.id, event.clientX);
+                    }}
+                  />
+                </th>
               ))}
-              {items.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="empty">
-                    No flows yet. Browse a site in the Browser tab and they will land here.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-        <aside className="detail">
-          {detail && selected ? (
-            <>
-              <div className="detail-head">
-                <div>
-                  <div className="detail-title">
-                    <span className="method">{detail.method}</span> {detail.url}
-                  </div>
-                  <div className="muted">
-                    {detail.status ?? "pending"} · {detail.source} ·{" "}
-                    {formatBytes(detail.req_len)} / {formatBytes(detail.resp_len)}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => onSendToRepeater(detail)}
-                >
-                  Send to Repeater
-                </button>
-              </div>
-              <div className="detail-tabs">
-                <button
-                  type="button"
-                  className={pane === "req" ? "active" : ""}
-                  onClick={() => setPane("req")}
-                >
-                  Request
-                </button>
-                <button
-                  type="button"
-                  className={pane === "resp" ? "active" : ""}
-                  onClick={() => setPane("resp")}
-                >
-                  Response
-                </button>
-              </div>
-              <pre className="headers">
-                {pane === "req"
-                  ? formatHeaderBlock(detail.req_headers)
-                  : formatHeaderBlock(detail.resp_headers)}
-              </pre>
-              <pre className="body">
-                {pane === "req"
-                  ? detail.req_preview || (detail.req_blob ? "(binary body)" : "(empty)")
-                  : detail.resp_preview || (detail.resp_blob ? "(binary body)" : "(empty)")}
-              </pre>
-            </>
-          ) : (
-            <div className="empty-pane">Select a request to inspect it.</div>
-          )}
-        </aside>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={COLS.length} className="muted">
+                  No flows yet. Browse a site and they will land here.
+                </td>
+              </tr>
+            ) : (
+              rows.map(({ item, index }) => {
+                const hl = highlightOf(item.tags);
+                return (
+                  <tr
+                    key={item.id}
+                    className={`${selectedId === item.id ? "selected" : ""}${hl ? ` hl-${hl}` : ""}`}
+                    onClick={() => setSelectedId(item.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      setSelectedId(item.id);
+                      setMenu({ x: event.clientX, y: event.clientY, flow: item });
+                    }}
+                    title={item.note || undefined}
+                  >
+                    {COLS.map((col) => (
+                      <td key={col.id} style={{ width: widths[col.id] }} className={col.id === "status" ? statusClass(item.status) : undefined}>
+                        {cell(item, index, col.id)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
-    </main>
+      <div
+        className="split-resizer horizontal"
+        onMouseDown={(event) => {
+          event.preventDefault();
+          startSplit(event.clientY);
+        }}
+      />
+      <AnnotationBar flow={detail} onPatched={applyPatch} />
+      <HttpViewer flow={detail} />
+      <FlowContextMenu menu={menu} handlers={handlers} onPatched={applyPatch} />
+    </div>
   );
 }
 
-function formatHeaderBlock(headers: { name: string; value: string }[]): string {
-  return headers.map((header) => `${header.name}: ${header.value}`).join("\n") || "(no headers)";
+async function sendToComparer(flow: FlowDetail, handlers: FlowSendHandlers) {
+  const { addComparerItem } = await import("./workbench");
+  addComparerItem(flow.id, `${flow.method} ${flow.host}${flow.path}`);
+  handlers.onSendToComparer?.(flow);
 }

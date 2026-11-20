@@ -11,6 +11,10 @@ export type ToolId =
   | "decode"
   | "recon"
   | "scanner"
+  | "sitemap"
+  | "comparer"
+  | "logger"
+  | "sequencer"
   | "settings";
 
 export type SidebarPanel =
@@ -21,7 +25,11 @@ export type SidebarPanel =
   | "intruder"
   | "decode"
   | "recon"
-  | "scanner";
+  | "scanner"
+  | "sitemap"
+  | "comparer"
+  | "logger"
+  | "sequencer";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -154,6 +162,11 @@ export type FlowQuery = {
 export type FlowList = {
   items: FlowSummary[];
   total: number;
+};
+
+export type FlowAnnotation = {
+  note?: string;
+  tags?: string[];
 };
 
 export type RepeaterSendRequest = {

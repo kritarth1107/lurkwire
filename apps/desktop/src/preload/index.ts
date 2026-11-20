@@ -6,6 +6,7 @@ import type {
   Bounds,
   DownloadInfo,
   FindResult,
+  FlowAnnotation,
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
@@ -55,6 +56,9 @@ const api = {
   reportBounds: (bounds: Bounds) => ipcRenderer.invoke("lurkwire:reportBounds", bounds),
   listFlows: (query: FlowQuery) => ipcRenderer.invoke("lurkwire:listFlows", query),
   getFlow: (id: string) => ipcRenderer.invoke("lurkwire:getFlow", id),
+  getFlowBody: (id: string, which: "req" | "resp"): Promise<string> =>
+    ipcRenderer.invoke("lurkwire:getFlowBody", id, which),
+  patchFlow: (id: string, patch: FlowAnnotation) => ipcRenderer.invoke("lurkwire:patchFlow", id, patch),
   sendRepeater: (req: RepeaterSendRequest) => ipcRenderer.invoke("lurkwire:sendRepeater", req),
   getIntercept: () => ipcRenderer.invoke("lurkwire:getIntercept"),
   setIntercept: (config: InterceptConfig) => ipcRenderer.invoke("lurkwire:setIntercept", config),

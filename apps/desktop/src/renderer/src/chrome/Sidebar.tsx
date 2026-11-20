@@ -1,12 +1,16 @@
 import {
   Crosshair,
+  FolderTree,
+  GitCompare,
   KeyRound,
   Globe,
   History,
   MessageSquare,
   Radar,
   Repeat,
+  ScrollText,
   ShieldOff,
+  Shuffle,
   X,
 } from "lucide-react";
 import type { AppSnapshot, FlowDetail, SidebarPanel } from "../../../shared/types";
@@ -18,13 +22,22 @@ import { IntruderView } from "../IntruderView";
 import { DecodeView } from "../DecodeView";
 import { ScannerView } from "../ScannerView";
 import { ReconView } from "../ReconView";
+import { SiteMapView } from "../SiteMapView";
+import { ComparerView } from "../ComparerView";
+import { LoggerView } from "../LoggerView";
+import { SequencerView } from "../SequencerView";
+import type { FlowSendHandlers } from "../FlowActions";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "history", label: "History", icon: History },
+  { id: "sitemap", label: "Site map", icon: FolderTree },
   { id: "intercept", label: "Intercept", icon: ShieldOff },
   { id: "repeater", label: "Repeater", icon: Repeat },
   { id: "intruder", label: "Intruder", icon: Crosshair },
   { id: "decode", label: "Decode", icon: KeyRound },
+  { id: "sequencer", label: "Sequencer", icon: Shuffle },
+  { id: "comparer", label: "Comparer", icon: GitCompare },
+  { id: "logger", label: "Logger", icon: ScrollText },
   { id: "scanner", label: "Scanner", icon: Radar },
   { id: "recon", label: "Recon", icon: Globe },
   { id: "ai", label: "AI", icon: MessageSquare },
@@ -33,17 +46,38 @@ const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
 export function Sidebar({
   state,
   repeaterDraft,
+  intruderDraft,
   onRepeaterDraft,
+  onIntruderDraft,
   onDraftConsumed,
+  onIntruderDraftConsumed,
 }: {
   state: AppSnapshot;
   repeaterDraft: FlowDetail | null;
+  intruderDraft: FlowDetail | null;
   onRepeaterDraft: (flow: FlowDetail) => void;
+  onIntruderDraft: (flow: FlowDetail) => void;
   onDraftConsumed: () => void;
+  onIntruderDraftConsumed: () => void;
 }) {
   const open = state.prefs.sidebarOpen;
   const panel = state.prefs.sidebarPanel;
   const width = state.prefs.sidebarWidth;
+
+  const handlers: FlowSendHandlers = {
+    onSendToRepeater: (flow) => {
+      onRepeaterDraft(flow);
+      void window.lurkwire.setTool("repeater");
+    },
+    onSendToIntruder: (flow) => {
+      onIntruderDraft(flow);
+      void window.lurkwire.setTool("intruder");
+    },
+    onSendToComparer: () => {
+      void window.lurkwire.setTool("comparer");
+    },
+  };
+
 
   return (
     <aside className="sidebar" style={{ width: open ? width : 46 }}>
@@ -83,13 +117,9 @@ export function Sidebar({
             </div>
             <div className="sidebar-body">
               {panel === "history" ? (
-                <HistoryView
-                  projectId={state.currentProjectId}
-                  onSendToRepeater={(flow) => {
-                    onRepeaterDraft(flow);
-                    void window.lurkwire.setTool("repeater");
-                  }}
-                />
+                <HistoryView projectId={state.currentProjectId} handlers={handlers} />
+              ) : panel === "sitemap" ? (
+                <SiteMapView projectId={state.currentProjectId} handlers={handlers} />
               ) : panel === "repeater" ? (
                 <RepeaterView draft={repeaterDraft} onDraftConsumed={onDraftConsumed} />
               ) : panel === "intercept" ? (
@@ -105,20 +135,22 @@ export function Sidebar({
               ) : panel === "intruder" ? (
                 <IntruderView
                   projectId={state.currentProjectId}
-                  onSendToRepeater={(flow) => {
-                    onRepeaterDraft(flow);
-                    void window.lurkwire.setTool("repeater");
-                  }}
+                  draft={intruderDraft}
+                  onDraftConsumed={onIntruderDraftConsumed}
+                  onSendToRepeater={handlers.onSendToRepeater}
                 />
               ) : panel === "decode" ? (
                 <DecodeView />
+              ) : panel === "sequencer" ? (
+                <SequencerView />
+              ) : panel === "comparer" ? (
+                <ComparerView handlers={handlers} />
+              ) : panel === "logger" ? (
+                <LoggerView projectId={state.currentProjectId} handlers={handlers} />
               ) : panel === "scanner" ? (
                 <ScannerView
                   projectId={state.currentProjectId}
-                  onSendToRepeater={(flow) => {
-                    onRepeaterDraft(flow);
-                    void window.lurkwire.setTool("repeater");
-                  }}
+                  onSendToRepeater={handlers.onSendToRepeater}
                 />
               ) : panel === "recon" ? (
                 <ReconView

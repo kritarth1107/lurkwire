@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare } from "lucide-react";
+import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, FolderTree, GitCompare, ScrollText, Shuffle } from "lucide-react";
 import type {
   AppSnapshot,
   DownloadInfo,
@@ -203,6 +203,10 @@ function AppMenu({ state }: { state: AppSnapshot }) {
             close();
           }}
         />
+        <MenuItem label="Site map" onClick={() => { void window.lurkwire.setTool("sitemap"); close(); }} />
+        <MenuItem label="Comparer" onClick={() => { void window.lurkwire.setTool("comparer"); close(); }} />
+        <MenuItem label="Sequencer" onClick={() => { void window.lurkwire.setTool("sequencer"); close(); }} />
+        <MenuItem label="Logger" onClick={() => { void window.lurkwire.setTool("logger"); close(); }} />
         <MenuItem
           label="View source"
           shortcut="Ctrl+U"
@@ -587,10 +591,14 @@ function Identity({
 function LurkwireMenu() {
   const tools = [
     { id: "history", label: "History", icon: History },
+    { id: "sitemap", label: "Site map", icon: FolderTree },
     { id: "intercept", label: "Intercept", icon: ShieldOff },
     { id: "repeater", label: "Repeater", icon: Repeat },
     { id: "intruder", label: "Intruder", icon: Crosshair },
     { id: "decode", label: "Decode", icon: KeyRound },
+    { id: "sequencer", label: "Sequencer", icon: Shuffle },
+    { id: "comparer", label: "Comparer", icon: GitCompare },
+    { id: "logger", label: "Logger", icon: ScrollText },
     { id: "scanner", label: "Scanner", icon: Radar },
     { id: "recon", label: "Recon", icon: Globe },
     { id: "ai", label: "AI", icon: MessageSquare },

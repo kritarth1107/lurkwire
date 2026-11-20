@@ -457,6 +457,27 @@ impl Store {
         }))
     }
 
+    pub fn update_flow_annotation(
+        &self,
+        id: &str,
+        note: Option<&str>,
+        tags: Option<&[String]>,
+    ) -> Result<Option<FlowDetail>> {
+        if note.is_none() && tags.is_none() {
+            return self.get_flow(id);
+        }
+        let conn = self.conn.lock().expect("store lock");
+        if let Some(note) = note {
+            conn.execute("UPDATE flows SET note = ?1 WHERE id = ?2", rusqlite::params![note, id])?;
+        }
+        if let Some(tags) = tags {
+            let encoded = serde_json::to_string(tags)?;
+            conn.execute("UPDATE flows SET tags = ?1 WHERE id = ?2", rusqlite::params![encoded, id])?;
+        }
+        drop(conn);
+        self.get_flow(id)
+    }
+
     pub fn get_blob(&self, hash: &str) -> Result<Vec<u8>> {
         if !hash.chars().all(|c| c.is_ascii_hexdigit()) || hash.len() != 64 {
             anyhow::bail!("invalid blob id");

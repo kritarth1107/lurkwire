@@ -11,9 +11,13 @@ function parseLines(text: string): string[] {
 
 export function IntruderView({
   projectId,
+  draft,
+  onDraftConsumed,
   onSendToRepeater,
 }: {
   projectId: string | null;
+  draft?: FlowDetail | null;
+  onDraftConsumed?: () => void;
   onSendToRepeater: (flow: FlowDetail) => void;
 }) {
   const [method, setMethod] = useState("GET");
@@ -26,6 +30,17 @@ export function IntruderView({
   const [job, setJob] = useState<IntruderJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const running = job?.status === "running";
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+    setMethod(draft.method);
+    setUrl(draft.url);
+    setHeaders(draft.req_headers.map((h) => `${h.name}: ${h.value}`).join("\n") + "\n");
+    setBody(draft.req_preview ?? "");
+    onDraftConsumed?.();
+  }, [draft, onDraftConsumed]);
 
   useEffect(() => {
     if (!job || job.status !== "running") {

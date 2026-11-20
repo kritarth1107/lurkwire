@@ -796,6 +796,13 @@ function registerIpc(): void {
     });
   });
   ipcMain.handle("lurkwire:getFlow", (_event, id: string) => control.getFlow(id));
+  ipcMain.handle("lurkwire:getFlowBody", async (_event, id: string, which: "req" | "resp") => {
+    const buf = await control.getFlowBody(id, which);
+    return Buffer.from(buf).toString("base64");
+  });
+  ipcMain.handle("lurkwire:patchFlow", (_event, id: string, patch: { note?: string; tags?: string[] }) =>
+    control.patchFlow(id, patch),
+  );
   ipcMain.handle("lurkwire:sendRepeater", (_event, req: RepeaterSendRequest) =>
     control.sendRepeater({
       ...req,

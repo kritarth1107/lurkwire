@@ -14,6 +14,7 @@ export function App() {
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
   const [omnibox, setOmnibox] = useState("");
   const [repeaterDraft, setRepeaterDraft] = useState<FlowDetail | null>(null);
+  const [intruderDraft, setIntruderDraft] = useState<FlowDetail | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
@@ -82,8 +83,11 @@ export function App() {
         <Sidebar
           state={state}
           repeaterDraft={repeaterDraft}
+          intruderDraft={intruderDraft}
           onRepeaterDraft={setRepeaterDraft}
+          onIntruderDraft={setIntruderDraft}
           onDraftConsumed={() => setRepeaterDraft(null)}
+          onIntruderDraftConsumed={() => setIntruderDraft(null)}
         />
         <div className="content-col">
           {state.error ? <div className="banner">{state.error}</div> : null}

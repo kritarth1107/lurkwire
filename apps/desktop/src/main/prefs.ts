@@ -12,6 +12,10 @@ const SIDEBAR_PANELS = new Set<SidebarPanel>([
   "decode",
   "recon",
   "scanner",
+  "sitemap",
+  "comparer",
+  "logger",
+  "sequencer",
 ]);
 
 export function prefsPath(): string {
