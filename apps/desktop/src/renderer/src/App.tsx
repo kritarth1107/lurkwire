@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import type { ToolId } from "../../shared/types";
+import type { FlowDetail, ToolId } from "../../shared/types";
+import { HistoryView } from "./HistoryView";
 import { useAppState } from "./useAppState";
 
 const tools: { id: ToolId; label: string }[] = [
@@ -12,6 +13,7 @@ export function App() {
   const state = useAppState();
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
   const [omnibox, setOmnibox] = useState("");
+  const [repeaterDraft, setRepeaterDraft] = useState<FlowDetail | null>(null);
 
   useEffect(() => {
     setOmnibox(activeTab?.url ?? "");
@@ -156,14 +158,21 @@ export function App() {
       {state.tool === "browser" ? (
         <BrowserStage hasUrl={Boolean(activeTab?.url)} />
       ) : state.tool === "history" ? (
-        <Placeholder
-          title="HTTP history"
-          body="The traffic store is already running in the proxy. The history grid lands next."
+        <HistoryView
+          projectId={state.currentProjectId}
+          onSendToRepeater={(flow) => {
+            setRepeaterDraft(flow);
+            void window.lurkwire.setTool("repeater");
+          }}
         />
       ) : (
         <Placeholder
           title="Repeater"
-          body="The sidecar already has POST /repeater/send. The editor UI lands next."
+          body={
+            repeaterDraft
+              ? `Queued ${repeaterDraft.method} ${repeaterDraft.url}. The editor UI lands next.`
+              : "The sidecar already has POST /repeater/send. The editor UI lands next."
+          }
         />
       )}
     </div>
