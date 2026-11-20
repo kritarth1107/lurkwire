@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { BrowserWindow, clipboard, WebContentsView, session } from "electron";
 import type { Bounds, ContextMenuPayload, FindResult, TabGroup, TabGroupColor, TabInfo } from "../shared/types";
 import { nextTabGroupColor, packTabOrder } from "../shared/tabGroups";
+import type { SessionWindow } from "../shared/session";
 import {
   canonicalizeInternalUrl,
   isInternalUrl,
@@ -129,6 +130,60 @@ export class TabManager {
       .map((tab) => toInfo(tab));
   }
 
+
+  serialize(): SessionWindow {
+    const tabs = this.order
+      .map((id) => this.tabs.get(id))
+      .filter((tab): tab is Tab => Boolean(tab))
+      .filter((tab) => Boolean(tab.url))
+      .map((tab) => ({
+        url: tab.url,
+        title: tab.title,
+        pinned: tab.pinned,
+        groupId: tab.groupId,
+      }));
+    const used = new Set(tabs.map((tab) => tab.groupId).filter((id): id is string => Boolean(id)));
+    return {
+      tabs,
+      groups: [...this.groups.values()].filter((group) => used.has(group.id)).map((group) => ({ ...group })),
+      activeUrl: this.active()?.url ?? null,
+    };
+  }
+
+  async restore(projectId: string, data: SessionWindow): Promise<void> {
+    for (const group of data.groups) {
+      this.groups.set(group.id, { ...group });
+    }
+    let firstId: string | null = null;
+    let activeId: string | null = null;
+    for (const tab of data.tabs) {
+      if (!tab.url) {
+        continue;
+      }
+      const id = await this.create(projectId, tab.url, {
+        pinned: tab.pinned,
+        groupId: tab.groupId ?? undefined,
+        activate: false,
+      });
+      firstId ??= id;
+      if (tab.url === data.activeUrl) {
+        activeId = id;
+      }
+    }
+    const showId = activeId ?? firstId;
+    if (showId) {
+      this.show(showId);
+    } else {
+      await this.ensureTab(projectId);
+    }
+    this.packOrder();
+    this.onChange();
+  }
+
+  hasTabs(): boolean {
+    return this.order.length > 0;
+  }
+
   listGroups(projectId: string): TabGroup[] {
     const used = new Set(
       this.list(projectId)
@@ -156,7 +211,7 @@ export class TabManager {
     return this.create(projectId);
   }
 
-  async create(projectId: string, url = "", opts?: { pinned?: boolean; groupId?: string }): Promise<string> {
+  async create(projectId: string, url = "", opts?: { pinned?: boolean; groupId?: string; activate?: boolean }): Promise<string> {
     await this.prepareSession(projectId);
     const id = randomUUID();
     const view = new WebContentsView({
@@ -198,7 +253,11 @@ export class TabManager {
       this.order.push(id);
     }
     this.window.contentView.addChildView(view);
-    this.show(id);
+    if (opts?.activate !== false) {
+      this.show(id);
+    } else {
+      view.setVisible(false);
+    }
     await this.navigate(id, url || "lurkwire://newtab");
     this.layout();
     this.onChange();

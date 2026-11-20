@@ -47,5 +47,5 @@ Refreshed screenshots cover main light/dark, the app menu, a lurkwire://settings
 - [x] Fix Electron deprecations (navigationHistory, session.extensions)
 - [x] Real tab groups (create / name / color / collapse)
 - [x] Bookmarks manager and opt-in Chrome/Firefox import
-- [ ] Session restore (reopen last tabs)
+- [x] Session restore (reopen last tabs)
 - [x] Silence DevTools Autofill errors

@@ -69,6 +69,7 @@ export type AppPrefs = {
   sidebarPanel: SidebarPanel;
   sidebarWidth: number;
   sidebarSide: "left" | "right";
+  sessionRestore: boolean;
   llm: LlmSettings;
 };
 
@@ -79,6 +80,7 @@ export const DEFAULT_PREFS: AppPrefs = {
   sidebarPanel: "history",
   sidebarWidth: 360,
   sidebarSide: "left",
+  sessionRestore: false,
   llm: DEFAULT_LLM,
 };
 

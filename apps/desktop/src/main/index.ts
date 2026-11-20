@@ -33,6 +33,8 @@ import { clearShodanKey, hasShodanKey, runRecon, saveShodanKey } from "./recon";
 import { isSmokeRun, isolateSmokeUserData, runSmoke } from "./smoke";
 import { handleLurkwireProtocol, registerLurkwireScheme } from "./internal-protocol";
 import { isSettingsUrl, TabManager } from "./tabs";
+import { loadSession, saveSession } from "./session";
+import { hasRestorableTabs } from "../shared/session";
 import {
   canonicalizeInternalUrl,
   isInternalUrl,
@@ -85,6 +87,41 @@ let currentProjectId: string | null = null;
 let projects: AppSnapshot["projects"] = [];
 let proxyStatus: AppSnapshot["proxy"] = { status: "starting" };
 let lastError: string | null = null;
+let sessionRestored = false;
+let sessionSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+function collectSession() {
+  return liveWindows()
+    .filter((win) => !win.privateMode)
+    .map((win) => win.tabs.serialize());
+}
+
+function scheduleSessionSave(): void {
+  if (isSmokeRun() || !prefs.sessionRestore) {
+    return;
+  }
+  if (sessionSaveTimer) {
+    clearTimeout(sessionSaveTimer);
+  }
+  sessionSaveTimer = setTimeout(() => {
+    sessionSaveTimer = null;
+    saveSession(collectSession());
+  }, 750);
+}
+
+function flushSession(): void {
+  if (isSmokeRun()) {
+    return;
+  }
+  if (sessionSaveTimer) {
+    clearTimeout(sessionSaveTimer);
+    sessionSaveTimer = null;
+  }
+  if (prefs.sessionRestore) {
+    saveSession(collectSession());
+  }
+}
+
 
 function loadBookmarksSafe() {
   try {
@@ -264,8 +301,23 @@ async function applyProxyReady(): Promise<void> {
   lastError = null;
   await refreshProjects();
   if (currentProjectId) {
+    const shouldRestore = !isSmokeRun() && prefs.sessionRestore && !sessionRestored;
+    sessionRestored = true;
+    const saved = shouldRestore ? loadSession() : null;
+    if (saved && hasRestorableTabs(saved)) {
+      const existing = liveWindows().filter((win) => !win.privateMode);
+      for (let i = 0; i < saved.windows.length; i += 1) {
+        const data = saved.windows[i]!;
+        const win = existing[i] ?? createWindow();
+        if (!win.tabs.hasTabs()) {
+          await win.tabs.restore(currentProjectId, data);
+        }
+      }
+    }
     for (const win of liveWindows()) {
-      await win.tabs.ensureTab(currentProjectId);
+      if (!win.tabs.hasTabs()) {
+        await win.tabs.ensureTab(currentProjectId);
+      }
     }
   }
   try {
@@ -339,6 +391,7 @@ function createWindow(options?: { privateMode?: boolean }): ChromeWin {
       }
       syncViewVisibility(win);
       emit(win);
+      scheduleSessionSave();
     },
     (ses) => downloads.hook(ses),
     (payload) => {
@@ -369,6 +422,9 @@ function createWindow(options?: { privateMode?: boolean }): ChromeWin {
   window.on("focus", () => activate(win));
   window.on("maximize", () => emit(win));
   window.on("unmaximize", () => emit(win));
+  window.on("close", () => {
+    flushSession();
+  });
   window.on("closed", () => {
     const index = chromeWindows.findIndex((item) => item.id === win.id);
     if (index >= 0) {
@@ -1203,6 +1259,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  flushSession();
   stopPolling();
   void sidecar.stop();
 });

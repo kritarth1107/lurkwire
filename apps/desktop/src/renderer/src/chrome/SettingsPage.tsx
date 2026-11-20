@@ -81,6 +81,19 @@ export function SettingsPage({ state, url }: { state: AppSnapshot; url?: string 
             </div>
             <div className="settings-row">
               <div>
+                <strong>Continue where I left off</strong>
+                <p>Reopen the last tabs and windows on startup. Private windows are never restored.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={Boolean(state.prefs.sessionRestore)}
+                onChange={(event) =>
+                  void window.lurkwire.setPrefs({ sessionRestore: event.target.checked })
+                }
+              />
+            </div>
+            <div className="settings-row">
+              <div>
                 <strong>Bookmarks toolbar</strong>
                 <p>Show bookmarks under the address bar.</p>
               </div>
