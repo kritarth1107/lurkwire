@@ -1,26 +1,34 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type {
+  AppPrefs,
   AppSnapshot,
+  Bookmark,
   Bounds,
+  DownloadInfo,
+  FindResult,
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  PanelContext,
+  PanelOpenRequest,
   RepeaterSendRequest,
   ToolId,
 } from "../shared/types";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
 
+function listen<T>(channel: string, callback: (value: T) => void): () => void {
+  const listener = (_event: unknown, value: T) => callback(value);
+  ipcRenderer.on(channel, listener);
+  return () => {
+    ipcRenderer.removeListener(channel, listener);
+  };
+}
+
 const api = {
   product: PRODUCT_NAME,
   version: PRODUCT_VERSION,
   getState: (): Promise<AppSnapshot> => ipcRenderer.invoke("lurkwire:getState"),
-  onState: (callback: (state: AppSnapshot) => void) => {
-    const listener = (_event: unknown, state: AppSnapshot) => callback(state);
-    ipcRenderer.on("lurkwire:state", listener);
-    return () => {
-      ipcRenderer.removeListener("lurkwire:state", listener);
-    };
-  },
+  onState: (callback: (state: AppSnapshot) => void) => listen("lurkwire:state", callback),
   newTab: (url?: string) => ipcRenderer.invoke("lurkwire:newTab", url),
   closeTab: (id: string) => ipcRenderer.invoke("lurkwire:closeTab", id),
   switchTab: (id: string) => ipcRenderer.invoke("lurkwire:switchTab", id),
@@ -42,6 +50,48 @@ const api = {
   forwardIntercept: (id: string, edit: ForwardEdit) =>
     ipcRenderer.invoke("lurkwire:forwardIntercept", id, edit),
   dropIntercept: (id: string) => ipcRenderer.invoke("lurkwire:dropIntercept", id),
+  getPrefs: (): Promise<AppPrefs> => ipcRenderer.invoke("lurkwire:getPrefs"),
+  setPrefs: (patch: Partial<AppPrefs>): Promise<AppPrefs> =>
+    ipcRenderer.invoke("lurkwire:setPrefs", patch),
+  setKillSwitch: (next: boolean) => ipcRenderer.invoke("lurkwire:setKillSwitch", next),
+  windowMinimize: () => ipcRenderer.invoke("lurkwire:windowMinimize"),
+  windowToggleMaximize: () => ipcRenderer.invoke("lurkwire:windowToggleMaximize"),
+  windowClose: () => ipcRenderer.invoke("lurkwire:windowClose"),
+  getBookmarks: (): Promise<Bookmark[]> => ipcRenderer.invoke("lurkwire:getBookmarks"),
+  addBookmark: (input: { title: string; url: string }): Promise<Bookmark[]> =>
+    ipcRenderer.invoke("lurkwire:addBookmark", input),
+  removeBookmark: (id: string): Promise<Bookmark[]> =>
+    ipcRenderer.invoke("lurkwire:removeBookmark", id),
+  onBookmarks: (callback: (items: Bookmark[]) => void) => listen("lurkwire:bookmarks", callback),
+  listDownloads: (): Promise<DownloadInfo[]> => ipcRenderer.invoke("lurkwire:listDownloads"),
+  cancelDownload: (id: string) => ipcRenderer.invoke("lurkwire:cancelDownload", id),
+  showDownload: (id: string) => ipcRenderer.invoke("lurkwire:showDownload", id),
+  openDownload: (id: string) => ipcRenderer.invoke("lurkwire:openDownload", id),
+  onDownloads: (callback: (items: DownloadInfo[]) => void) => listen("lurkwire:downloads", callback),
+  findInPage: (text: string, options?: { forward?: boolean; findNext?: boolean; matchCase?: boolean }) =>
+    ipcRenderer.invoke("lurkwire:findInPage", text, options),
+  stopFindInPage: () => ipcRenderer.invoke("lurkwire:stopFindInPage"),
+  onFind: (callback: (result: FindResult) => void) => listen("lurkwire:find", callback),
+  setZoom: (factor: number) => ipcRenderer.invoke("lurkwire:setZoom", factor),
+  adjustZoom: (delta: number) => ipcRenderer.invoke("lurkwire:adjustZoom", delta),
+  resetZoom: () => ipcRenderer.invoke("lurkwire:resetZoom"),
+  pinTab: (id: string, pinned: boolean) => ipcRenderer.invoke("lurkwire:pinTab", id, pinned),
+  duplicateTab: (id: string) => ipcRenderer.invoke("lurkwire:duplicateTab", id),
+  closeOtherTabs: (id: string) => ipcRenderer.invoke("lurkwire:closeOtherTabs", id),
+  closeTabsToRight: (id: string) => ipcRenderer.invoke("lurkwire:closeTabsToRight", id),
+  reopenTab: () => ipcRenderer.invoke("lurkwire:reopenTab"),
+  pageAction: (action: string, url?: string) => ipcRenderer.invoke("lurkwire:pageAction", action, url),
+  copyText: (text: string) => ipcRenderer.invoke("lurkwire:copyText", text),
+  openExternal: (url: string) => ipcRenderer.invoke("lurkwire:openExternal", url),
+  openPanel: (request: PanelOpenRequest) => ipcRenderer.invoke("lurkwire:openPanel", request),
+  closePanel: () => ipcRenderer.invoke("lurkwire:closePanel"),
+  resizePanel: (width: number, height: number) =>
+    ipcRenderer.invoke("lurkwire:resizePanel", width, height),
+  getPanelContext: (): Promise<PanelContext | null> => ipcRenderer.invoke("lurkwire:getPanelContext"),
+  requestFind: () => ipcRenderer.invoke("lurkwire:requestFind"),
+  onFocusUrl: (callback: () => void) => listen("lurkwire:focus-url", callback),
+  onOpenFind: (callback: () => void) => listen("lurkwire:open-find", callback),
+  onEscape: (callback: () => void) => listen("lurkwire:escape", callback),
 };
 
 contextBridge.exposeInMainWorld("lurkwire", api);

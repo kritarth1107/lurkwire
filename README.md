@@ -111,6 +111,8 @@ Linux first, then macOS and Windows. See [docs/PROGRESS.md](docs/PROGRESS.md) fo
 
 Lurkwire is provided "as is", without warranty of any kind. You are solely responsible for how you use it and for complying with all applicable laws and the terms of any service or program you interact with. The authors and contributors accept no liability for any misuse, damage, data loss or legal consequences arising from the use of this software.
 
+Chrome icons are from [Lucide](https://lucide.dev) (ISC). See [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES).
+
 ## License
 
 TBD

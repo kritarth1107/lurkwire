@@ -1,7 +1,50 @@
 export const PRODUCT_NAME = "Lurkwire";
 export const PRODUCT_VERSION = "0.1.0";
 
-export type ToolId = "browser" | "history" | "repeater" | "intercept";
+export type ToolId =
+  | "browser"
+  | "history"
+  | "repeater"
+  | "intercept"
+  | "ai"
+  | "intruder"
+  | "recon"
+  | "scanner"
+  | "settings";
+
+export type SidebarPanel =
+  | "tabs"
+  | "history"
+  | "repeater"
+  | "intercept"
+  | "ai"
+  | "intruder"
+  | "recon"
+  | "scanner";
+
+export type ThemePref = "system" | "light" | "dark";
+
+export type ChromePage = "content" | "settings";
+
+export type AppPrefs = {
+  theme: ThemePref;
+  bookmarksBar: boolean;
+  verticalTabs: boolean;
+  sidebarOpen: boolean;
+  sidebarPanel: SidebarPanel;
+  sidebarWidth: number;
+  sidebarSide: "left" | "right";
+};
+
+export const DEFAULT_PREFS: AppPrefs = {
+  theme: "system",
+  bookmarksBar: true,
+  verticalTabs: false,
+  sidebarOpen: false,
+  sidebarPanel: "history",
+  sidebarWidth: 360,
+  sidebarSide: "left",
+};
 
 export type ProxyStatus = "starting" | "ready" | "down";
 
@@ -19,6 +62,10 @@ export type TabInfo = {
   canGoBack: boolean;
   canGoForward: boolean;
   projectId: string;
+  favicon: string | null;
+  pinned: boolean;
+  secure: boolean;
+  zoomFactor: number;
 };
 
 export type HeaderPair = {
@@ -101,6 +148,12 @@ export type AppSnapshot = {
   activeTabId: string | null;
   tool: ToolId;
   error: string | null;
+  prefs: AppPrefs;
+  killed: boolean;
+  chromePage: ChromePage;
+  zoomFactor: number;
+  theme: "light" | "dark";
+  maximized: boolean;
 };
 
 export type InterceptConfig = {
@@ -142,4 +195,73 @@ export type Bounds = {
   y: number;
   width: number;
   height: number;
+};
+
+export type Bookmark = {
+  id: string;
+  title: string;
+  url: string;
+  createdAt: number;
+};
+
+export type DownloadInfo = {
+  id: string;
+  filename: string;
+  url: string;
+  state: "progressing" | "completed" | "cancelled" | "interrupted";
+  receivedBytes: number;
+  totalBytes: number;
+  path: string | null;
+};
+
+export type FindResult = {
+  requestId: number;
+  activeMatchOrdinal: number;
+  matches: number;
+  finalUpdate: boolean;
+};
+
+export type ContextMenuPayload = {
+  kind: "page" | "tab";
+  tabId?: string;
+  x: number;
+  y: number;
+  linkURL?: string;
+  srcURL?: string;
+  pageURL?: string;
+  selectionText?: string;
+  canCopy: boolean;
+  canPaste: boolean;
+  canCut: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+  hasImage: boolean;
+  isEditable: boolean;
+};
+
+export type PanelKind =
+  | "appmenu"
+  | "downloads"
+  | "alltabs"
+  | "identity"
+  | "lurkwire"
+  | "intercept"
+  | "project"
+  | "tabmenu"
+  | "pagemenu";
+
+export type PanelOpenRequest = {
+  kind: PanelKind;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  payload?: Record<string, unknown>;
+};
+
+export type PanelContext = {
+  kind: PanelKind;
+  payload: Record<string, unknown>;
 };

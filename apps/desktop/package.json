@@ -14,6 +14,7 @@
     "dist:linux": "electron-builder --linux AppImage deb"
   },
   "dependencies": {
+    "lucide-react": "^1.77.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -34,7 +35,7 @@
   "build": {
     "appId": "com.lurkwire.app",
     "productName": "Lurkwire",
-    "copyright": "Copyright \u00a9 Kritarth Agrawal",
+    "copyright": "Copyright © Kritarth Agrawal",
     "asar": true,
     "npmRebuild": false,
     "directories": {

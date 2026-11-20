@@ -16,3 +16,15 @@ export function displayHost(url: string): string {
     return url;
   }
 }
+
+export function isSettingsUrl(url: string): boolean {
+  return (
+    url.startsWith("lurkwire://settings") ||
+    url === "about:preferences" ||
+    url === "about:settings"
+  );
+}
+
+export function isNewTabUrl(url: string): boolean {
+  return !url || url === "about:blank" || url.startsWith("lurkwire://newtab");
+}

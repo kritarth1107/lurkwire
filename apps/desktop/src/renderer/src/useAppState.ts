@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppSnapshot } from "../../shared/types";
+import { DEFAULT_PREFS, type AppSnapshot } from "../../shared/types";
 
 const empty: AppSnapshot = {
   product: "Lurkwire",
@@ -11,6 +11,12 @@ const empty: AppSnapshot = {
   activeTabId: null,
   tool: "browser",
   error: null,
+  prefs: DEFAULT_PREFS,
+  killed: false,
+  chromePage: "content",
+  zoomFactor: 1,
+  theme: "dark",
+  maximized: false,
 };
 
 export function useAppState(): AppSnapshot {

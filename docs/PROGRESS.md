@@ -16,3 +16,4 @@ Build order for v0.1. Checked items are on `main`.
 - [ ] 12. Recon panel (crt.sh, DNS, RDAP/WHOIS, Wayback, optional Shodan BYO key)
 - [ ] 13. OOB collaborator via interactsh client
 - [x] 14. Linux packaging (AppImage and deb via electron-builder)
+- [x] Proton-style browser chrome (tabs, toolbar, sidebar, new tab, settings, themes)

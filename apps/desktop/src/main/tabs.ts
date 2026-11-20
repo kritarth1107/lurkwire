@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { BrowserWindow, WebContentsView, session } from "electron";
-import type { Bounds, TabInfo } from "../shared/types";
-import { normalizeUrl } from "../shared/url";
+import { BrowserWindow, clipboard, WebContentsView, session } from "electron";
+import type { Bounds, ContextMenuPayload, FindResult, TabInfo } from "../shared/types";
+import { isSettingsUrl, normalizeUrl } from "../shared/url";
 import { configureProjectSession } from "./sessions";
 
 type Tab = {
@@ -12,12 +12,15 @@ type Tab = {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  favicon: string | null;
+  pinned: boolean;
   view: WebContentsView;
 };
 
 export class TabManager {
   private tabs = new Map<string, Tab>();
   private order: string[] = [];
+  private closed: { projectId: string; url: string; title: string }[] = [];
   private activeId: string | null = null;
   private bounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
   private visible = true;
@@ -27,13 +30,16 @@ export class TabManager {
     private window: BrowserWindow,
     private getProxy: () => { listen: string; fingerprint: string } | null,
     private onChange: () => void,
+    private onSession: (ses: Electron.Session) => void,
+    private onContextMenu: (payload: ContextMenuPayload) => void,
+    private onFind: (result: FindResult) => void,
   ) {}
 
   list(projectId: string): TabInfo[] {
     return this.order
       .map((id) => this.tabs.get(id))
       .filter((tab): tab is Tab => Boolean(tab && tab.projectId === projectId))
-      .map(toInfo);
+      .map((tab) => toInfo(tab));
   }
 
   active(): Tab | null {
@@ -54,7 +60,7 @@ export class TabManager {
     return this.create(projectId);
   }
 
-  async create(projectId: string, url = ""): Promise<string> {
+  async create(projectId: string, url = "", opts?: { pinned?: boolean }): Promise<string> {
     await this.prepareSession(projectId);
     const id = randomUUID();
     const view = new WebContentsView({
@@ -70,15 +76,22 @@ export class TabManager {
       id,
       projectId,
       url,
-      title: url ? url : "New tab",
+      title: url ? url : "New Tab",
       loading: false,
       canGoBack: false,
       canGoForward: false,
+      favicon: null,
+      pinned: opts?.pinned ?? false,
       view,
     };
     this.bind(tab);
     this.tabs.set(id, tab);
-    this.order.push(id);
+    if (tab.pinned) {
+      const firstUnpinned = this.order.findIndex((item) => !this.tabs.get(item)?.pinned);
+      this.order.splice(firstUnpinned === -1 ? this.order.length : firstUnpinned, 0, id);
+    } else {
+      this.order.push(id);
+    }
     this.window.contentView.addChildView(view);
     this.show(id);
     if (url) {
@@ -93,6 +106,12 @@ export class TabManager {
     const tab = this.tabs.get(id);
     if (!tab) {
       return;
+    }
+    if (tab.pinned) {
+      return;
+    }
+    if (tab.url) {
+      this.closed.push({ projectId: tab.projectId, url: tab.url, title: tab.title });
     }
     this.window.contentView.removeChildView(tab.view);
     try {
@@ -110,6 +129,62 @@ export class TabManager {
       }
     }
     this.layout();
+    this.onChange();
+  }
+
+  closeOthers(id: string, projectId: string): void {
+    for (const tab of this.list(projectId)) {
+      if (tab.id !== id && !tab.pinned) {
+        this.close(tab.id, projectId);
+      }
+    }
+  }
+
+  closeToRight(id: string, projectId: string): void {
+    const listed = this.list(projectId);
+    const index = listed.findIndex((tab) => tab.id === id);
+    if (index < 0) {
+      return;
+    }
+    for (const tab of listed.slice(index + 1)) {
+      if (!tab.pinned) {
+        this.close(tab.id, projectId);
+      }
+    }
+  }
+
+  async reopen(projectId: string): Promise<void> {
+    for (let i = this.closed.length - 1; i >= 0; i -= 1) {
+      const item = this.closed[i];
+      if (item?.projectId === projectId) {
+        this.closed.splice(i, 1);
+        await this.create(projectId, item.url);
+        return;
+      }
+    }
+  }
+
+  async duplicate(id: string): Promise<void> {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      return;
+    }
+    await this.create(tab.projectId, tab.url);
+  }
+
+  pin(id: string, pinned: boolean): void {
+    const tab = this.tabs.get(id);
+    if (!tab) {
+      return;
+    }
+    tab.pinned = pinned;
+    this.order = this.order.filter((item) => item !== id);
+    if (pinned) {
+      const firstUnpinned = this.order.findIndex((item) => !this.tabs.get(item)?.pinned);
+      this.order.splice(firstUnpinned === -1 ? this.order.length : firstUnpinned, 0, id);
+    } else {
+      this.order.push(id);
+    }
     this.onChange();
   }
 
@@ -141,20 +216,31 @@ export class TabManager {
     this.layout();
   }
 
-  async navigate(id: string, input: string): Promise<void> {
+  async navigate(id: string, input: string): Promise<"internal" | "external"> {
     const tab = this.tabs.get(id);
     if (!tab) {
-      return;
+      return "external";
     }
     const url = normalizeUrl(input);
     if (!url) {
-      return;
+      return "external";
+    }
+    if (isInternalPage(url)) {
+      tab.url = url;
+      tab.title = titleForInternal(url);
+      tab.loading = false;
+      tab.favicon = null;
+      tab.canGoBack = tab.view.webContents.canGoBack();
+      tab.canGoForward = tab.view.webContents.canGoForward();
+      this.onChange();
+      return "internal";
     }
     await this.prepareSession(tab.projectId);
     tab.url = url;
     tab.loading = true;
     this.onChange();
     await tab.view.webContents.loadURL(url);
+    return "external";
   }
 
   back(): void {
@@ -165,8 +251,16 @@ export class TabManager {
     this.active()?.view.webContents.goForward();
   }
 
-  reload(): void {
-    this.active()?.view.webContents.reload();
+  reload(ignoreCache = false): void {
+    const wc = this.active()?.view.webContents;
+    if (!wc) {
+      return;
+    }
+    if (ignoreCache) {
+      wc.reloadIgnoringCache();
+    } else {
+      wc.reload();
+    }
   }
 
   stop(): void {
@@ -177,11 +271,81 @@ export class TabManager {
     this.active()?.view.webContents.openDevTools({ mode: "detach" });
   }
 
+  setZoom(factor: number): void {
+    const wc = this.active()?.view.webContents;
+    if (!wc) {
+      return;
+    }
+    const next = Math.min(3, Math.max(0.5, factor));
+    wc.setZoomFactor(next);
+    this.onChange();
+  }
+
+  adjustZoom(delta: number): void {
+    const current = this.active()?.view.webContents.getZoomFactor() ?? 1;
+    this.setZoom(current + delta);
+  }
+
+  resetZoom(): void {
+    this.setZoom(1);
+  }
+
+  find(text: string, options?: Electron.FindInPageOptions): void {
+    const wc = this.active()?.view.webContents;
+    if (!wc) {
+      return;
+    }
+    if (!text) {
+      wc.stopFindInPage("clearSelection");
+      return;
+    }
+    wc.findInPage(text, options);
+  }
+
+  stopFind(): void {
+    this.active()?.view.webContents.stopFindInPage("clearSelection");
+  }
+
   hideProject(projectId: string): void {
     for (const tab of this.tabs.values()) {
       if (tab.projectId === projectId) {
         tab.view.setVisible(false);
       }
+    }
+  }
+
+  execPageAction(action: string, url?: string): void {
+    const wc = this.active()?.view.webContents;
+    if (!wc) {
+      return;
+    }
+    switch (action) {
+      case "copy":
+        wc.copy();
+        break;
+      case "cut":
+        wc.cut();
+        break;
+      case "paste":
+        wc.paste();
+        break;
+      case "selectAll":
+        wc.selectAll();
+        break;
+      case "undo":
+        wc.undo();
+        break;
+      case "redo":
+        wc.redo();
+        break;
+      case "copyURL":
+      case "copyLink":
+        if (url) {
+          clipboard.writeText(url);
+        }
+        break;
+      default:
+        break;
     }
   }
 
@@ -209,7 +373,11 @@ export class TabManager {
       return { action: "deny" };
     });
     wc.on("page-title-updated", (_event, title) => {
-      tab.title = title || tab.url || "New tab";
+      tab.title = title || tab.url || "New Tab";
+      this.onChange();
+    });
+    wc.on("page-favicon-updated", (_event, favicons) => {
+      tab.favicon = favicons[0] ?? null;
       this.onChange();
     });
     wc.on("did-start-loading", () => {
@@ -239,10 +407,40 @@ export class TabManager {
         return;
       }
       tab.loading = false;
-      tab.title = `Failed to load`;
+      tab.title = "Failed to load";
       tab.url = url;
       console.error(`tab load failed ${code} ${description} ${url}`);
       this.onChange();
+    });
+    wc.on("found-in-page", (_event, result) => {
+      this.onFind({
+        requestId: result.requestId,
+        activeMatchOrdinal: result.activeMatchOrdinal,
+        matches: result.matches,
+        finalUpdate: result.finalUpdate,
+      });
+    });
+    wc.on("context-menu", (_event, params) => {
+      const bounds = this.window.getContentBounds();
+      this.onContextMenu({
+        kind: "page",
+        tabId: tab.id,
+        x: bounds.x + params.x + this.bounds.x,
+        y: bounds.y + params.y + this.bounds.y,
+        linkURL: params.linkURL || undefined,
+        srcURL: params.srcURL || undefined,
+        pageURL: params.pageURL || undefined,
+        selectionText: params.selectionText || undefined,
+        canCopy: params.editFlags.canCopy,
+        canPaste: params.editFlags.canPaste,
+        canCut: params.editFlags.canCut,
+        canUndo: params.editFlags.canUndo,
+        canRedo: params.editFlags.canRedo,
+        canGoBack: wc.canGoBack(),
+        canGoForward: wc.canGoForward(),
+        hasImage: Boolean(params.hasImageContents || params.srcURL),
+        isEditable: params.isEditable,
+      });
     });
   }
 
@@ -257,7 +455,33 @@ export class TabManager {
     }
     const ses = session.fromPartition(`persist:proj-${projectId}`);
     await configureProjectSession(ses, proxy.listen, proxy.fingerprint);
+    this.onSession(ses);
     this.configured.add(key);
+  }
+}
+
+function isInternalPage(url: string): boolean {
+  return (
+    url.startsWith("lurkwire://") ||
+    url === "about:preferences" ||
+    url === "about:settings" ||
+    url === "about:blank"
+  );
+}
+
+function titleForInternal(url: string): string {
+  if (isSettingsUrl(url)) {
+    return "Settings";
+  }
+  return "New Tab";
+}
+
+function isSecure(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "lurkwire:";
+  } catch {
+    return false;
   }
 }
 
@@ -270,5 +494,11 @@ function toInfo(tab: Tab): TabInfo {
     loading: tab.loading,
     canGoBack: tab.canGoBack,
     canGoForward: tab.canGoForward,
+    favicon: tab.favicon,
+    pinned: tab.pinned,
+    secure: isSecure(tab.url),
+    zoomFactor: tab.view.webContents.isDestroyed() ? 1 : tab.view.webContents.getZoomFactor(),
   };
 }
+
+export { isNewTabUrl, isSettingsUrl } from "../shared/url";
