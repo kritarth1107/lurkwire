@@ -11,6 +11,7 @@ const categories = [
   { id: "scope", label: "Scope" },
   { id: "audit", label: "Audit log" },
   { id: "llm", label: "AI models" },
+  { id: "recon", label: "Recon" },
   { id: "about", label: "About" },
 ] as const;
 
@@ -206,6 +207,7 @@ export function SettingsPage({ state }: { state: AppSnapshot }) {
         {cat === "scope" ? <ScopeSection projectId={state.currentProjectId} /> : null}
         {cat === "audit" ? <AuditSection projectId={state.currentProjectId} /> : null}
         {cat === "llm" ? <LlmSection state={state} /> : null}
+        {cat === "recon" ? <ReconSettings /> : null}
         {cat === "about" ? (
           <section>
             <h3>About {state.product}</h3>
@@ -333,6 +335,65 @@ function AuditSection({ projectId }: { projectId: string | null }) {
   );
 }
 
+
+function ReconSettings() {
+  const [key, setKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    void window.lurkwire.hasShodanKey().then(setHasKey);
+  }, []);
+  return (
+    <section>
+      <h3>Recon integrations</h3>
+      <p>
+        DNS, crt.sh, RDAP, WHOIS, and Wayback run without a key. Shodan is optional. The key is
+        stored in the OS secret store and is only sent to api.shodan.io when you run a Shodan
+        lookup.
+      </p>
+      <div className="settings-row">
+        <div>
+          <strong>Shodan API key</strong>
+          <p>{hasKey ? "A key is stored in the OS secret store." : "No key saved yet."}</p>
+          {message ? <p>{message}</p> : null}
+        </div>
+        <input
+          type="password"
+          value={key}
+          placeholder="Paste a key, then save"
+          onChange={(event) => setKey(event.target.value)}
+        />
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            void window.lurkwire
+              .setShodanKey(key)
+              .then((saved) => {
+                setHasKey(saved);
+                setKey("");
+                setMessage("Key saved.");
+              })
+              .catch((err: unknown) => setMessage(err instanceof Error ? err.message : String(err)));
+          }}
+        >
+          Save key
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void window.lurkwire.clearShodanKey().then(() => {
+              setHasKey(false);
+              setMessage("Key removed.");
+            });
+          }}
+        >
+          Remove
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function LlmSection({ state }: { state: AppSnapshot }) {
   const llm = state.prefs.llm;

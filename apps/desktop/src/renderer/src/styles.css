@@ -909,3 +909,11 @@ button.danger:hover { filter: brightness(1.08); }
 .sev-medium { background: #c45a00; color: #fff; }
 .sev-low { background: color-mix(in srgb, var(--focus-ring) 70%, #888); color: #fff; }
 .sev-info { background: var(--button-hover); color: var(--text); }
+
+.recon { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; padding: 8px; overflow: auto; }
+.recon-sources { display: flex; flex-wrap: wrap; gap: 8px 12px; }
+.recon-results section { margin: 0 0 12px; }
+.recon-results h3 { margin: 0 0 4px; font-size: 13px; }
+.recon-results p, .recon-results li { font-size: 12px; margin: 2px 0; word-break: break-word; }
+.recon-results ul { margin: 0; padding-left: 16px; }
+.recon-errors { color: var(--error, #c50042); font-size: 12px; margin: 0; padding-left: 16px; }

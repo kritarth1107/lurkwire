@@ -25,6 +25,7 @@ import { PanelManager } from "./panels";
 import { loadPrefs, savePrefs } from "./prefs";
 import { ProxySidecar } from "./proxy";
 import { clearLlmKey, completeLlm, hasLlmKey, saveLlmKey } from "./llm";
+import { clearShodanKey, hasShodanKey, runRecon, saveShodanKey } from "./recon";
 import { isSmokeRun, isolateSmokeUserData, runSmoke } from "./smoke";
 import { isNewTabUrl, isSettingsUrl, TabManager } from "./tabs";
 
@@ -651,6 +652,17 @@ function registerIpc(): void {
     }),
   );
   ipcMain.handle("lurkwire:getFinding", (_event, id: string) => control.getFinding(id));
+  ipcMain.handle("lurkwire:runRecon", (_event, request: { domain: string; sources?: string[] }) =>
+    runRecon(request as Parameters<typeof runRecon>[0]),
+  );
+  ipcMain.handle("lurkwire:hasShodanKey", () => hasShodanKey());
+  ipcMain.handle("lurkwire:setShodanKey", (_event, key: string) => {
+    saveShodanKey(key);
+    return hasShodanKey();
+  });
+  ipcMain.handle("lurkwire:clearShodanKey", () => {
+    clearShodanKey();
+  });
   ipcMain.handle("lurkwire:windowMinimize", () => mainWindow?.minimize());
   ipcMain.handle("lurkwire:windowToggleMaximize", () => {
     if (!mainWindow) {

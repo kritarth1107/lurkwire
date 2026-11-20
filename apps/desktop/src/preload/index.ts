@@ -18,6 +18,7 @@ import type {
   RepeaterSendRequest,
   ToolId,
 } from "../shared/types";
+import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
@@ -72,6 +73,11 @@ const api = {
   stopIntruder: (id: string) => ipcRenderer.invoke("lurkwire:stopIntruder", id),
   listFindings: (query: FindingQuery) => ipcRenderer.invoke("lurkwire:listFindings", query),
   getFinding: (id: string) => ipcRenderer.invoke("lurkwire:getFinding", id),
+  runRecon: (request: ReconRequest): Promise<ReconResult> =>
+    ipcRenderer.invoke("lurkwire:runRecon", request),
+  hasShodanKey: (): Promise<boolean> => ipcRenderer.invoke("lurkwire:hasShodanKey"),
+  setShodanKey: (key: string): Promise<boolean> => ipcRenderer.invoke("lurkwire:setShodanKey", key),
+  clearShodanKey: () => ipcRenderer.invoke("lurkwire:clearShodanKey"),
   windowMinimize: () => ipcRenderer.invoke("lurkwire:windowMinimize"),
   windowToggleMaximize: () => ipcRenderer.invoke("lurkwire:windowToggleMaximize"),
   windowClose: () => ipcRenderer.invoke("lurkwire:windowClose"),

@@ -13,7 +13,7 @@ Build order for v0.1. Checked items are on `main`.
 - [x] 9. Intruder-lite (sniper / pitchfork / battering ram, § positions, grep, scope and kill switch)
 - [x] 10. JWT/session tools plus encode/decode (HS* re-sign, alg none, URL/Base64/Hex/HTML/hash)
 - [x] 11. Passive scanner and anomaly flags
-- [ ] 12. Recon panel (crt.sh, DNS, RDAP/WHOIS, Wayback, optional Shodan BYO key)
+- [x] 12. Recon panel (crt.sh, DNS, RDAP/WHOIS, Wayback, optional Shodan BYO key)
 - [ ] 13. OOB collaborator via interactsh client
 - [x] 14. Linux packaging (AppImage and deb via electron-builder)
 - [x] Proton-style browser chrome (tabs, toolbar, sidebar, new tab, settings, themes)

@@ -19,6 +19,7 @@ import { AiView } from "./AiView";
 import { IntruderView } from "../IntruderView";
 import { DecodeView } from "../DecodeView";
 import { ScannerView } from "../ScannerView";
+import { ReconView } from "../ReconView";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "tabs", label: "Vertical tabs", icon: Columns2 },
@@ -132,6 +133,17 @@ export function Sidebar({
                     void window.lurkwire.setTool("repeater");
                   }}
                 />
+              ) : panel === "recon" ? (
+                <ReconView
+                  initialHost={(() => {
+                    const tab = state.tabs.find((item) => item.id === state.activeTabId);
+                    try {
+                      return tab?.url ? new URL(tab.url).hostname : "";
+                    } catch {
+                      return "";
+                    }
+                  })()}
+                />
               ) : (
                 <ComingSoon panel={panel} />
               )}
@@ -198,10 +210,6 @@ function VerticalTabs({ state }: { state: AppSnapshot }) {
 
 export function ComingSoon({ panel }: { panel: string }) {
   const copy: Record<string, { title: string; body: string }> = {
-    recon: {
-      title: "Recon",
-      body: "crt.sh, DNS, RDAP/WHOIS, and Wayback lookups will appear in this panel.",
-    },
   };
   const item = copy[panel] ?? { title: panel, body: "This tool will land in a later module." };
   return (
