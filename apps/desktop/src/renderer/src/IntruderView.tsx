@@ -184,6 +184,26 @@ export function IntruderView({
               </option>
             ))}
           </select>
+          <label className="file-btn">
+            Load from file
+            <input
+              type="file"
+              accept=".txt,.csv,text/plain"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) {
+                  return;
+                }
+                void file.text().then((text) => {
+                  const next = [...lists];
+                  next[index] = text.replace(/\r\n/g, "\n").trim();
+                  setLists(next);
+                });
+              }}
+            />
+          </label>
           <textarea
             className="mono"
             rows={5}

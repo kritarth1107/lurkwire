@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, parseRawRequest } from "./http";
+import { flowToCurl, formatBytes, parseRawRequest } from "./http";
 
 describe("http helpers", () => {
   it("formats byte sizes", () => {
@@ -19,5 +19,23 @@ describe("http helpers", () => {
       { name: "Content-Type", value: "application/json" },
     ]);
     expect(parsed.body).toBe('{"a":1}');
+  });
+
+  it("renders a cURL command from a flow", () => {
+    const curl = flowToCurl(
+      {
+        method: "POST",
+        url: "https://httpbin.org/post",
+        req_headers: [
+          { name: "Content-Type", value: "application/json" },
+          { name: "Content-Length", value: "9" },
+        ],
+      },
+      '{"z":2}',
+    );
+    expect(curl).toContain("curl --path-as-is -X POST 'https://httpbin.org/post'");
+    expect(curl).toContain("-H 'Content-Type: application/json'");
+    expect(curl).not.toContain("Content-Length");
+    expect(curl).toContain("--data-raw '{\"z\":2}'");
   });
 });

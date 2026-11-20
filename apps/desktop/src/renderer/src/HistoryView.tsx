@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, formatTime, shortMime, statusClass } from "../../shared/http";
 import { flowTitle, highlightOf, tlsLabel } from "../../shared/flowMeta";
-import { AnnotationBar, copyClickjackPoc, copyCsrfPoc, copySecurityHeaderReport, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { AnnotationBar, addFlowHostToScope, copyClickjackPoc, copyCsrfPoc, copyFlowCurl, copySecurityHeaderReport, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
 import { flowsToHar, harToString, type HarBody, type HarFlowInput } from "../../shared/harExport";
 import { downloadText } from "./downloadText";
 import { HttpViewer } from "./HttpViewer";
@@ -274,6 +274,12 @@ export function HistoryView({ projectId, handlers }: Props) {
             </button>
             <button type="button" onClick={() => void copySecurityHeaderReport(detail.id)}>
               Header report
+            </button>
+            <button type="button" onClick={() => void copyFlowCurl(detail.id)}>
+              Copy cURL
+            </button>
+            <button type="button" onClick={() => void addFlowHostToScope(detail.id)}>
+              Add host to scope
             </button>
           </>
         ) : null}

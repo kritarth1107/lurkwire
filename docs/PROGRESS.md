@@ -68,4 +68,5 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 - [x] Intruder payload presets and a localhost-only CL.TE smuggling lab
 - [x] History HAR export, sitemap markdown export, and a clickjacking PoC
 - [x] Cookie jar Netscape import/export, Cookie header copy, and import from the project browser session
+- [x] History copy-as-cURL, add-host-to-scope, and Intruder payload lists from a file
 - [ ] Remaining ideas (client-streaming/bidi gRPC, routing gRPC/WS through the MITM proxy)

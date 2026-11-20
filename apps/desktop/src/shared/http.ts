@@ -117,3 +117,25 @@ export function parseRawRequest(raw: string, fallbackUrl: string): RepeaterSendR
 export function seedRawRequest(flow: FlowDetail): { url: string; raw: string } {
   return { url: flow.url, raw: formatRawRequest(flow) };
 }
+
+
+function shellQuote(value: string): string {
+  if (value === "") {
+    return "''";
+  }
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+export function flowToCurl(flow: Pick<FlowDetail, "method" | "url" | "req_headers">, body?: string): string {
+  const parts = ["curl", "--path-as-is", "-X", flow.method, shellQuote(flow.url)];
+  for (const header of flow.req_headers) {
+    if (header.name.toLowerCase() === "content-length") {
+      continue;
+    }
+    parts.push("-H", shellQuote(`${header.name}: ${header.value}`));
+  }
+  if (body) {
+    parts.push("--data-raw", shellQuote(body));
+  }
+  return parts.join(" ");
+}
