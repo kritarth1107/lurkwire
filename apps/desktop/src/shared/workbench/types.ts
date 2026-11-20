@@ -66,6 +66,12 @@ export type WbAuthType =
   | "oauth2"
   | "awsv4";
 
+export type WbMockResponse = {
+  status: number;
+  headers: { name: string; value: string }[];
+  body: string;
+};
+
 export type WbOAuth2 = {
   grant: "authorization_code" | "client_credentials";
   accessToken?: string;
@@ -78,6 +84,7 @@ export type WbOAuth2 = {
   audience?: string;
   pkce?: boolean;
   addTo?: "header" | "query";
+  redirectUri?: string;
 };
 
 export type WbAwsV4 = {
@@ -118,6 +125,7 @@ export type WbRequest = {
   protocol?: WbProtocol;
   ws?: { protocols?: string };
   grpc?: { service?: string; method?: string; proto?: string; metadata?: WbKv[] };
+  mock?: WbMockResponse;
   updatedAt: number;
 };
 

@@ -28,7 +28,8 @@ import type { InstalledExtension } from "../shared/extensions";
 import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
-import type { RunnerProgress, RunnerSpec, WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
+import type { RunnerProgress, RunnerSpec, WbOAuth2, WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
+import type { NotesStore } from "../shared/notes";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
   const listener = (_event: unknown, value: T) => callback(value);
@@ -183,6 +184,41 @@ const api = {
     ipcRenderer.invoke("lurkwire:workbenchRun", spec),
   workbenchImportFlow: (flowId: string): Promise<{ workspace: WbWorkspace; request: WbRequest }> =>
     ipcRenderer.invoke("lurkwire:workbenchImportFlow", flowId),
+  workbenchPickBinary: (): Promise<{ fileName: string; base64: string; mime: string; size: number } | null> =>
+    ipcRenderer.invoke("lurkwire:workbenchPickBinary"),
+  workbenchMockStart: (collectionId: string): Promise<{ running: boolean; url: string | null; collectionId: string | null }> =>
+    ipcRenderer.invoke("lurkwire:workbenchMockStart", collectionId),
+  workbenchMockStop: (): Promise<{ running: boolean; url: string | null; collectionId: string | null }> =>
+    ipcRenderer.invoke("lurkwire:workbenchMockStop"),
+  workbenchMockStatus: (): Promise<{ running: boolean; url: string | null; collectionId: string | null }> =>
+    ipcRenderer.invoke("lurkwire:workbenchMockStatus"),
+  workbenchStreamOpen: (input: {
+    kind: "websocket" | "sse";
+    url: string;
+    protocols?: string;
+    headers?: { name: string; value: string }[];
+    projectId?: string | null;
+  }): Promise<{ id: string; kind: "websocket" | "sse"; url: string }> =>
+    ipcRenderer.invoke("lurkwire:workbenchStreamOpen", input),
+  workbenchStreamSend: (id: string, text: string) => ipcRenderer.invoke("lurkwire:workbenchStreamSend", id, text),
+  workbenchStreamClose: (id: string) => ipcRenderer.invoke("lurkwire:workbenchStreamClose", id),
+  onWorkbenchStream: (
+    callback: (frame: { sessionId: string; id: string; at: number; dir: "in" | "out" | "sys"; text: string }) => void,
+  ) => listen("lurkwire:workbenchStream", callback),
+  workbenchOauthStart: (
+    oauth: WbOAuth2,
+  ): Promise<{ accessToken: string; refreshToken?: string; tokenType?: string; raw: string }> =>
+    ipcRenderer.invoke("lurkwire:workbenchOauthStart", oauth),
+  workbenchOauthExchange: (input: {
+    oauth: WbOAuth2;
+    redirectUrl: string;
+    redirectUri?: string;
+  }): Promise<{ accessToken: string; refreshToken?: string; tokenType?: string; raw: string }> =>
+    ipcRenderer.invoke("lurkwire:workbenchOauthExchange", input),
+  notesGet: (): Promise<NotesStore> => ipcRenderer.invoke("lurkwire:notesGet"),
+  notesSave: (store: NotesStore): Promise<NotesStore> => ipcRenderer.invoke("lurkwire:notesSave", store),
+  notesExport: (projectId?: string): Promise<string> => ipcRenderer.invoke("lurkwire:notesExport", projectId),
+  activeSend: (req: RepeaterSendRequest) => ipcRenderer.invoke("lurkwire:activeSend", req),
 };
 
 

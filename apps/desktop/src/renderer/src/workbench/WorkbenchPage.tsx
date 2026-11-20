@@ -38,6 +38,7 @@ import {
 } from "../../../shared/workbench";
 import { MonacoView } from "../MonacoView";
 import { queueIntruderDraft, queueRepeaterDraft } from "./pendingSend";
+import { StreamPane } from "./StreamPane";
 
 type ReqTab = "params" | "headers" | "body" | "auth" | "scripts";
 type RespTab = "pretty" | "raw" | "headers" | "cookies" | "tests" | "timing";
@@ -115,6 +116,11 @@ export function WorkbenchPage({ url }: { url: string }) {
   const [runBusy, setRunBusy] = useState(false);
   const [runResults, setRunResults] = useState<RunnerProgress[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [mock, setMock] = useState<{ running: boolean; url: string | null; collectionId: string | null }>({ running: false, url: null, collectionId: null });
+
+  useEffect(() => {
+    void window.lurkwire.workbenchMockStatus().then(setMock).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     void window.lurkwire.workbenchGet().then((data) => {
@@ -508,6 +514,22 @@ export function WorkbenchPage({ url }: { url: string }) {
             <button
               type="button"
               disabled={!collection}
+              className={mock.running ? "active" : ""}
+              onClick={() => {
+                if (!collection) {
+                  return;
+                }
+                void (mock.running
+                  ? window.lurkwire.workbenchMockStop()
+                  : window.lurkwire.workbenchMockStart(collection.id)
+                ).then(setMock).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+              }}
+            >
+              {mock.running ? "Stop mock" : "Mock"}
+            </button>
+            <button
+              type="button"
+              disabled={!collection}
               onClick={() => {
                 if (!collection) {
                   return;
@@ -530,6 +552,15 @@ export function WorkbenchPage({ url }: { url: string }) {
         {request ? (
           <>
             <div className="wb-urlbar">
+              <select
+                value={request.protocol ?? "http"}
+                onChange={(event) => patchRequest({ protocol: event.target.value as WbRequest["protocol"] })}
+                aria-label="Protocol"
+              >
+                <option value="http">HTTP</option>
+                <option value="websocket">WebSocket</option>
+                <option value="sse">SSE</option>
+              </select>
               <select value={request.method} onChange={(event) => patchRequest({ method: event.target.value })}>
                 {WB_METHODS.map((method) => (
                   <option key={method} value={method}>
@@ -569,7 +600,25 @@ export function WorkbenchPage({ url }: { url: string }) {
               <button type="button" onClick={() => void sendToTool("intruder")} disabled={!result?.flowId}>
                 Send to Intruder
               </button>
+              {result && (request.protocol ?? "http") === "http" ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    patchRequest({
+                      mock: {
+                        status: result.status ?? 200,
+                        headers: result.responseHeaders ?? [],
+                        body: result.responseText ?? "",
+                      },
+                    })
+                  }
+                >
+                  Use response as mock
+                </button>
+              ) : null}
             </div>
+            {mock.running && mock.url ? <p className="wb-muted">Mock server: {mock.url}</p> : null}
+            {(request.protocol === "websocket" || request.protocol === "sse") ? <StreamPane request={request} /> : null}
             <div className="wb-split">
               <div className="wb-req">
                 <div className="wb-subtabs">
@@ -1110,8 +1159,100 @@ function BodyEditor({ request, onChange }: { request: WbRequest; onChange: (patc
         </div>
       ) : null}
       {body.mode === "binary" ? (
-        <p className="wb-muted">Binary bodies can be attached when sending a file field from multipart; a standalone file picker will land in a follow-up.</p>
+        <div className="wb-binary">
+          <button
+            type="button"
+            onClick={() => {
+              void window.lurkwire.workbenchPickBinary().then((file) => {
+                if (file) {
+                  onChange({ body: { ...body, mode: "binary", binary: { fileName: file.fileName, base64: file.base64, mime: file.mime } } });
+                }
+              });
+            }}
+          >
+            Choose file
+          </button>
+          {body.binary?.fileName ? (
+            <p className="wb-muted">
+              {body.binary.fileName}
+              {body.binary.mime ? ` · ${body.binary.mime}` : ""}
+              {body.binary.base64 ? ` · ${Math.ceil((body.binary.base64.length * 3) / 4)} bytes` : ""}
+            </p>
+          ) : (
+            <p className="wb-muted">No file attached.</p>
+          )}
+        </div>
       ) : null}
+    </div>
+  );
+}
+
+
+function OAuthCodeFlow({ auth, onChange }: { auth: WbAuth; onChange: (auth: WbAuth) => void }) {
+  const [redirect, setRedirect] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const oauth = auth.oauth2 ?? { grant: "authorization_code" as const, pkce: true };
+
+  const applyToken = (accessToken: string, refreshToken?: string) => {
+    onChange({ ...auth, oauth2: { ...oauth, accessToken, refreshToken: refreshToken ?? oauth.refreshToken } });
+  };
+
+  return (
+    <div className="wb-oauth">
+      <label>
+        Redirect URI
+        <input
+          value={oauth.redirectUri ?? ""}
+          onChange={(event) => onChange({ ...auth, oauth2: { ...oauth, redirectUri: event.target.value } })}
+          placeholder="Leave blank to use a temporary http://127.0.0.1 port"
+          spellCheck={false}
+        />
+      </label>
+      <div className="wb-oauth-actions">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setMessage(null);
+            void window.lurkwire
+              .workbenchOauthStart(oauth)
+              .then((result) => {
+                applyToken(result.accessToken, result.refreshToken);
+                setMessage("Access token saved. The token host must be in scope.");
+              })
+              .catch((err: unknown) => setMessage(err instanceof Error ? err.message : String(err)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          {busy ? "Waiting…" : "Get token"}
+        </button>
+      </div>
+      <label>
+        Paste redirect URL or code
+        <input value={redirect} onChange={(event) => setRedirect(event.target.value)} placeholder="http://127.0.0.1/callback?code=… or the code itself" spellCheck={false} />
+      </label>
+      <button
+        type="button"
+        disabled={busy || !redirect.trim()}
+        onClick={() => {
+          setBusy(true);
+          setMessage(null);
+          const redirectUrl = redirect.includes("://") ? redirect : `http://127.0.0.1/callback?code=${encodeURIComponent(redirect.trim())}`;
+          void window.lurkwire
+            .workbenchOauthExchange({ oauth, redirectUrl, redirectUri: oauth.redirectUri })
+            .then((result) => {
+              applyToken(result.accessToken, result.refreshToken);
+              setMessage("Access token saved from the pasted redirect.");
+            })
+            .catch((err: unknown) => setMessage(err instanceof Error ? err.message : String(err)))
+            .finally(() => setBusy(false));
+        }}
+      >
+        Exchange code
+      </button>
+      {message ? <p className="wb-muted">{message}</p> : null}
     </div>
   );
 }
@@ -1383,10 +1524,7 @@ function AuthEditor({ auth, onChange }: { auth: WbAuth; onChange: (auth: WbAuth)
         </>
       ) : null}
       {auth.type === "oauth2" && auth.oauth2?.grant === "authorization_code" ? (
-        <p className="wb-muted">
-          Paste an access token, or use client credentials (sent through the Lurkwire proxy). A full in-app PKCE browser
-          flow is still being wired.
-        </p>
+        <OAuthCodeFlow auth={auth} onChange={onChange} />
       ) : null}
     </div>
   );

@@ -16,6 +16,10 @@ export type ToolId =
   | "logger"
   | "sequencer"
   | "oob"
+  | "autorize"
+  | "notes"
+  | "discover"
+  | "graphql"
   | "settings";
 
 export type SidebarPanel =
@@ -31,7 +35,11 @@ export type SidebarPanel =
   | "comparer"
   | "logger"
   | "sequencer"
-  | "oob";
+  | "oob"
+  | "autorize"
+  | "notes"
+  | "discover"
+  | "graphql";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -178,6 +186,7 @@ export type RepeaterSendRequest = {
   headers: HeaderPair[];
   body?: string;
   body_base64?: boolean;
+  source?: string;
 };
 
 export type AppSnapshot = {

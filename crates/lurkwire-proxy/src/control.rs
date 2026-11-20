@@ -222,11 +222,23 @@ async fn repeater_send(
     Ok(Json(detail))
 }
 
+
+fn allowed_source<'a>(raw: Option<&'a str>, fallback: &'a str) -> &'a str {
+    const ALLOWED: &[&str] = &[
+        "workbench", "repeater", "intruder", "autorize", "discover", "graphql", "oauth", "scanner", "sse", "websocket",
+    ];
+    match raw {
+        Some(value) if ALLOWED.contains(&value) => value,
+        _ => fallback,
+    }
+}
+
 async fn workbench_send(
     State(state): State<Arc<AppState>>,
     Json(body): Json<RepeaterSendRequest>,
 ) -> Result<Json<crate::types::FlowDetail>, ApiError> {
-    let result = send_active(&state, body, "workbench", None).await?;
+    let source = body.source.clone();
+    let result = send_active(&state, body, allowed_source(source.as_deref(), "workbench"), None).await?;
     Ok(Json(result.detail))
 }
 

@@ -463,6 +463,7 @@ async fn fire_one(
         headers: headers.to_vec(),
         body: Some(body.to_string()),
         body_base64: Some(false),
+        source: None,
     };
     match crate::proxy::send_active(state, send, "intruder", Some(permit)).await {
         Ok(sent) => {

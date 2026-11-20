@@ -46,7 +46,14 @@ import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, importVisits, listVisits } from "./visits";
 import { getMaskedWorkspace, importFlowToWorkbench, putWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
-import type { RunnerSpec, WbRequest, WbWorkspace } from "../shared/workbench";
+import type { RunnerSpec, WbOAuth2, WbRequest, WbWorkspace } from "../shared/workbench";
+import { pickBinary } from "./workbench/binary";
+import { mockStatus, startMock, stopMock } from "./workbench/mockServer";
+import { closeStream, openStream, sendStream, type StreamOpen } from "./workbench/stream";
+import { exchangeOauthCode, startOauthBrowserFlow } from "./workbench/oauth";
+import { parseRedirectCallback } from "../shared/workbench/oauthPkce";
+import { exportNotesMarkdown, loadNotes, saveNotes } from "./notesStore";
+import type { NotesStore } from "../shared/notes";
 
 app.setName(PRODUCT_NAME);
 registerLurkwireScheme();
@@ -1156,6 +1163,47 @@ function registerIpc(): void {
       body = flow.req_preview ?? undefined;
     }
     return importFlowToWorkbench(flow, body);
+  });
+
+  ipcMain.handle("lurkwire:workbenchPickBinary", (event) => {
+    return pickBinary(BrowserWindow.fromWebContents(event.sender));
+  });
+  ipcMain.handle("lurkwire:workbenchMockStart", (_event, collectionId: string) => startMock(collectionId));
+  ipcMain.handle("lurkwire:workbenchMockStop", () => stopMock());
+  ipcMain.handle("lurkwire:workbenchMockStatus", () => mockStatus());
+  ipcMain.handle("lurkwire:workbenchStreamOpen", (event, input: StreamOpen) => {
+    return openStream(input, control, (frame) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("lurkwire:workbenchStream", frame);
+      }
+    });
+  });
+  ipcMain.handle("lurkwire:workbenchStreamSend", (event, id: string, text: string) => {
+    sendStream(id, text, (frame) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("lurkwire:workbenchStream", frame);
+      }
+    });
+  });
+  ipcMain.handle("lurkwire:workbenchStreamClose", (_event, id: string) => closeStream(id));
+  ipcMain.handle("lurkwire:workbenchOauthStart", (event, oauth: WbOAuth2) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const partition = currentProjectId ? `persist:proj-${currentProjectId}` : undefined;
+    return startOauthBrowserFlow(oauth, win, control, currentProjectId, partition);
+  });
+  ipcMain.handle("lurkwire:workbenchOauthExchange", (_event, input: { oauth: WbOAuth2; redirectUrl: string; redirectUri?: string }) => {
+    const { code } = parseRedirectCallback(input.redirectUrl);
+    const redirectUri = input.redirectUri || input.redirectUrl.split("?")[0] || input.redirectUrl;
+    return exchangeOauthCode(input.oauth, { code, redirectUri }, control, currentProjectId);
+  });
+  ipcMain.handle("lurkwire:notesGet", () => loadNotes());
+  ipcMain.handle("lurkwire:notesSave", (_event, store: NotesStore) => saveNotes(store));
+  ipcMain.handle("lurkwire:notesExport", async (_event, projectId?: string) => {
+    const list = await control.listFindings({ project_id: projectId ?? currentProjectId ?? undefined, limit: 500 });
+    return exportNotesMarkdown(list.items);
+  });
+  ipcMain.handle("lurkwire:activeSend", (_event, req: RepeaterSendRequest) => {
+    return control.sendWorkbench({ ...req, project_id: req.project_id ?? currentProjectId ?? undefined });
   });
 
   ipcMain.handle("lurkwire:revealPath", (_event, filePath: string) => shell.showItemInFolder(filePath));

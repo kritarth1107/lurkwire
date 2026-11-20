@@ -85,6 +85,8 @@ pub struct RepeaterSendRequest {
     pub headers: Vec<HeaderPair>,
     pub body: Option<String>,
     pub body_base64: Option<bool>,
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 pub fn url_from_parts(scheme: &str, host: &str, port: u16, path: &str, query: &str) -> String {

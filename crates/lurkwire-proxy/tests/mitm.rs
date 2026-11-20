@@ -99,6 +99,7 @@ async fn repeater_send_records_source() {
             }],
             body: None,
             body_base64: None,
+            source: None,
         },
     )
     .await
