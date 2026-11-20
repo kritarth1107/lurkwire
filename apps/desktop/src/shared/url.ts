@@ -4,6 +4,7 @@ export const INTERNAL_PAGES = [
   "history",
   "bookmarks",
   "extensions",
+  "workbench",
   "newtab",
   "about",
 ] as const;
@@ -16,6 +17,7 @@ export const INTERNAL_TITLES: Record<InternalPage, string> = {
   history: "History",
   bookmarks: "Bookmarks",
   extensions: "Extensions",
+  workbench: "Workbench",
   newtab: "New Tab",
   about: "About Lurkwire",
 };
@@ -31,6 +33,7 @@ const ALIASES: Record<string, InternalPage> = {
   "about:history": "history",
   "about:bookmarks": "bookmarks",
   "about:addons": "extensions",
+  "about:workbench": "workbench",
   "about:about": "about",
   "about:lurkwire": "about",
   "chrome://settings": "settings",
@@ -38,6 +41,8 @@ const ALIASES: Record<string, InternalPage> = {
   "chrome://history": "history",
   "chrome://bookmarks": "bookmarks",
   "chrome://extensions": "extensions",
+  "lurkwire://api": "workbench",
+  "lurkwire://postman": "workbench",
   "chrome://newtab": "newtab",
   "chrome://new-tab-page": "newtab",
 };

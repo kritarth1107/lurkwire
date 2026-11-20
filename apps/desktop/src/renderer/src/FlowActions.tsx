@@ -9,7 +9,7 @@ export type FlowSendHandlers = {
   onSendToComparer?: (flow: FlowDetail) => void;
 };
 
-export async function sendFlow(id: string, target: "repeater" | "intruder" | "comparer", handlers: FlowSendHandlers) {
+export async function sendFlow(id: string, target: "repeater" | "intruder" | "comparer" | "workbench", handlers: FlowSendHandlers) {
   const flow = await window.lurkwire.getFlow(id);
   if (target === "repeater") {
     handlers.onSendToRepeater(flow);
@@ -17,6 +17,11 @@ export async function sendFlow(id: string, target: "repeater" | "intruder" | "co
   }
   if (target === "intruder") {
     handlers.onSendToIntruder(flow);
+    return;
+  }
+  if (target === "workbench") {
+    const imported = await window.lurkwire.workbenchImportFlow(id);
+    await window.lurkwire.navigate(`lurkwire://workbench#${imported.request.id}`);
     return;
   }
   addComparerItem(flow.id, `${flow.method} ${flow.host}${flow.path}`);
@@ -79,6 +84,9 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "intruder", handlers)}>
         Send to Intruder
+      </button>
+      <button type="button" onClick={() => void sendFlow(menu.flow.id, "workbench", handlers)}>
+        Send to Workbench
       </button>
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "comparer", handlers)}>
         Send to Comparer

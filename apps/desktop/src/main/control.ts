@@ -70,6 +70,10 @@ export class ControlClient {
     return this.json("POST", "/repeater/send", req);
   }
 
+  sendWorkbench(req: RepeaterSendRequest): Promise<FlowDetail> {
+    return this.json("POST", "/workbench/send", req);
+  }
+
   getIntercept(): Promise<InterceptState> {
     return this.json("GET", "/intercept");
   }

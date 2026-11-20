@@ -6,9 +6,10 @@ type Props = {
   value: string;
   language?: string;
   readOnly?: boolean;
+  onChange?: (value: string) => void;
 };
 
-export function MonacoView({ value, language = "plaintext", readOnly = true }: Props) {
+export function MonacoView({ value, language = "plaintext", readOnly = true, onChange }: Props) {
   const [failed, setFailed] = useState(false);
   const [theme, setTheme] = useState<"vs" | "vs-dark">("vs");
 
@@ -49,6 +50,7 @@ export function MonacoView({ value, language = "plaintext", readOnly = true }: P
         }}
         loading={<pre className="code-block monaco-fallback">{value || "Loading editor…"}</pre>}
         onMount={() => setFailed(false)}
+        onChange={(next) => onChange?.(next ?? "")}
         onValidate={() => undefined}
       />
     </div>

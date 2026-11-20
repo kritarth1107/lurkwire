@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { takeIntruderDraft, takeRepeaterDraft } from "../workbench/pendingSend";
 import {
   Crosshair,
   FolderTree,
@@ -63,6 +65,17 @@ export function Sidebar({
   onDraftConsumed: () => void;
   onIntruderDraftConsumed: () => void;
 }) {
+  useEffect(() => {
+    const repeater = takeRepeaterDraft();
+    if (repeater) {
+      onRepeaterDraft(repeater);
+    }
+    const intruder = takeIntruderDraft();
+    if (intruder) {
+      onIntruderDraft(intruder);
+    }
+  }, [state.tool, onRepeaterDraft, onIntruderDraft]);
+
   const open = state.prefs.sidebarOpen;
   const panel = state.prefs.sidebarPanel;
   const width = state.prefs.sidebarWidth;

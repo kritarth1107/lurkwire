@@ -17,7 +17,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use crate::guardrails::GuardError;
 use crate::intercept::{Decision, ForwardEdit, InterceptConfig, PausedItem};
 use crate::intruder::{self, IntruderJob, IntruderStart};
-use crate::proxy::send_repeater;
+use crate::proxy::{send_active, send_repeater};
 use crate::scope::{NewScopeRule, ScopeKind, ScopeRule};
 use crate::store::AuditEntry;
 use crate::types::{Finding, FindingQuery, FlowQuery, Project, RepeaterSendRequest};
@@ -40,6 +40,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/flows/{id}/body/{which}", get(get_flow_body))
         .route("/events", get(events))
         .route("/repeater/send", post(repeater_send))
+        .route("/workbench/send", post(workbench_send))
         .route("/intercept", get(get_intercept).put(put_intercept))
         .route("/intercept/queue", get(list_intercept_queue))
         .route("/intercept/queue/{id}", get(get_intercept_item))
@@ -219,6 +220,14 @@ async fn repeater_send(
 ) -> Result<Json<crate::types::FlowDetail>, ApiError> {
     let detail = send_repeater(&state, body).await?;
     Ok(Json(detail))
+}
+
+async fn workbench_send(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<RepeaterSendRequest>,
+) -> Result<Json<crate::types::FlowDetail>, ApiError> {
+    let result = send_active(&state, body, "workbench", None).await?;
+    Ok(Json(result.detail))
 }
 
 #[derive(serde::Serialize)]

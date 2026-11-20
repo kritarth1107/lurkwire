@@ -46,7 +46,10 @@ describe("internal pages", () => {
     expect(parseInternalPage("lurkwire://history#today")).toBe("history");
     expect(parseInternalPage("lurkwire://bookmarks/")).toBe("bookmarks");
     expect(parseInternalPage("lurkwire://extensions")).toBe("extensions");
+    expect(parseInternalPage("lurkwire://workbench")).toBe("workbench");
+    expect(parseInternalPage("lurkwire://api")).toBe("workbench");
     expect(parseInternalPage("lurkwire://about")).toBe("about");
+    expect(titleForInternalPage("lurkwire://workbench")).toBe("Workbench");
     expect(parseInternalPage("chrome://extensions")).toBe("extensions");
     expect(parseInternalPage("lurkwire://unknown")).toBeNull();
   });

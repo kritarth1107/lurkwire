@@ -4,6 +4,7 @@ import { parseInternalPage, type InternalPage as PageId, INTERNAL_TITLES } from 
 import { SettingsPage } from "./SettingsPage";
 import { ExtensionsPage } from "./ExtensionsPage";
 import { NewTabPage } from "./NewTabPage";
+import { WorkbenchPage } from "../workbench/WorkbenchPage";
 
 export function InternalPage({ state, url }: { state: AppSnapshot; url: string }) {
   const page = parseInternalPage(url);
@@ -31,6 +32,9 @@ export function InternalPage({ state, url }: { state: AppSnapshot; url: string }
         <ExtensionsPage />
       </PageShell>
     );
+  }
+  if (page === "workbench") {
+    return <WorkbenchPage url={url} />;
   }
   return <AboutPage state={state} />;
 }
@@ -257,6 +261,7 @@ function AboutPage({ state }: { state: AppSnapshot }) {
         ["History", "lurkwire://history"],
         ["Bookmarks", "lurkwire://bookmarks"],
         ["Extensions", "lurkwire://extensions"],
+        ["Workbench", "lurkwire://workbench"],
       ] as const,
     [],
   );

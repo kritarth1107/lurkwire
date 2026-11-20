@@ -45,6 +45,8 @@ import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpacked
 import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, importVisits, listVisits } from "./visits";
+import { getMaskedWorkspace, importFlowToWorkbench, putWorkspace, sendFromWorkbench, transportFrom } from "./workbench";
+import type { WbRequest, WbWorkspace } from "../shared/workbench";
 
 app.setName(PRODUCT_NAME);
 registerLurkwireScheme();
@@ -580,6 +582,10 @@ function handleShortcut(input: Electron.Input, win: ChromeWin, contents: Electro
   }
   if (ctrl && shift && key === "o") {
     void openInternalPage("bookmarks", win);
+    return true;
+  }
+  if (ctrl && shift && key === "m") {
+    void openInternalPage("workbench", win);
     return true;
   }
   if (ctrl && key === "p") {
@@ -1120,6 +1126,30 @@ function registerIpc(): void {
     win.window.focus();
     win.window.webContents.focus();
   });
+
+  ipcMain.handle("lurkwire:workbenchGet", () => getMaskedWorkspace());
+  ipcMain.handle("lurkwire:workbenchSave", (_event, workspace: WbWorkspace) => putWorkspace(workspace));
+  ipcMain.handle("lurkwire:workbenchSend", (event, draft: WbRequest) => {
+    void event;
+    return sendFromWorkbench(
+      draft,
+      transportFrom(control, () => currentProjectId),
+    );
+  });
+  ipcMain.handle("lurkwire:workbenchImportFlow", async (_event, flowId: string) => {
+    const flow = await control.getFlow(flowId);
+    let body: string | undefined;
+    try {
+      const buf = Buffer.from(await control.getFlowBody(flowId, "req"));
+      if (buf.byteLength > 0) {
+        body = buf.toString("utf8");
+      }
+    } catch {
+      body = flow.req_preview ?? undefined;
+    }
+    return importFlowToWorkbench(flow, body);
+  });
+
   ipcMain.handle("lurkwire:revealPath", (_event, filePath: string) => shell.showItemInFolder(filePath));
   ipcMain.handle("lurkwire:command", async (event, name: string) => {
     const win = ctx(event);

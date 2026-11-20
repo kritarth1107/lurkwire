@@ -28,6 +28,7 @@ import type { InstalledExtension } from "../shared/extensions";
 import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
+import type { WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
   const listener = (_event: unknown, value: T) => callback(value);
@@ -172,7 +173,15 @@ const api = {
   onFocusUrl: (callback: () => void) => listen("lurkwire:focus-url", callback),
   onOpenFind: (callback: () => void) => listen("lurkwire:open-find", callback),
   onEscape: (callback: () => void) => listen("lurkwire:escape", callback),
+  workbenchGet: (): Promise<WbWorkspace> => ipcRenderer.invoke("lurkwire:workbenchGet"),
+  workbenchSave: (workspace: WbWorkspace): Promise<WbWorkspace> =>
+    ipcRenderer.invoke("lurkwire:workbenchSave", workspace),
+  workbenchSend: (draft: WbRequest): Promise<WbSendResult> =>
+    ipcRenderer.invoke("lurkwire:workbenchSend", draft),
+  workbenchImportFlow: (flowId: string): Promise<{ workspace: WbWorkspace; request: WbRequest }> =>
+    ipcRenderer.invoke("lurkwire:workbenchImportFlow", flowId),
 };
+
 
 contextBridge.exposeInMainWorld("lurkwire", api);
 

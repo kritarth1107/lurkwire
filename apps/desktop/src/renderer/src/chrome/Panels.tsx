@@ -229,6 +229,7 @@ function AppMenu({ state }: { state: AppSnapshot }) {
           }}
         />
         <MenuItem label="Site map" onClick={() => { void window.lurkwire.setTool("sitemap"); close(); }} />
+        <MenuItem label="API Workbench" shortcut="Ctrl+Shift+M" onClick={() => go("lurkwire://workbench")} />
         <MenuItem label="Comparer" onClick={() => { void window.lurkwire.setTool("comparer"); close(); }} />
         <MenuItem label="Sequencer" onClick={() => { void window.lurkwire.setTool("sequencer"); close(); }} />
         <MenuItem label="Logger" onClick={() => { void window.lurkwire.setTool("logger"); close(); }} />
@@ -274,6 +275,7 @@ function AppMenu({ state }: { state: AppSnapshot }) {
       <MenuItem label="Passwords and autofill" onClick={() => go("lurkwire://settings")} />
       <MenuItem label="History" shortcut="Ctrl+H" submenu onClick={() => setSub("history")} />
       <MenuItem label="Downloads" shortcut="Ctrl+J" onClick={() => go("lurkwire://downloads")} />
+      <MenuItem label="Workbench" shortcut="Ctrl+Shift+M" onClick={() => go("lurkwire://workbench")} />
       <MenuItem label="Bookmarks and lists" submenu onClick={() => setSub("bookmarks")} />
       <MenuItem label="Tab groups" submenu onClick={() => setSub("tabgroups")} />
       <MenuItem label="Extensions" submenu onClick={() => setSub("extensions")} />
