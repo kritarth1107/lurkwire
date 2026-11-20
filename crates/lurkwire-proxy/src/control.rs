@@ -20,7 +20,7 @@ use crate::intruder::{self, IntruderJob, IntruderStart};
 use crate::proxy::send_repeater;
 use crate::scope::{NewScopeRule, ScopeKind, ScopeRule};
 use crate::store::AuditEntry;
-use crate::types::{FlowQuery, Project, RepeaterSendRequest};
+use crate::types::{Finding, FindingQuery, FlowQuery, Project, RepeaterSendRequest};
 use crate::AppState;
 
 pub async fn run_control(listener: TcpListener, state: Arc<AppState>) -> anyhow::Result<()> {
@@ -51,6 +51,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/scope/{id}", delete(delete_scope))
         .route("/audit", get(list_audit))
         .route("/intruder", get(list_intruder).post(start_intruder))
+        .route("/findings", get(list_findings))
+        .route("/findings/{id}", get(get_finding))
         .route("/intruder/{id}", get(get_intruder))
         .route("/intruder/{id}/stop", post(stop_intruder))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
@@ -292,6 +294,34 @@ fn tokens_equal(a: &str, b: &str) -> bool {
     a.as_bytes().ct_eq(b.as_bytes()).into()
 }
 
+
+
+async fn list_findings(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<FindingQuery>,
+) -> Result<Json<FindingList>, ApiError> {
+    let (items, total) = state
+        .store
+        .list_findings(&query, &state.default_project_id)?;
+    Ok(Json(FindingList { items, total }))
+}
+
+async fn get_finding(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<Finding>, ApiError> {
+    state
+        .store
+        .get_finding(&id)?
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("finding not found"))
+}
+
+#[derive(serde::Serialize)]
+struct FindingList {
+    items: Vec<Finding>,
+    total: u32,
+}
 
 async fn start_intruder(
     State(state): State<Arc<AppState>>,

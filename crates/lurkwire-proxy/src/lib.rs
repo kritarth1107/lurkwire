@@ -5,6 +5,7 @@ pub mod guardrails;
 pub mod intercept;
 pub mod intruder;
 pub mod proxy;
+pub mod scanner;
 pub mod scope;
 pub mod store;
 pub mod types;

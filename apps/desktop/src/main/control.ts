@@ -10,6 +10,9 @@ import type {
   NewScopeRule,
   PausedItem,
   Project,
+  Finding,
+  FindingList,
+  FindingQuery,
   IntruderJob,
   IntruderStart,
   RepeaterSendRequest,
@@ -125,6 +128,22 @@ export class ControlClient {
 
   stopIntruder(id: string): Promise<IntruderJob> {
     return this.json("POST", `/intruder/${encodeURIComponent(id)}/stop`);
+  }
+
+  listFindings(query: FindingQuery): Promise<FindingList> {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === "") {
+        continue;
+      }
+      params.set(key, String(value));
+    }
+    const qs = params.toString();
+    return this.json("GET", qs ? `/findings?${qs}` : "/findings");
+  }
+
+  getFinding(id: string): Promise<Finding> {
+    return this.json("GET", `/findings/${encodeURIComponent(id)}`);
   }
 
   private url(path: string): string {

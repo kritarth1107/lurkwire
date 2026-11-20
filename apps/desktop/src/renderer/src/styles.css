@@ -896,3 +896,16 @@ button.danger:hover { filter: brightness(1.08); }
 .decode-pane { display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: auto; }
 .codec-grid { display: flex; flex-direction: column; gap: 4px; }
 .codec-row { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 12px; }
+
+.scanner { display: flex; flex-direction: column; gap: 8px; height: 100%; min-height: 0; padding: 8px; }
+.scanner-split { display: flex; flex-direction: column; gap: 8px; min-height: 0; flex: 1; }
+.scanner-list { overflow: auto; flex: 1; min-height: 120px; }
+.scanner-detail { overflow: auto; border-top: 1px solid var(--border); padding-top: 8px; }
+.scanner-detail h3 { margin: 0 0 4px; font-size: 13px; }
+.scanner-detail p { margin: 6px 0; font-size: 12px; }
+.evidence { white-space: pre-wrap; word-break: break-word; font-size: 11px; background: var(--field-bg, var(--content)); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 6px 8px; max-height: 160px; overflow: auto; }
+.sev { display: inline-block; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.03em; padding: 1px 6px; border-radius: 999px; }
+.sev-high { background: #c50042; color: #fff; }
+.sev-medium { background: #c45a00; color: #fff; }
+.sev-low { background: color-mix(in srgb, var(--focus-ring) 70%, #888); color: #fff; }
+.sev-info { background: var(--button-hover); color: var(--text); }

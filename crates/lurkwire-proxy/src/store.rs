@@ -8,7 +8,8 @@ use sha2::{Digest, Sha256};
 
 use crate::scope::{ScopeKind, ScopeRule};
 use crate::types::{
-    url_from_parts, FlowDetail, FlowQuery, FlowSummary, HeaderPair, Project, PREVIEW_CHARS,
+    url_from_parts, Finding, FindingDraft, FindingQuery, FlowDetail, FlowQuery, FlowSummary,
+    HeaderPair, Project, Severity, PREVIEW_CHARS,
 };
 
 const SCHEMA: &str = r#"
@@ -94,6 +95,27 @@ CREATE TABLE IF NOT EXISTS audit_log (
   hash TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS audit_log_ts ON audit_log(ts DESC);
+
+CREATE TABLE IF NOT EXISTS findings (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  flow_id TEXT,
+  ts INTEGER NOT NULL,
+  check_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  detail TEXT NOT NULL,
+  evidence TEXT NOT NULL,
+  host TEXT NOT NULL,
+  path TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status INTEGER,
+  count INTEGER NOT NULL DEFAULT 1,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS findings_dedup
+  ON findings(project_id, check_id, host, path, method);
+CREATE INDEX IF NOT EXISTS findings_project_ts ON findings(project_id, ts DESC);
 "#;
 
 const MAX_INDEX_CHARS: usize = 256 * 1024;
@@ -623,11 +645,159 @@ impl Store {
             if expected != entry.hash {
                 return Ok(false);
             }
+
             prev = entry.hash;
         }
         Ok(true)
     }
+
+    pub fn upsert_finding(&self, draft: &FindingDraft) -> Result<Finding> {
+        let conn = self.conn.lock().expect("store lock");
+        let existing: Option<(String, u32)> = conn
+            .query_row(
+                "SELECT id, count FROM findings
+                 WHERE project_id = ?1 AND check_id = ?2 AND host = ?3 AND path = ?4 AND method = ?5",
+                params![
+                    draft.project_id,
+                    draft.check_id,
+                    draft.host,
+                    draft.path,
+                    draft.method
+                ],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()?;
+        let ts = now_ms();
+        let severity = match draft.severity {
+            Severity::Info => "info",
+            Severity::Low => "low",
+            Severity::Medium => "medium",
+            Severity::High => "high",
+        };
+        let (id, count) = if let Some((id, count)) = existing {
+            let count = count + 1;
+            conn.execute(
+                "UPDATE findings SET ts = ?1, flow_id = ?2, evidence = ?3, status = ?4, count = ?5, detail = ?6
+                 WHERE id = ?7",
+                params![
+                    ts,
+                    draft.flow_id,
+                    draft.evidence,
+                    draft.status.map(|s| s as i64),
+                    count as i64,
+                    draft.detail,
+                    id,
+                ],
+            )?;
+            (id, count)
+        } else {
+            let id = uuid::Uuid::new_v4().to_string();
+            conn.execute(
+                "INSERT INTO findings (
+                    id, project_id, flow_id, ts, check_id, title, severity, detail, evidence,
+                    host, path, method, status, count
+                ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,1)",
+                params![
+                    id,
+                    draft.project_id,
+                    draft.flow_id,
+                    ts,
+                    draft.check_id,
+                    draft.title,
+                    severity,
+                    draft.detail,
+                    draft.evidence,
+                    draft.host,
+                    draft.path,
+                    draft.method,
+                    draft.status.map(|s| s as i64),
+                ],
+            )?;
+            (id, 1)
+        };
+        Ok(Finding {
+            id,
+            project_id: draft.project_id.clone(),
+            flow_id: Some(draft.flow_id.clone()),
+            ts,
+            check_id: draft.check_id.clone(),
+            title: draft.title.clone(),
+            severity: draft.severity,
+            detail: draft.detail.clone(),
+            evidence: draft.evidence.clone(),
+            host: draft.host.clone(),
+            path: draft.path.clone(),
+            method: draft.method.clone(),
+            status: draft.status,
+            count,
+        })
+    }
+
+    pub fn list_findings(
+        &self,
+        query: &FindingQuery,
+        default_project: &str,
+    ) -> Result<(Vec<Finding>, u32)> {
+        let conn = self.conn.lock().expect("store lock");
+        let project = query
+            .project_id
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(default_project);
+        let limit = query.limit.unwrap_or(200).min(1000) as i64;
+        let offset = query.offset.unwrap_or(0) as i64;
+        let q = query.q.as_deref().unwrap_or("").trim();
+        let sev = query.severity.as_deref().unwrap_or("").trim();
+        let check = query.check_id.as_deref().unwrap_or("").trim();
+        let host = query.host.as_deref().unwrap_or("").trim();
+        let like = format!("%{q}%");
+        let total: u32 = conn.query_row(
+            "SELECT COUNT(*) FROM findings
+             WHERE project_id = ?1
+               AND (?2 = '' OR severity = ?2)
+               AND (?3 = '' OR check_id = ?3)
+               AND (?4 = '' OR host LIKE ?4)
+               AND (?5 = '' OR title LIKE ?5 OR host LIKE ?5 OR path LIKE ?5 OR check_id LIKE ?5 OR detail LIKE ?5)",
+            params![project, sev, check, if host.is_empty() { String::new() } else { format!("%{host}%") }, if q.is_empty() { String::new() } else { like.clone() }],
+            |row| row.get(0),
+        )?;
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, flow_id, ts, check_id, title, severity, detail, evidence,
+                    host, path, method, status, count
+             FROM findings
+             WHERE project_id = ?1
+               AND (?2 = '' OR severity = ?2)
+               AND (?3 = '' OR check_id = ?3)
+               AND (?4 = '' OR host LIKE ?4)
+               AND (?5 = '' OR title LIKE ?5 OR host LIKE ?5 OR path LIKE ?5 OR check_id LIKE ?5 OR detail LIKE ?5)
+             ORDER BY CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END,
+                      ts DESC
+             LIMIT ?6 OFFSET ?7",
+        )?;
+        let host_like = if host.is_empty() { String::new() } else { format!("%{host}%") };
+        let q_like = if q.is_empty() { String::new() } else { like };
+        let rows = stmt.query_map(
+            params![project, sev, check, host_like, q_like, limit, offset],
+            row_finding,
+        )?;
+        let items = rows.collect::<Result<Vec<_>, _>>()?;
+        Ok((items, total))
+    }
+
+    pub fn get_finding(&self, id: &str) -> Result<Option<Finding>> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.query_row(
+            "SELECT id, project_id, flow_id, ts, check_id, title, severity, detail, evidence,
+                    host, path, method, status, count
+             FROM findings WHERE id = ?1",
+            params![id],
+            row_finding,
+        )
+        .optional()
+        .map_err(Into::into)
+    }
 }
+
 
 struct ParsedSearch {
     fts: Option<String>,
@@ -817,18 +987,44 @@ fn migrate(conn: &Connection) -> Result<()> {
     match version.as_deref() {
         None => {
             conn.execute(
-                "INSERT INTO meta(key, value) VALUES ('schema_version', '2')",
+                "INSERT INTO meta(key, value) VALUES ('schema_version', '3')",
                 [],
             )?;
         }
-        Some("1") => {
+        Some("1") | Some("2") => {
             conn.execute(
-                "UPDATE meta SET value = '2' WHERE key = 'schema_version'",
+                "UPDATE meta SET value = '3' WHERE key = 'schema_version'",
                 [],
             )?;
         }
         Some(_) => {}
     }
+    // Idempotent for existing databases that already ran SCHEMA CREATE IF NOT EXISTS
+    // on a later process start, and for mid-upgrade openings.
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS findings (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          flow_id TEXT,
+          ts INTEGER NOT NULL,
+          check_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          severity TEXT NOT NULL,
+          detail TEXT NOT NULL,
+          evidence TEXT NOT NULL,
+          host TEXT NOT NULL,
+          path TEXT NOT NULL,
+          method TEXT NOT NULL,
+          status INTEGER,
+          count INTEGER NOT NULL DEFAULT 1,
+          FOREIGN KEY (project_id) REFERENCES projects(id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS findings_dedup
+          ON findings(project_id, check_id, host, path, method);
+        CREATE INDEX IF NOT EXISTS findings_project_ts ON findings(project_id, ts DESC);
+        "#,
+    )?;
     Ok(())
 }
 
@@ -913,6 +1109,32 @@ fn row_scope(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScopeRule> {
         port: row.get::<_, Option<i64>>(5)?.map(|p| p as u16),
         path_prefix: row.get(6)?,
         created_at: row.get(7)?,
+    })
+}
+
+
+fn row_finding(row: &rusqlite::Row<'_>) -> rusqlite::Result<Finding> {
+    let severity = match row.get::<_, String>(6)?.as_str() {
+        "high" => Severity::High,
+        "medium" => Severity::Medium,
+        "low" => Severity::Low,
+        _ => Severity::Info,
+    };
+    Ok(Finding {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        flow_id: row.get(2)?,
+        ts: row.get(3)?,
+        check_id: row.get(4)?,
+        title: row.get(5)?,
+        severity,
+        detail: row.get(7)?,
+        evidence: row.get(8)?,
+        host: row.get(9)?,
+        path: row.get(10)?,
+        method: row.get(11)?,
+        status: row.get::<_, Option<i64>>(12)?.map(|s| s as u16),
+        count: row.get::<_, i64>(13)? as u32,
     })
 }
 

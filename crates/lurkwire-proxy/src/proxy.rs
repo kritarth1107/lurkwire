@@ -389,6 +389,7 @@ async fn intercept(
                     "kind": "flow",
                     "flow": summary,
                 }));
+                record_scan(&state_store, &flow);
             }
             Err(err) => tracing::warn!(error = %err, "failed to store flow"),
         }
@@ -397,6 +398,32 @@ async fn intercept(
     let mut response = Response::builder().status(status).version(resp_version);
     copy_response_headers(response.headers_mut().expect("headers"), &resp_headers);
     response.body(client_body).context("build client response")
+}
+
+
+fn record_scan(state: &AppState, flow: &crate::store::NewFlow) {
+    let input = crate::scanner::ScanInput {
+        id: &flow.id,
+        project_id: &flow.project_id,
+        method: &flow.method,
+        scheme: &flow.scheme,
+        host: &flow.host,
+        path: &flow.path,
+        query: &flow.query,
+        status: flow.status,
+        req_headers: &flow.req_headers,
+        resp_headers: &flow.resp_headers,
+        req_body: &flow.req_body,
+        resp_body: &flow.resp_body,
+    };
+    for draft in crate::scanner::scan_flow(&input) {
+        match state.store.upsert_finding(&draft) {
+            Ok(finding) => {
+                let _ = state.events.send(serde_json::json!({"kind":"finding","finding": finding}));
+            }
+            Err(err) => tracing::warn!(error = %err, "failed to store finding"),
+        }
+    }
 }
 
 fn apply_url_override(
@@ -555,6 +582,7 @@ pub async fn send_active(
         "kind": "flow",
         "flow": summary,
     }));
+    record_scan(state, &flow);
     if source == "repeater" {
         let _ = state.store.append_audit(
             "repeater",

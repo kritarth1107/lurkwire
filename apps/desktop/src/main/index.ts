@@ -8,6 +8,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  FindingQuery,
   IntruderStart,
   LlmRequest,
   NewScopeRule,
@@ -643,6 +644,13 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:getIntruder", (_event, id: string) => control.getIntruder(id));
   ipcMain.handle("lurkwire:listIntruder", () => control.listIntruder());
   ipcMain.handle("lurkwire:stopIntruder", (_event, id: string) => control.stopIntruder(id));
+  ipcMain.handle("lurkwire:listFindings", (_event, query: FindingQuery) =>
+    control.listFindings({
+      ...query,
+      project_id: query.project_id ?? currentProjectId ?? undefined,
+    }),
+  );
+  ipcMain.handle("lurkwire:getFinding", (_event, id: string) => control.getFinding(id));
   ipcMain.handle("lurkwire:windowMinimize", () => mainWindow?.minimize());
   ipcMain.handle("lurkwire:windowToggleMaximize", () => {
     if (!mainWindow) {

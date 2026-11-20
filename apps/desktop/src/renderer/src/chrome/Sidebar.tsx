@@ -18,6 +18,7 @@ import { RepeaterView } from "../RepeaterView";
 import { AiView } from "./AiView";
 import { IntruderView } from "../IntruderView";
 import { DecodeView } from "../DecodeView";
+import { ScannerView } from "../ScannerView";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "tabs", label: "Vertical tabs", icon: Columns2 },
@@ -123,6 +124,14 @@ export function Sidebar({
                 />
               ) : panel === "decode" ? (
                 <DecodeView />
+              ) : panel === "scanner" ? (
+                <ScannerView
+                  projectId={state.currentProjectId}
+                  onSendToRepeater={(flow) => {
+                    onRepeaterDraft(flow);
+                    void window.lurkwire.setTool("repeater");
+                  }}
+                />
               ) : (
                 <ComingSoon panel={panel} />
               )}
@@ -192,10 +201,6 @@ export function ComingSoon({ panel }: { panel: string }) {
     recon: {
       title: "Recon",
       body: "crt.sh, DNS, RDAP/WHOIS, and Wayback lookups will appear in this panel.",
-    },
-    scanner: {
-      title: "Passive scanner",
-      body: "Anomaly flags and passive checks will be reported in this panel.",
     },
   };
   const item = copy[panel] ?? { title: panel, body: "This tool will land in a later module." };

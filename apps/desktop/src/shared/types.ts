@@ -379,3 +379,37 @@ export type IntruderJob = {
   started_at: number;
 };
 
+export type Severity = "info" | "low" | "medium" | "high";
+
+export type Finding = {
+  id: string;
+  project_id: string;
+  flow_id: string | null;
+  ts: number;
+  check_id: string;
+  title: string;
+  severity: Severity;
+  detail: string;
+  evidence: string;
+  host: string;
+  path: string;
+  method: string;
+  status: number | null;
+  count: number;
+};
+
+export type FindingQuery = {
+  project_id?: string;
+  q?: string;
+  severity?: string;
+  check_id?: string;
+  host?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type FindingList = {
+  items: Finding[];
+  total: number;
+};
+

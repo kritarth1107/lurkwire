@@ -101,3 +101,57 @@ pub fn url_from_parts(scheme: &str, host: &str, port: u16, path: &str, query: &s
 }
 
 pub const PREVIEW_CHARS: usize = 8 * 1024;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum Severity {
+    Info,
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FindingDraft {
+    pub project_id: String,
+    pub flow_id: String,
+    pub check_id: String,
+    pub title: String,
+    pub severity: Severity,
+    pub detail: String,
+    pub evidence: String,
+    pub host: String,
+    pub path: String,
+    pub method: String,
+    pub status: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Finding {
+    pub id: String,
+    pub project_id: String,
+    pub flow_id: Option<String>,
+    pub ts: i64,
+    pub check_id: String,
+    pub title: String,
+    pub severity: Severity,
+    pub detail: String,
+    pub evidence: String,
+    pub host: String,
+    pub path: String,
+    pub method: String,
+    pub status: Option<u16>,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FindingQuery {
+    pub project_id: Option<String>,
+    pub q: Option<String>,
+    pub severity: Option<String>,
+    pub check_id: Option<String>,
+    pub host: Option<String>,
+    pub limit: Option<u32>,
+    pub offset: Option<u32>,
+}
+
