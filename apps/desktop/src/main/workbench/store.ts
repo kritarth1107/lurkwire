@@ -123,6 +123,7 @@ function normalize(workspace: WbWorkspace): WbWorkspace {
     globals: workspace.globals ?? [],
     history: (workspace.history ?? []).slice(0, 200),
     cookies: workspace.cookies ?? [],
+    matchRules: workspace.matchRules ?? [],
     activeEnvironmentId: workspace.activeEnvironmentId ?? null,
   };
 }

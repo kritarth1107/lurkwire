@@ -22,6 +22,8 @@ import {
   newId,
   parseRunnerData,
   toCurl,
+  type MatchRule,
+  type MatchWhere,
   type SnippetLanguage,
   type WbAuth,
   type WbAuthType,
@@ -112,6 +114,7 @@ export function WorkbenchPage({ url }: { url: string }) {
   const [runStop, setRunStop] = useState(false);
   const [runBusy, setRunBusy] = useState(false);
   const [runResults, setRunResults] = useState<RunnerProgress[]>([]);
+  const [rulesOpen, setRulesOpen] = useState(false);
 
   useEffect(() => {
     void window.lurkwire.workbenchGet().then((data) => {
@@ -499,6 +502,9 @@ export function WorkbenchPage({ url }: { url: string }) {
             <button type="button" disabled={!collection} onClick={() => setRunOpen(true)}>
               Run
             </button>
+            <button type="button" onClick={() => setRulesOpen(true)}>
+              Match / replace
+            </button>
             <button
               type="button"
               disabled={!collection}
@@ -665,6 +671,127 @@ export function WorkbenchPage({ url }: { url: string }) {
               </button>
               <button type="button" className="primary" onClick={onImport}>
                 Import
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+
+      {rulesOpen ? (
+        <div className="wb-modal" role="dialog">
+          <div className="wb-modal-card">
+            <h2>Match and replace</h2>
+            <p className="lead">
+              Enabled rules run on the request URL, headers, and body after variable interpolation and just
+              before the proxy send.
+            </p>
+            {(workspace.matchRules ?? []).map((rule) => (
+              <div key={rule.id} className="wb-rule">
+                <label className="wb-check">
+                  <input
+                    type="checkbox"
+                    checked={rule.enabled}
+                    onChange={(event) =>
+                      persist({
+                        ...workspace,
+                        matchRules: workspace.matchRules.map((item) =>
+                          item.id === rule.id ? { ...item, enabled: event.target.checked } : item,
+                        ),
+                      })
+                    }
+                  />
+                  On
+                </label>
+                <input
+                  value={rule.name}
+                  placeholder="Name"
+                  onChange={(event) =>
+                    persist({
+                      ...workspace,
+                      matchRules: workspace.matchRules.map((item) =>
+                        item.id === rule.id ? { ...item, name: event.target.value } : item,
+                      ),
+                    })
+                  }
+                />
+                <input
+                  value={rule.match}
+                  placeholder="Match"
+                  onChange={(event) =>
+                    persist({
+                      ...workspace,
+                      matchRules: workspace.matchRules.map((item) =>
+                        item.id === rule.id ? { ...item, match: event.target.value } : item,
+                      ),
+                    })
+                  }
+                />
+                <input
+                  value={rule.replace}
+                  placeholder="Replace"
+                  onChange={(event) =>
+                    persist({
+                      ...workspace,
+                      matchRules: workspace.matchRules.map((item) =>
+                        item.id === rule.id ? { ...item, replace: event.target.value } : item,
+                      ),
+                    })
+                  }
+                />
+                <select
+                  value={rule.where}
+                  onChange={(event) =>
+                    persist({
+                      ...workspace,
+                      matchRules: workspace.matchRules.map((item) =>
+                        item.id === rule.id ? { ...item, where: event.target.value as MatchWhere } : item,
+                        ),
+                      })
+                  }
+                >
+                  <option value="anywhere">Anywhere</option>
+                  <option value="url">URL</option>
+                  <option value="headers">Headers</option>
+                  <option value="body">Body</option>
+                </select>
+                <label className="wb-check">
+                  <input
+                    type="checkbox"
+                    checked={rule.regex}
+                    onChange={(event) =>
+                      persist({
+                        ...workspace,
+                        matchRules: workspace.matchRules.map((item) =>
+                          item.id === rule.id ? { ...item, regex: event.target.checked } : item,
+                        ),
+                      })
+                    }
+                  />
+                  Regex
+                </label>
+              </div>
+            ))}
+            <div className="wb-modal-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  const rule: MatchRule = {
+                    id: newId(),
+                    enabled: true,
+                    name: "New rule",
+                    match: "",
+                    replace: "",
+                    regex: false,
+                    where: "anywhere",
+                  };
+                  persist({ ...workspace, matchRules: [...(workspace.matchRules ?? []), rule] });
+                }}
+              >
+                Add rule
+              </button>
+              <button type="button" onClick={() => setRulesOpen(false)}>
+                Close
               </button>
             </div>
           </div>

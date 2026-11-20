@@ -58,4 +58,5 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 - [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar, import/export, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, and proxy-backed send with guardrails). Still open: mock server, in-app OAuth PKCE browser flow, gRPC/WebSocket/SSE clients, standalone binary body picker
 - [x] Command palette (Ctrl+K), CSRF PoC generator, and security-header reports from History
 - [x] Passive scanner hints for CL.TE request smuggling and unkeyed-header cache poisoning
+- [x] Workbench match-and-replace rules (applied after interpolation, before the proxy send)
 - [ ] Additional pentester tools

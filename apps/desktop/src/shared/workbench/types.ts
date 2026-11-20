@@ -1,3 +1,4 @@
+import type { MatchRule } from "./matchReplace";
 export type WbMethod =
   | "GET"
   | "POST"
@@ -181,6 +182,7 @@ export type WbWorkspace = {
   activeEnvironmentId: string | null;
   history: WbHistoryEntry[];
   cookies: WbCookie[];
+  matchRules: MatchRule[];
 };
 
 export type WbTabKind = WbProtocol;
@@ -249,5 +251,6 @@ export function emptyWorkspace(): WbWorkspace {
     activeEnvironmentId: null,
     history: [],
     cookies: [],
+    matchRules: [],
   };
 }

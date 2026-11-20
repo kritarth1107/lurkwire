@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { FlowDetail, HeaderPair, RepeaterSendRequest } from "../../shared/types";
 import {
+  applyMatchRules,
   applySetCookieHeaders,
   buildHttpRequest,
   cookieHeaderFor,
@@ -270,6 +271,14 @@ export async function sendWorkbenchRequest(
     if (cookie) {
       built = { ...built, headers: [...built.headers, { name: "Cookie", value: cookie }] };
     }
+  }
+
+  const rewritten = applyMatchRules(
+    { url: built.url, headers: built.headers, body: built.body },
+    workspace.matchRules ?? [],
+  );
+  if (rewritten.applied.length > 0) {
+    built = { ...built, url: rewritten.value.url, headers: rewritten.value.headers, body: rewritten.value.body };
   }
 
   if (built.pending === "multipart" || prepared.body.mode === "formdata") {

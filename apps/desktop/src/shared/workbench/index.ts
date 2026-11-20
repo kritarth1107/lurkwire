@@ -10,3 +10,4 @@ export * from "./importExport";
 export * from "./cookies";
 export * from "./seed";
 export * from "./runner";
+export * from "./matchReplace";

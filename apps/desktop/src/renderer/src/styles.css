@@ -1681,3 +1681,6 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
 .palette-item.active, .palette-item:hover { background: var(--button-hover); }
 .palette-hint { color: var(--muted); font-size: 11px; }
 .palette-empty { padding: 16px; color: var(--muted); text-align: center; }
+
+.wb-rule { display: grid; grid-template-columns: auto 1fr 1fr 1fr auto auto; gap: 6px; align-items: center; margin-bottom: 8px; }
+@media (max-width: 800px) { .wb-rule { grid-template-columns: 1fr 1fr; } }
