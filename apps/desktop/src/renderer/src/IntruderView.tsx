@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { AttackType, FlowDetail, IntruderJob } from "../../shared/types";
+import { INTRUDER_PRESETS, presetPayloads } from "../../shared/intruderPresets";
 import { parseHeaderBlock, statusClass } from "../../shared/http";
 
 function parseLines(text: string): string[] {
@@ -162,6 +163,27 @@ export function IntruderView({
       {lists.map((list, index) => (
         <label className="intruder-label" key={index}>
           Payloads {attack === "pitchfork" ? `for position ${index + 1}` : "(one per line)"}
+          <select
+            defaultValue=""
+            onChange={(event) => {
+              const id = event.target.value;
+              event.currentTarget.value = "";
+              if (!id) {
+                return;
+              }
+              const next = [...lists];
+              next[index] = presetPayloads(id).join("\n");
+              setLists(next);
+            }}
+            aria-label="Payload preset"
+          >
+            <option value="">Load a preset…</option>
+            {INTRUDER_PRESETS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
           <textarea
             className="mono"
             rows={5}

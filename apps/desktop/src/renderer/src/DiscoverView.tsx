@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import type { FlowSummary } from "../../shared/types";
 import { DEFAULT_WORDLIST, expandWordlist, isInterestingStatus, joinPath, parseWordlist, type DiscoverHit } from "../../shared/discover";
-import { endpointsOf, extractJsFindings, secretsOf, type ExtractedItem } from "../../shared/jsSecrets";
+import { endpointsOf, extractJsFindings, isHighConfidence, secretsOf, type ExtractedItem } from "../../shared/jsSecrets";
+import { emptyNote } from "../../shared/notes";
 
 type Tab = "paths" | "js";
 
@@ -100,6 +101,27 @@ export function DiscoverView({ projectId }: { projectId: string | null }) {
     }
   }
 
+  async function fileSecrets(items: ExtractedItem[]) {
+    if (!items.length) {
+      return;
+    }
+    const store = await window.lurkwire.notesGet();
+    const existing = new Set(store.notes.map((note) => `${note.title}:${note.body}`));
+    const notes = items
+      .map((item) => {
+        const note = emptyNote(crypto.randomUUID());
+        note.title = `${item.kind} in captured JavaScript`;
+        note.severity = item.kind === "privateKey" || item.kind === "awsAccessKey" ? "high" : "medium";
+        note.tags = ["js-miner", item.kind];
+        note.body = `Kind: ${item.kind}\nValue: ${item.value}\nLine: ${item.line}\nContext: ${item.context}`;
+        return note;
+      })
+      .filter((note) => !existing.has(`${note.title}:${note.body}`));
+    if (notes.length) {
+      await window.lurkwire.notesSave({ ...store, notes: [...notes, ...store.notes] });
+    }
+  }
+
   return (
     <div className="workbench">
       <div className="workbench-toolbar">
@@ -165,11 +187,26 @@ export function DiscoverView({ projectId }: { projectId: string | null }) {
               <li key={item}>{item}</li>
             ))}
           </ul>
+          {secretsOf(extracted).some((item) => isHighConfidence(item.kind)) ? (
+            <div className="intruder-actions">
+              <button
+                type="button"
+                onClick={() => void fileSecrets(secretsOf(extracted).filter((item) => isHighConfidence(item.kind)))}
+              >
+                Save high-confidence secrets to Notes
+              </button>
+            </div>
+          ) : null}
           <h3 className="wb-sub">Secrets ({secretsOf(extracted).length})</h3>
           <ul className="discover-hits">
             {secretsOf(extracted).map((item, index) => (
               <li key={`${item.kind}-${index}`}>
                 <strong>{item.kind}</strong> {item.value} <span className="muted">L{item.line}</span>
+                {isHighConfidence(item.kind) ? (
+                  <button type="button" onClick={() => void fileSecrets([item])}>
+                    Accept
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>

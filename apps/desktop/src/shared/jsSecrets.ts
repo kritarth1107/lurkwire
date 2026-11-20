@@ -77,3 +77,17 @@ export function endpointsOf(items: ExtractedItem[]): string[] {
 export function secretsOf(items: ExtractedItem[]): ExtractedItem[] {
   return items.filter((item) => item.kind !== "endpoint");
 }
+
+export const HIGH_CONFIDENCE_KINDS: SecretKind[] = [
+  "jwt",
+  "awsAccessKey",
+  "privateKey",
+  "slack",
+  "github",
+  "googleApi",
+  "bearer",
+];
+
+export function isHighConfidence(kind: SecretKind): boolean {
+  return HIGH_CONFIDENCE_KINDS.includes(kind);
+}

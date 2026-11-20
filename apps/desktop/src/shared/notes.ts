@@ -60,6 +60,9 @@ export function exportFindingsMarkdown(notes: FindingNote[], scanner: Finding[])
       if (note.method || note.host) {
         lines.push(`- Target: ${note.method ?? ""} ${note.host ?? ""}${note.path ?? ""}`.trim());
       }
+      if (note.flowId) {
+        lines.push(`- Evidence: lurkwire://history#${note.flowId}`);
+      }
       if (note.tags.length) {
         lines.push(`- Tags: ${note.tags.join(", ")}`);
       }
@@ -87,8 +90,11 @@ export function exportFindingsMarkdown(notes: FindingNote[], scanner: Finding[])
       if (item.detail) {
         lines.push(item.detail, "");
       }
+      if (item.flow_id) {
+        lines.push(`- Evidence: lurkwire://history#${item.flow_id}`);
+      }
       if (item.evidence) {
-        lines.push("```", item.evidence, "```", "");
+        lines.push("", "```", item.evidence, "```", "");
       }
     }
   }

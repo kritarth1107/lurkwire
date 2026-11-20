@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { buildSchemaGraph } from "../../shared/graphqlGraph";
 import {
   INTROSPECTION_QUERY,
   parseIntrospection,
@@ -114,6 +115,7 @@ export function GraphqlView({ projectId }: { projectId: string | null }) {
       </label>
       {error ? <p className="error">{error}</p> : null}
       {schema ? (
+        <>
         <div className="graphql-split">
           <ul className="graphql-types">
             {types.map((item) => (
@@ -148,7 +150,66 @@ export function GraphqlView({ projectId }: { projectId: string | null }) {
             {stub ? <pre className="mono">{stub}</pre> : null}
           </div>
         </div>
+        <SchemaGraphView schema={schema} selected={selected} onSelect={setSelected} />
+        </>
       ) : null}
+    </div>
+  );
+}
+
+
+function SchemaGraphView({
+  schema,
+  selected,
+  onSelect,
+}: {
+  schema: GqlSchema;
+  selected: string;
+  onSelect: (name: string) => void;
+}) {
+  const graph = buildSchemaGraph(schema);
+  const nodeOf = Object.fromEntries(graph.nodes.map((item) => [item.id, item]));
+  return (
+    <div className="graphql-graph">
+      <h3 className="wb-sub">Type graph</h3>
+      <svg width="100%" viewBox={`0 0 ${graph.width} ${graph.height}`} role="img" aria-label="GraphQL type relationships">
+        {graph.edges.map((edge, index) => {
+          const from = nodeOf[edge.from];
+          const to = nodeOf[edge.to];
+          if (!from || !to) {
+            return null;
+          }
+          const x1 = from.x + 90;
+          const y1 = from.y + 16;
+          const x2 = to.x;
+          const y2 = to.y + 16;
+          return (
+            <g key={`${edge.from}-${edge.field}-${index}`}>
+              <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeOpacity="0.35" />
+              <text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 4} fontSize="9" fill="currentColor" opacity="0.7">
+                {edge.field}
+              </text>
+            </g>
+          );
+        })}
+        {graph.nodes.map((node) => (
+          <g key={node.id} onClick={() => onSelect(node.id)} style={{ cursor: "pointer" }}>
+            <rect
+              x={node.x}
+              y={node.y}
+              width="180"
+              height="32"
+              rx="6"
+              fill={node.id === selected ? "var(--accent, #0a84ff)" : "color-mix(in srgb, CanvasText 8%, Canvas)"}
+              stroke="currentColor"
+              strokeOpacity="0.3"
+            />
+            <text x={node.x + 10} y={node.y + 20} fontSize="11" fill={node.id === selected ? "#fff" : "currentColor"}>
+              {node.kind === "OBJECT" ? node.id : `${node.id} (${node.kind.toLowerCase()})`}
+            </text>
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }

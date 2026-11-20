@@ -24,6 +24,8 @@ export function ScannerView({
   const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [lab, setLab] = useState<string | null>(null);
+  const [labBusy, setLabBusy] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), 200);
@@ -80,7 +82,8 @@ export function ScannerView({
   return (
     <div className="scanner">
       <p className="hint">
-        Passive checks run on captured responses only. Nothing extra is sent to the target.
+        Passive checks run on captured responses only. The optional lab spins a local listener on 127.0.0.1
+        and sends a harmless CL.TE probe to that listener — never to a remote host.
       </p>
       <div className="workbench-toolbar">
         <input
@@ -102,7 +105,25 @@ export function ScannerView({
           ))}
         </select>
         <span className="muted">{total} finding{total === 1 ? "" : "s"}</span>
+        <button
+          type="button"
+          disabled={labBusy}
+          onClick={() => {
+            setLabBusy(true);
+            setLab(null);
+            void window.lurkwire
+              .smugglingLabRun()
+              .then((result) => {
+                setLab(`127.0.0.1:${result.port} — ${result.detail}${result.smuggled ? " Probe confirmed." : ""}`);
+              })
+              .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+              .finally(() => setLabBusy(false));
+          }}
+        >
+          {labBusy ? "Running lab…" : "Local smuggling lab"}
+        </button>
       </div>
+      {lab ? <p className="muted">{lab}</p> : null}
       {error ? <p className="error">{error}</p> : null}
       <div className="scanner-split">
         <div className="scanner-list">

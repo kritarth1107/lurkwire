@@ -55,13 +55,15 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 ## Overnight tools (22 Nov)
 
 - [x] Firefox-style tab throbber, globe fallback, mute/crash states
-- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar, import/export including OpenAPI YAML, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, proxy-backed send with guardrails, collection mock server, WebSocket/SSE clients, binary body picker, and OAuth 2.0 authorization-code + PKCE). Still open: gRPC client
+- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar editor, import/export including OpenAPI YAML, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, proxy-backed send with guardrails, collection mock server, WebSocket/SSE/gRPC clients with persisted stream history, binary body picker, match-replace template packs, and OAuth 2.0 authorization-code + PKCE)
 - [x] Command palette (Ctrl+K), CSRF PoC generator, and security-header reports from History
 - [x] Passive scanner hints for CL.TE request smuggling and unkeyed-header cache poisoning
 - [x] Workbench match-and-replace rules (applied after interpolation, before the proxy send)
 - [x] Autorize-style session replay and response diff
 - [x] Notes/findings tracker with a CVSS 3.1 calculator and Markdown export
 - [x] In-scope directory/content discovery and JS endpoint/secret extraction
-- [x] GraphQL introspection explorer (voyager-lite)
+- [x] GraphQL introspection explorer with a type-relationship graph
 - [x] Logger++ filters and highlight rules; Decoder recipe chains
-- [ ] Remaining pentester ideas (gRPC, JS secret auto-filing into Notes, full GraphQL graph layout)
+- [x] High-confidence JS secrets can be accepted into Notes
+- [x] Intruder payload presets and a localhost-only CL.TE smuggling lab
+- [ ] Remaining ideas (client-streaming/bidi gRPC, routing gRPC/WS through the MITM proxy)

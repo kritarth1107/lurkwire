@@ -7,7 +7,7 @@ test("exports notes and scanner findings as markdown", () => {
     {
       id: "f",
       project_id: "p",
-      flow_id: null,
+      flow_id: "flow-1",
       ts: 0,
       check_id: "missing-csp",
       title: "Missing CSP",
@@ -25,4 +25,26 @@ test("exports notes and scanner findings as markdown", () => {
   expect(md).toContain("IDOR on /users");
   expect(md).toContain("Missing CSP");
   expect(md).toContain("CVSS:3.1");
+});
+
+test("includes evidence links for scanner findings", () => {
+  const md = exportFindingsMarkdown([], [
+    {
+      id: "f",
+      project_id: "p",
+      flow_id: "flow-1",
+      ts: 0,
+      check_id: "x",
+      title: "X",
+      severity: "low",
+      detail: "",
+      evidence: "ev",
+      host: "example.com",
+      path: "/",
+      method: "GET",
+      status: 200,
+      count: 1,
+    },
+  ]);
+  expect(md).toContain("lurkwire://history#flow-1");
 });

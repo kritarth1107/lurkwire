@@ -1834,3 +1834,30 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
   font-size: 13px;
   margin: 12px 0 6px;
 }
+
+
+.graphql-graph {
+  margin-top: 16px;
+  overflow: auto;
+  border-top: 1px solid var(--border, #d7d7db);
+  padding-top: 8px;
+}
+
+.graphql-graph svg {
+  min-width: 640px;
+  color: inherit;
+}
+
+.wb-grpc,
+.wb-history-mini {
+  margin-top: 10px;
+}
+
+.wb-history-mini button {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+}

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { endpointsOf, extractJsFindings, secretsOf } from "./jsSecrets";
+import { endpointsOf, extractJsFindings, isHighConfidence, secretsOf } from "./jsSecrets";
 
 const sample = `
 const API = "https://api.example.com/v1/users";
@@ -13,4 +13,11 @@ test("extracts URLs, JWTs, AWS keys, and generic secrets", () => {
   expect(endpointsOf(items)).toEqual(expect.arrayContaining(["https://api.example.com/v1/users", "/graphql"]));
   const kinds = secretsOf(items).map((item) => item.kind);
   expect(kinds).toEqual(expect.arrayContaining(["jwt", "awsAccessKey", "generic"]));
+});
+
+test("treats AWS keys and JWTs as high confidence, not generic secrets", () => {
+  const items = extractJsFindings(sample);
+  expect(items.some((item) => item.kind === "awsAccessKey" && isHighConfidence(item.kind))).toBe(true);
+  expect(isHighConfidence("generic")).toBe(false);
+  expect(isHighConfidence("endpoint")).toBe(false);
 });
