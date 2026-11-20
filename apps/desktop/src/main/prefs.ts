@@ -40,7 +40,12 @@ export function loadPrefs(): AppPrefs {
       sidebarPanel: SIDEBAR_PANELS.has(panel as SidebarPanel)
         ? (panel as SidebarPanel)
         : DEFAULT_PREFS.sidebarPanel,
-      llm: { ...DEFAULT_LLM, ...parsed.llm },
+      llm: {
+        ...DEFAULT_LLM,
+        ...parsed.llm,
+        connectors: { ...DEFAULT_LLM.connectors, ...(parsed.llm?.connectors ?? {}) },
+        routing: { ...DEFAULT_LLM.routing, ...(parsed.llm?.routing ?? {}) },
+      },
     };
   } catch {
     return { ...DEFAULT_PREFS };

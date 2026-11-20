@@ -35,23 +35,11 @@ export type ThemePref = "system" | "light" | "dark";
 
 export type ChromePage = "content" | "settings";
 
-export type LlmProvider = "openai" | "anthropic" | "gemini" | "ollama" | "openai-compatible";
+import type { LlmAction, LlmProvider, LlmSettings } from "./llm";
+import { DEFAULT_LLM, LLM_PROVIDERS } from "./llm";
 
-export type LlmSettings = {
-  provider: LlmProvider;
-  baseUrl: string;
-  model: string;
-  localOnly: boolean;
-};
-
-export const DEFAULT_LLM: LlmSettings = {
-  provider: "ollama",
-  baseUrl: "http://127.0.0.1:11434/v1",
-  model: "llama3.2",
-  localOnly: true,
-};
-
-export type LlmAction = "explain" | "suggest" | "draft";
+export type { LlmAction, LlmConnectorConfig, LlmProvider, LlmSettings } from "./llm";
+export { DEFAULT_LLM, LLM_PROVIDERS };
 
 export type LlmRequest = {
   action: LlmAction;

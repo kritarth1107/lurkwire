@@ -1173,3 +1173,28 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
 .seq-notes { margin: 0; padding-left: 18px; font-size: 12px; }
 .seq-charset { word-break: break-all; }
 .empty-pane { padding: 16px; }
+
+/* Item 9 — AI connectors */
+.ai-settings h4 { margin: 18px 0 6px; }
+.connector-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+.connector-card.default { border-color: color-mix(in srgb, var(--focus-ring) 50%, var(--border)); }
+.connector-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 10px 12px;
+}
+.connector-head em { font-style: normal; color: var(--focus-ring); font-size: 11px; margin-left: 8px; }
+.connector-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.connector-body label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.model-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.model-row input, .model-row select { flex: 1; min-width: 140px; }

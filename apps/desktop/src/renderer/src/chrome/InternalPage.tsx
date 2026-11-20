@@ -10,7 +10,7 @@ export function InternalPage({ state, url }: { state: AppSnapshot; url: string }
     return null;
   }
   if (page === "settings") {
-    return <SettingsPage state={state} />;
+    return <SettingsPage state={state} url={url} />;
   }
   if (page === "newtab") {
     return <NewTabPage product={state.product} />;

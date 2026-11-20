@@ -10,6 +10,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  LlmProvider,
   LlmRequest,
   NewScopeRule,
   PanelContext,
@@ -73,9 +74,15 @@ const api = {
   addScope: (rule: NewScopeRule) => ipcRenderer.invoke("lurkwire:addScope", rule),
   deleteScope: (id: string) => ipcRenderer.invoke("lurkwire:deleteScope", id),
   listAudit: (projectId?: string) => ipcRenderer.invoke("lurkwire:listAudit", projectId),
-  hasLlmKey: (): Promise<boolean> => ipcRenderer.invoke("lurkwire:hasLlmKey"),
-  setLlmKey: (key: string): Promise<boolean> => ipcRenderer.invoke("lurkwire:setLlmKey", key),
-  clearLlmKey: () => ipcRenderer.invoke("lurkwire:clearLlmKey"),
+  hasLlmKey: (provider?: LlmProvider): Promise<boolean> => ipcRenderer.invoke("lurkwire:hasLlmKey", provider),
+  listLlmKeys: (): Promise<LlmProvider[]> => ipcRenderer.invoke("lurkwire:listLlmKeys"),
+  setLlmKey: (key: string, provider?: LlmProvider): Promise<boolean> =>
+    ipcRenderer.invoke("lurkwire:setLlmKey", key, provider),
+  clearLlmKey: (provider?: LlmProvider) => ipcRenderer.invoke("lurkwire:clearLlmKey", provider),
+  listLlmModels: (provider: LlmProvider): Promise<string[]> =>
+    ipcRenderer.invoke("lurkwire:listLlmModels", provider),
+  testLlmConnection: (provider: LlmProvider): Promise<{ ok: boolean; message: string; models: string[] }> =>
+    ipcRenderer.invoke("lurkwire:testLlmConnection", provider),
   llmComplete: (request: LlmRequest) => ipcRenderer.invoke("lurkwire:llmComplete", request),
   startIntruder: (req: IntruderStart) => ipcRenderer.invoke("lurkwire:startIntruder", req),
   getIntruder: (id: string) => ipcRenderer.invoke("lurkwire:getIntruder", id),

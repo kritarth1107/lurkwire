@@ -11,6 +11,7 @@ import type {
   InterceptConfig,
   FindingQuery,
   IntruderStart,
+  LlmProvider,
   LlmRequest,
   NewScopeRule,
   PanelOpenRequest,
@@ -25,7 +26,7 @@ import { DownloadManager } from "./downloads";
 import { PanelManager } from "./panels";
 import { loadPrefs, savePrefs } from "./prefs";
 import { ProxySidecar } from "./proxy";
-import { clearLlmKey, completeLlm, hasLlmKey, saveLlmKey } from "./llm";
+import { clearLlmKey, completeLlm, hasLlmKey, listLlmKeyProviders, listLlmModels, saveLlmKey, testLlmConnection } from "./llm";
 import { clearShodanKey, hasShodanKey, runRecon, saveShodanKey } from "./recon";
 import { isSmokeRun, isolateSmokeUserData, runSmoke } from "./smoke";
 import { handleLurkwireProtocol, registerLurkwireScheme } from "./internal-protocol";
@@ -842,15 +843,21 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:addScope", (_event, rule: NewScopeRule) => control.addScope(rule));
   ipcMain.handle("lurkwire:deleteScope", (_event, id: string) => control.deleteScope(id));
   ipcMain.handle("lurkwire:listAudit", (_event, projectId?: string) => control.listAudit(projectId));
-  ipcMain.handle("lurkwire:hasLlmKey", () => hasLlmKey());
-  ipcMain.handle("lurkwire:setLlmKey", (_event, key: string) => {
-    saveLlmKey(key);
-    return hasLlmKey();
+  ipcMain.handle("lurkwire:hasLlmKey", (_event, provider?: LlmProvider) => hasLlmKey(provider));
+  ipcMain.handle("lurkwire:listLlmKeys", () => listLlmKeyProviders());
+  ipcMain.handle("lurkwire:setLlmKey", (_event, key: string, provider?: LlmProvider) => {
+    saveLlmKey(key, provider ?? loadPrefs().llm.provider);
+    return hasLlmKey(provider ?? loadPrefs().llm.provider);
   });
-  ipcMain.handle("lurkwire:clearLlmKey", () => {
-    clearLlmKey();
+  ipcMain.handle("lurkwire:clearLlmKey", (_event, provider?: LlmProvider) => {
+    clearLlmKey(provider);
   });
+  ipcMain.handle("lurkwire:listLlmModels", (_event, provider: LlmProvider) => listLlmModels(loadPrefs().llm, provider));
+  ipcMain.handle("lurkwire:testLlmConnection", (_event, provider: LlmProvider) =>
+    testLlmConnection(loadPrefs().llm, provider),
+  );
   ipcMain.handle("lurkwire:llmComplete", async (_event, request: LlmRequest) => {
+    const prefs = loadPrefs();
     return completeLlm(prefs.llm, request, (id) => control.getFlow(id));
   });
   ipcMain.handle("lurkwire:startIntruder", (_event, req: IntruderStart) =>

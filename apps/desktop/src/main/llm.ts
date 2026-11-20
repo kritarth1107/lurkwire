@@ -4,31 +4,47 @@ import { app, safeStorage } from "electron";
 import type {
   FlowDetail,
   HeaderPair,
+  LlmProvider,
   LlmRequest,
   LlmResult,
   LlmSettings,
   RepeaterSendRequest,
 } from "../shared/types";
-import { DEFAULT_LLM } from "../shared/types";
+import { modelsUrl, ollamaTagsUrl, parseModelList, providerInfo, resolveLlmForTask } from "../shared/llm";
 import { isLocalLlmUrl, redactForCloud } from "../shared/redact";
 
-const DEFAULTS: Record<LlmSettings["provider"], { baseUrl: string; model: string }> = {
-  openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
-  anthropic: { baseUrl: "https://api.anthropic.com", model: "claude-sonnet-4-20250514" },
-  gemini: { baseUrl: "https://generativelanguage.googleapis.com/v1beta", model: "gemini-2.0-flash" },
-  ollama: { baseUrl: "http://127.0.0.1:11434/v1", model: "llama3.2" },
-  "openai-compatible": { baseUrl: "", model: "" },
-};
+function keysDir(): string {
+  return join(app.getPath("userData"), "llm-keys");
+}
 
-function keyPath(): string {
+function keyPath(provider: LlmProvider): string {
+  return join(keysDir(), `${provider}.bin`);
+}
+
+function legacyKeyPath(): string {
   return join(app.getPath("userData"), "llm-key.bin");
 }
 
-export function hasLlmKey(): boolean {
-  return existsSync(keyPath());
+export function hasLlmKey(provider?: LlmProvider): boolean {
+  if (provider) {
+    return existsSync(keyPath(provider)) || existsSync(legacyKeyPath());
+  }
+  return existsSync(legacyKeyPath()) || (existsSync(keysDir()) && listLlmKeyProviders().length > 0);
 }
 
-export function saveLlmKey(secret: string): void {
+export function listLlmKeyProviders(): LlmProvider[] {
+  const found = new Set<LlmProvider>();
+  if (existsSync(keysDir())) {
+    for (const file of ["openai", "anthropic", "gemini", "xai", "openrouter", "ollama", "lmstudio", "openai-compatible"] as LlmProvider[]) {
+      if (existsSync(keyPath(file))) {
+        found.add(file);
+      }
+    }
+  }
+  return [...found];
+}
+
+export function saveLlmKey(secret: string, provider: LlmProvider = "openai"): void {
   const trimmed = secret.trim();
   if (!trimmed) {
     return;
@@ -36,35 +52,41 @@ export function saveLlmKey(secret: string): void {
   if (!safeStorage.isEncryptionAvailable()) {
     throw new Error("OS key encryption is unavailable, so the API key was not saved.");
   }
-  mkdirSync(app.getPath("userData"), { recursive: true });
-  writeFileSync(keyPath(), safeStorage.encryptString(trimmed));
+  mkdirSync(keysDir(), { recursive: true });
+  writeFileSync(keyPath(provider), safeStorage.encryptString(trimmed));
 }
 
-export function clearLlmKey(): void {
-  if (existsSync(keyPath())) {
-    unlinkSync(keyPath());
+export function clearLlmKey(provider?: LlmProvider): void {
+  if (provider) {
+    if (existsSync(keyPath(provider))) {
+      unlinkSync(keyPath(provider));
+    }
+    return;
+  }
+  if (existsSync(legacyKeyPath())) {
+    unlinkSync(legacyKeyPath());
+  }
+  for (const id of listLlmKeyProviders()) {
+    unlinkSync(keyPath(id));
   }
 }
 
-function loadLlmKey(): string | null {
-  if (!existsSync(keyPath()) || !safeStorage.isEncryptionAvailable()) {
+function loadLlmKey(provider: LlmProvider): string | null {
+  if (!safeStorage.isEncryptionAvailable()) {
     return null;
   }
-  try {
-    return safeStorage.decryptString(readFileSync(keyPath()));
-  } catch {
-    return null;
+  const paths = [keyPath(provider), legacyKeyPath()];
+  for (const file of paths) {
+    if (!existsSync(file)) {
+      continue;
+    }
+    try {
+      return safeStorage.decryptString(readFileSync(file));
+    } catch {
+      continue;
+    }
   }
-}
-
-function normalizeSettings(input: LlmSettings | undefined): LlmSettings {
-  const settings = { ...DEFAULT_LLM, ...input };
-  const fallback = DEFAULTS[settings.provider];
-  return {
-    ...settings,
-    baseUrl: (settings.baseUrl || fallback.baseUrl).replace(/\/+$/, ""),
-    model: settings.model || fallback.model,
-  };
+  return null;
 }
 
 function systemPrompt(action: LlmRequest["action"]): string {
@@ -96,13 +118,14 @@ export async function completeLlm(
   request: LlmRequest,
   getFlow: (id: string) => Promise<FlowDetail>,
 ): Promise<LlmResult> {
-  const settings = normalizeSettings(settingsInput);
+  const settings = resolveLlmForTask(settingsInput, request.action);
   if (settings.localOnly && !isLocalLlmUrl(settings.baseUrl)) {
     throw new Error("Local-only mode is on. Set a loopback endpoint such as Ollama, or turn local-only off.");
   }
-  const key = loadLlmKey();
-  if (settings.provider !== "ollama" && !key) {
-    throw new Error("Add an API key in Settings before using a cloud model.");
+  const info = providerInfo(settings.provider);
+  const key = loadLlmKey(settings.provider);
+  if (info.needsKey && !key) {
+    throw new Error(`Add a ${info.label} API key in Settings before using this model.`);
   }
 
   let raw = request.raw?.trim() ?? "";
@@ -126,8 +149,10 @@ export async function completeLlm(
   };
 }
 
+type LlmClient = { provider: LlmProvider; baseUrl: string; model: string };
+
 async function invokeProvider(
-  settings: LlmSettings,
+  settings: LlmClient,
   key: string | null,
   system: string,
   user: string,
@@ -142,7 +167,7 @@ async function invokeProvider(
 }
 
 async function openAiChat(
-  settings: LlmSettings,
+  settings: LlmClient,
   key: string | null,
   system: string,
   user: string,
@@ -151,6 +176,10 @@ async function openAiChat(
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (key) {
     headers.Authorization = `Bearer ${key}`;
+  }
+  if (settings.provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://lurkwire.com";
+    headers["X-Title"] = "Lurkwire";
   }
   const res = await fetch(url, {
     method: "POST",
@@ -179,7 +208,7 @@ async function openAiChat(
 }
 
 async function anthropicChat(
-  settings: LlmSettings,
+  settings: LlmClient,
   key: string | null,
   system: string,
   user: string,
@@ -216,7 +245,7 @@ async function anthropicChat(
 }
 
 async function geminiChat(
-  settings: LlmSettings,
+  settings: LlmClient,
   key: string | null,
   system: string,
   user: string,
@@ -287,4 +316,87 @@ function extractJsonObject(text: string): string | null {
     return null;
   }
   return text.slice(start, end + 1);
+}
+
+export type LlmProbeResult = {
+  ok: boolean;
+  message: string;
+  models: string[];
+};
+
+async function fetchJson(url: string, headers: Record<string, string>): Promise<{ ok: boolean; status: number; body: unknown }> {
+  const res = await fetch(url, { method: "GET", headers, signal: AbortSignal.timeout(12_000) });
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  return { ok: res.ok, status: res.status, body };
+}
+
+function authHeaders(provider: LlmProvider, key: string | null): Record<string, string> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  const info = providerInfo(provider);
+  if (info.kind === "anthropic" && key) {
+    headers["x-api-key"] = key;
+    headers["anthropic-version"] = "2023-06-01";
+  } else if (info.kind === "gemini" && key) {
+    // key is passed as a query param
+  } else if (key) {
+    headers.Authorization = `Bearer ${key}`;
+  }
+  if (provider === "openrouter") {
+    headers["HTTP-Referer"] = "https://lurkwire.com";
+    headers["X-Title"] = "Lurkwire";
+  }
+  return headers;
+}
+
+export async function listLlmModels(settingsInput: LlmSettings, provider: LlmProvider): Promise<string[]> {
+  const baseUrl = (settingsInput.connectors?.[provider]?.baseUrl || (settingsInput.provider === provider ? settingsInput.baseUrl : "") || providerInfo(provider).baseUrl).replace(/\/+$/, "");
+  if (settingsInput.localOnly && !isLocalLlmUrl(baseUrl)) {
+    throw new Error("Local-only mode is on, so cloud model lists are blocked.");
+  }
+  const info = providerInfo(provider);
+  const key = loadLlmKey(provider);
+  if (info.needsKey && !key) {
+    throw new Error(`Add a ${info.label} API key first.`);
+  }
+  if (!baseUrl) {
+    throw new Error("Set a base URL for this connector first.");
+  }
+  let url = modelsUrl(provider, baseUrl);
+  if (info.kind === "gemini" && key) {
+    url += `${url.includes("?") ? "&" : "?"}key=${encodeURIComponent(key)}`;
+  }
+  const first = await fetchJson(url, authHeaders(provider, key));
+  let models = first.ok ? parseModelList(provider, first.body) : [];
+  if (!models.length && provider === "ollama") {
+    const tags = ollamaTagsUrl(baseUrl);
+    if (tags) {
+      const second = await fetchJson(tags, { Accept: "application/json" });
+      if (second.ok) {
+        models = parseModelList(provider, second.body);
+      }
+    }
+  }
+  if (!first.ok && models.length === 0) {
+    const err = (first.body as { error?: { message?: string } } | null)?.error?.message;
+    throw new Error(err || `Listing models failed (${first.status})`);
+  }
+  return models;
+}
+
+export async function testLlmConnection(settingsInput: LlmSettings, provider: LlmProvider): Promise<LlmProbeResult> {
+  try {
+    const models = await listLlmModels(settingsInput, provider);
+    const label = providerInfo(provider).label;
+    if (models.length) {
+      return { ok: true, message: `${label} responded with ${models.length} model${models.length === 1 ? "" : "s"}.`, models };
+    }
+    return { ok: true, message: `${label} is reachable, but the model list was empty.`, models };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err), models: [] };
+  }
 }

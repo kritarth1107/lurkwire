@@ -30,4 +30,4 @@ Build order for v0.1. Checked items are on `main`.
 - [x] Native per-tab Chrome DevTools (docked / undocked / inspect element)
 - [x] Site info panel (certificate, permissions, cookies, site intel)
 - [x] Burp-parity history, viewers, site map, Comparer, Sequencer-lite, Logger, annotations
-- [ ] Settings > AI: multi-provider connectors, model pickers, per-task routing
+- [x] Settings > AI: multi-provider connectors, model pickers, per-task routing
