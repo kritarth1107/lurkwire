@@ -11,6 +11,7 @@ import type {
   ForwardEdit,
   InterceptConfig,
   LlmProvider,
+  InteractshState,
   LlmRequest,
   NewScopeRule,
   PanelContext,
@@ -84,6 +85,12 @@ const api = {
   testLlmConnection: (provider: LlmProvider): Promise<{ ok: boolean; message: string; models: string[] }> =>
     ipcRenderer.invoke("lurkwire:testLlmConnection", provider),
   llmComplete: (request: LlmRequest) => ipcRenderer.invoke("lurkwire:llmComplete", request),
+  getInteractsh: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:getInteractsh"),
+  registerInteractsh: (server?: string): Promise<InteractshState> =>
+    ipcRenderer.invoke("lurkwire:registerInteractsh", server),
+  deregisterInteractsh: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:deregisterInteractsh"),
+  pollInteractsh: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:pollInteractsh"),
+  newInteractshPayload: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:newInteractshPayload"),
   startIntruder: (req: IntruderStart) => ipcRenderer.invoke("lurkwire:startIntruder", req),
   getIntruder: (id: string) => ipcRenderer.invoke("lurkwire:getIntruder", id),
   listIntruder: () => ipcRenderer.invoke("lurkwire:listIntruder"),

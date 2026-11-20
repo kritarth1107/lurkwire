@@ -15,6 +15,7 @@ export type ToolId =
   | "comparer"
   | "logger"
   | "sequencer"
+  | "oob"
   | "settings";
 
 export type SidebarPanel =
@@ -29,7 +30,8 @@ export type SidebarPanel =
   | "sitemap"
   | "comparer"
   | "logger"
-  | "sequencer";
+  | "sequencer"
+  | "oob";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -40,6 +42,8 @@ import { DEFAULT_LLM, LLM_PROVIDERS } from "./llm";
 
 export type { LlmAction, LlmConnectorConfig, LlmProvider, LlmSettings } from "./llm";
 export { DEFAULT_LLM, LLM_PROVIDERS };
+export type { InteractshInteraction, InteractshState } from "./interactsh";
+export { INTERACTSH_SERVERS } from "./interactsh";
 
 export type LlmRequest = {
   action: LlmAction;

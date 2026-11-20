@@ -37,6 +37,7 @@ import {
   type InternalPage,
 } from "../shared/url";
 import { collectSiteInfo } from "./siteInfo";
+import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, listVisits } from "./visits";
 
 app.setName(PRODUCT_NAME);
@@ -852,6 +853,11 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:clearLlmKey", (_event, provider?: LlmProvider) => {
     clearLlmKey(provider);
   });
+  ipcMain.handle("lurkwire:getInteractsh", () => interactshState());
+  ipcMain.handle("lurkwire:registerInteractsh", (_event, server?: string) => registerInteractsh(server));
+  ipcMain.handle("lurkwire:deregisterInteractsh", () => deregisterInteractsh());
+  ipcMain.handle("lurkwire:pollInteractsh", () => pollInteractsh());
+  ipcMain.handle("lurkwire:newInteractshPayload", () => newPayload());
   ipcMain.handle("lurkwire:listLlmModels", (_event, provider: LlmProvider) => listLlmModels(loadPrefs().llm, provider));
   ipcMain.handle("lurkwire:testLlmConnection", (_event, provider: LlmProvider) =>
     testLlmConnection(loadPrefs().llm, provider),
@@ -1055,6 +1061,9 @@ app.whenReady().then(async () => {
   bookmarks = loadBookmarksSafe();
   nativeTheme.themeSource = prefs.theme;
   registerIpc();
+  if (!isSmokeRun()) {
+    loadInteractsh();
+  }
   createWindow();
   downloads.hook(electronSession.defaultSession);
 
@@ -1124,5 +1133,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  stopPolling();
   void sidecar.stop();
 });

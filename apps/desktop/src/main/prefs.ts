@@ -16,6 +16,7 @@ const SIDEBAR_PANELS = new Set<SidebarPanel>([
   "comparer",
   "logger",
   "sequencer",
+  "oob",
 ]);
 
 export function prefsPath(): string {

@@ -1198,3 +1198,11 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
 .connector-body label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .model-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .model-row input, .model-row select { flex: 1; min-width: 140px; }
+
+.oob-workbench { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.oob-payload { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 8px; }
+.oob-payload code { flex: 1; font-size: 12px; word-break: break-all; }
+.oob-meta { padding: 0 8px 8px; }
+.oob-split { display: flex; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.oob-list { width: 42%; overflow: auto; border-right: 1px solid var(--border); }
+.oob-detail { flex: 1; margin: 0; overflow: auto; }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, FolderTree, GitCompare, ScrollText, Shuffle } from "lucide-react";
+import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, FolderTree, GitCompare, ScrollText, Shuffle, Radio } from "lucide-react";
 import type {
   AppSnapshot,
   DownloadInfo,
@@ -207,6 +207,7 @@ function AppMenu({ state }: { state: AppSnapshot }) {
         <MenuItem label="Comparer" onClick={() => { void window.lurkwire.setTool("comparer"); close(); }} />
         <MenuItem label="Sequencer" onClick={() => { void window.lurkwire.setTool("sequencer"); close(); }} />
         <MenuItem label="Logger" onClick={() => { void window.lurkwire.setTool("logger"); close(); }} />
+        <MenuItem label="OOB collaborator" onClick={() => { void window.lurkwire.setTool("oob"); close(); }} />
         <MenuItem
           label="View source"
           shortcut="Ctrl+U"
@@ -601,6 +602,7 @@ function LurkwireMenu() {
     { id: "logger", label: "Logger", icon: ScrollText },
     { id: "scanner", label: "Scanner", icon: Radar },
     { id: "recon", label: "Recon", icon: Globe },
+    { id: "oob", label: "OOB", icon: Radio },
     { id: "ai", label: "AI", icon: MessageSquare },
   ] as const;
   return (

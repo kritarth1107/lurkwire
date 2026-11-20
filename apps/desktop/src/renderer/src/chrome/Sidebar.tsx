@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Radar,
   Repeat,
+  Radio,
   ScrollText,
   ShieldOff,
   Shuffle,
@@ -26,6 +27,7 @@ import { SiteMapView } from "../SiteMapView";
 import { ComparerView } from "../ComparerView";
 import { LoggerView } from "../LoggerView";
 import { SequencerView } from "../SequencerView";
+import { OobView } from "../OobView";
 import type { FlowSendHandlers } from "../FlowActions";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
@@ -40,6 +42,7 @@ const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "logger", label: "Logger", icon: ScrollText },
   { id: "scanner", label: "Scanner", icon: Radar },
   { id: "recon", label: "Recon", icon: Globe },
+  { id: "oob", label: "OOB", icon: Radio },
   { id: "ai", label: "AI", icon: MessageSquare },
 ];
 
@@ -152,6 +155,8 @@ export function Sidebar({
                   projectId={state.currentProjectId}
                   onSendToRepeater={handlers.onSendToRepeater}
                 />
+              ) : panel === "oob" ? (
+                <OobView />
               ) : panel === "recon" ? (
                 <ReconView
                   initialHost={(() => {
