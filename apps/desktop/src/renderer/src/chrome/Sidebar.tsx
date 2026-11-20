@@ -8,10 +8,8 @@ import {
   Repeat,
   ShieldOff,
   X,
-  Columns2,
 } from "lucide-react";
 import type { AppSnapshot, FlowDetail, SidebarPanel } from "../../../shared/types";
-import { projectColor } from "../../../shared/projectColor";
 import { HistoryView } from "../HistoryView";
 import { InterceptView } from "../InterceptView";
 import { RepeaterView } from "../RepeaterView";
@@ -22,7 +20,6 @@ import { ScannerView } from "../ScannerView";
 import { ReconView } from "../ReconView";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
-  { id: "tabs", label: "Vertical tabs", icon: Columns2 },
   { id: "history", label: "History", icon: History },
   { id: "intercept", label: "Intercept", icon: ShieldOff },
   { id: "repeater", label: "Repeater", icon: Repeat },
@@ -59,14 +56,6 @@ export function Sidebar({
             title={item.label}
             aria-label={item.label}
             onClick={() => {
-              if (item.id === "tabs") {
-                void window.lurkwire.setPrefs({
-                  verticalTabs: true,
-                  sidebarOpen: true,
-                  sidebarPanel: "tabs",
-                });
-                return;
-              }
               if (open && panel === item.id) {
                 void window.lurkwire.setPrefs({ sidebarOpen: false });
                 return;
@@ -93,9 +82,7 @@ export function Sidebar({
               </button>
             </div>
             <div className="sidebar-body">
-              {panel === "tabs" ? (
-                <VerticalTabs state={state} />
-              ) : panel === "history" ? (
+              {panel === "history" ? (
                 <HistoryView
                   projectId={state.currentProjectId}
                   onSendToRepeater={(flow) => {
@@ -172,39 +159,6 @@ export function Sidebar({
         </>
       ) : null}
     </aside>
-  );
-}
-
-function VerticalTabs({ state }: { state: AppSnapshot }) {
-  return (
-    <div style={{ padding: 6 }}>
-      {state.tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          className={`vtab${tab.id === state.activeTabId ? " selected" : ""}`}
-          onClick={() => void window.lurkwire.switchTab(tab.id)}
-        >
-          <span className="tab-container-line" style={{ background: projectColor(tab.projectId) }} />
-          <span className="tab-title">{tab.title || "New Tab"}</span>
-          {tab.pinned ? null : (
-            <span
-              className="tab-close"
-              style={{ opacity: 1 }}
-              onClick={(event) => {
-                event.stopPropagation();
-                void window.lurkwire.closeTab(tab.id);
-              }}
-            >
-              ×
-            </span>
-          )}
-        </button>
-      ))}
-      <button type="button" className="vtab" onClick={() => void window.lurkwire.newTab()}>
-        + New tab
-      </button>
-    </div>
   );
 }
 

@@ -14,7 +14,6 @@ export type ToolId =
   | "settings";
 
 export type SidebarPanel =
-  | "tabs"
   | "history"
   | "repeater"
   | "intercept"
@@ -63,7 +62,6 @@ export type LlmResult = {
 export type AppPrefs = {
   theme: ThemePref;
   bookmarksBar: boolean;
-  verticalTabs: boolean;
   sidebarOpen: boolean;
   sidebarPanel: SidebarPanel;
   sidebarWidth: number;
@@ -74,7 +72,6 @@ export type AppPrefs = {
 export const DEFAULT_PREFS: AppPrefs = {
   theme: "system",
   bookmarksBar: true,
-  verticalTabs: false,
   sidebarOpen: false,
   sidebarPanel: "history",
   sidebarWidth: 360,

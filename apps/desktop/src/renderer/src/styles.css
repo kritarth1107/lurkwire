@@ -838,19 +838,6 @@ button.primary:hover { filter: brightness(1.08); }
   user-select: text;
 }
 
-.vtab {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 10px;
-  text-align: left;
-  border-radius: var(--radius-s);
-  color: var(--text);
-}
-.vtab:hover { background: var(--button-hover); }
-.vtab.selected { background: color-mix(in srgb, var(--focus-ring) 16%, transparent); }
-.vtab .tab-container-line { position: static; width: 4px; height: 16px; border-radius: 2px; flex: 0 0 4px; }
 
 .urlbar .mark, .navbar .mark { width: 16px; height: 16px; display: block; }
 .check { margin: 6px 0; }

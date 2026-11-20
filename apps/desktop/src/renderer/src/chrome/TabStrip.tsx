@@ -1,30 +1,10 @@
-import { ChevronDown, Plus, Columns2 } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import type { AppSnapshot, TabInfo } from "../../../shared/types";
 import { projectColor } from "../../../shared/projectColor";
 import { openAnchoredPanel, openAtCursor } from "./openPanel";
 import { WindowControls } from "./WindowControls";
 
 export function TabStrip({ state }: { state: AppSnapshot }) {
-  if (state.prefs.verticalTabs) {
-    return (
-      <div
-        className="tabstrip"
-        onDoubleClick={() => void window.lurkwire.windowToggleMaximize()}
-      >
-        <button
-          type="button"
-          className="strip-btn no-drag"
-          aria-label="Show horizontal tabs"
-          onClick={() => void window.lurkwire.setPrefs({ verticalTabs: false, sidebarOpen: state.prefs.sidebarOpen })}
-        >
-          <Columns2 size={16} />
-        </button>
-        <div className="tab-scroll" />
-        <WindowControls />
-      </div>
-    );
-  }
-
   return (
     <div className="tabstrip" onDoubleClick={() => void window.lurkwire.windowToggleMaximize()}>
       <div className="tab-scroll">

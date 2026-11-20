@@ -87,23 +87,6 @@ export function SettingsPage({ state }: { state: AppSnapshot }) {
             </div>
             <div className="settings-row">
               <div>
-                <strong>Vertical tabs</strong>
-                <p>Move the tab strip into the sidebar.</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={state.prefs.verticalTabs}
-                onChange={(event) =>
-                  void window.lurkwire.setPrefs({
-                    verticalTabs: event.target.checked,
-                    sidebarOpen: event.target.checked ? true : state.prefs.sidebarOpen,
-                    sidebarPanel: event.target.checked ? "tabs" : state.prefs.sidebarPanel,
-                  })
-                }
-              />
-            </div>
-            <div className="settings-row">
-              <div>
                 <strong>Sidebar position</strong>
               </div>
               <select

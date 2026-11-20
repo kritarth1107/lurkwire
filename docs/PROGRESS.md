@@ -19,3 +19,15 @@ Build order for v0.1. Checked items are on `main`.
 - [x] Proton-style browser chrome (tabs, toolbar, sidebar, new tab, settings, themes)
 
 - [x] Headless Electron smoke test (`npm run smoke`): load https://example.com through the proxy, assert the flow in History, and write PNGs to `docs/screenshots/`
+
+## Browser UX (after v0.1 modules)
+
+- [x] Remove the vertical tabs feature (keep the tool sidebar)
+- [ ] Anchor popovers next to the button that opened them
+- [ ] Internal pages as tabs at lurkwire:// URLs
+- [ ] Standard browser shortcuts, multi-window, tab-bar interactions
+- [ ] Chrome-style app menu with shortcuts and submenus
+- [ ] Native per-tab Chrome DevTools (docked / undocked / inspect element)
+- [ ] Site info panel (certificate, permissions, cookies, site intel)
+- [ ] Burp-parity history, viewers, site map, Comparer, Sequencer-lite, Logger, annotations
+- [ ] Settings > AI: multi-provider connectors, model pickers, per-task routing
