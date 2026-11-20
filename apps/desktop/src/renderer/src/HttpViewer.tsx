@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail } from "../../shared/types";
 import {
   bytesFromBase64,
+  decodeText,
   formatHeaders,
   headerMime,
   languageFor,
@@ -63,8 +64,8 @@ export function HttpViewer({ flow }: { flow: FlowDetail | null }) {
   }
 
   const preview = side === "req" ? flow.req_preview : flow.resp_preview;
-  const text = bytes && bytes.length ? new TextDecoder("utf-8").decode(bytes) : (preview ?? "");
   const headers = side === "req" ? flow.req_headers : flow.resp_headers;
+  const text = bytes && bytes.length ? decodeText(bytes, headers, mime) : (preview ?? "");
   const language = languageFor(mime, text);
 
   return (

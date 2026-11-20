@@ -110,3 +110,79 @@ export function bytesFromBase64(b64: string): Uint8Array {
   }
   return out;
 }
+
+export function headerValue(headers: HeaderPair[], name: string): string | null {
+  const found = headers.find((h) => h.name.toLowerCase() === name.toLowerCase());
+  return found?.value ?? null;
+}
+
+export function charsetFromContentType(contentType: string | null | undefined): string | null {
+  if (!contentType) {
+    return null;
+  }
+  for (const part of contentType.split(";").slice(1)) {
+    const [key, ...rest] = part.split("=");
+    if (key?.trim().toLowerCase() !== "charset") {
+      continue;
+    }
+    const raw = rest.join("=").trim().replace(/^["']|["']$/g, "");
+    if (raw) {
+      return raw;
+    }
+  }
+  return null;
+}
+
+export function charsetFromHtml(bytes: Uint8Array): string | null {
+  const prefix = bytes.subarray(0, Math.min(bytes.length, 2048));
+  const ascii = new TextDecoder("latin1").decode(prefix).toLowerCase();
+  const idx = ascii.indexOf("charset=");
+  if (idx < 0) {
+    return null;
+  }
+  let rest = ascii.slice(idx + 8).replace(/^["'\s]+/, "");
+  const match = /^[a-z0-9_-]+/.exec(rest);
+  return match ? match[0] : null;
+}
+
+export function charsetFromBom(bytes: Uint8Array): string | null {
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return "utf-8";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return "utf-16le";
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return "utf-16be";
+  }
+  return null;
+}
+
+export function resolveCharset(bytes: Uint8Array, headers: HeaderPair[], mime?: string | null): string {
+  return (
+    charsetFromBom(bytes) ??
+    charsetFromContentType(headerValue(headers, "content-type") ?? mime ?? null) ??
+    charsetFromHtml(bytes) ??
+    "utf-8"
+  );
+}
+
+export function decodeText(bytes: Uint8Array, headers: HeaderPair[] = [], mime?: string | null): string {
+  if (!bytes.length) {
+    return "";
+  }
+  const label = resolveCharset(bytes, headers, mime);
+  try {
+    const text = new TextDecoder(label, { fatal: false }).decode(bytes);
+    if (label.toLowerCase() === "utf-8" && !charsetFromBom(bytes) && !charsetFromContentType(headerValue(headers, "content-type") ?? mime ?? null)) {
+      // If UTF-8 was assumed and the body is mostly replacement characters, try windows-1252.
+      const replacements = (text.match(/\uFFFD/g) ?? []).length;
+      if (replacements > 0 && replacements * 8 > text.length) {
+        return new TextDecoder("windows-1252").decode(bytes);
+      }
+    }
+    return text;
+  } catch {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+}

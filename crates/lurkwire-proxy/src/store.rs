@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
+use crate::body_decode::{content_type, indexable_text as decode_indexable_text, preview_text as decode_preview_text};
 use crate::scope::{ScopeKind, ScopeRule};
 use crate::types::{
     url_from_parts, Finding, FindingDraft, FindingQuery, FlowDetail, FlowQuery, FlowSummary,
@@ -269,8 +270,8 @@ impl Store {
                 tags,
             ],
         )?;
-        let req_text = indexable_text(&flow.req_body, content_type(&flow.req_headers).as_deref());
-        let resp_text = indexable_text(&flow.resp_body, mime.as_deref());
+        let req_text = decode_indexable_text(&flow.req_body, &flow.req_headers, MAX_INDEX_CHARS);
+        let resp_text = decode_indexable_text(&flow.resp_body, &flow.resp_headers, MAX_INDEX_CHARS);
         tx.execute(
             "INSERT INTO flows_fts(id, method, host, path, query, req_text, resp_text)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -441,11 +442,11 @@ impl Store {
         let req_preview = req_blob
             .as_ref()
             .and_then(|h| self.get_blob(h).ok())
-            .and_then(|b| preview_text(&b));
+            .and_then(|b| decode_preview_text(&b, &req_headers, PREVIEW_CHARS));
         let resp_preview = resp_blob
             .as_ref()
             .and_then(|h| self.get_blob(h).ok())
-            .and_then(|b| preview_text(&b));
+            .and_then(|b| decode_preview_text(&b, &resp_headers, PREVIEW_CHARS));
         Ok(Some(FlowDetail {
             summary,
             req_headers,
@@ -944,45 +945,6 @@ fn row_summary_from(row: &rusqlite::Row<'_>) -> rusqlite::Result<FlowSummary> {
     })
 }
 
-fn content_type(headers: &[HeaderPair]) -> Option<String> {
-    headers
-        .iter()
-        .find(|h| h.name.eq_ignore_ascii_case("content-type"))
-        .map(|h| h.value.clone())
-}
-
-fn indexable_text(bytes: &[u8], content_type: Option<&str>) -> String {
-    if let Some(ct) = content_type {
-        let ct = ct.to_ascii_lowercase();
-        if ct.contains("image/")
-            || ct.contains("octet-stream")
-            || ct.contains("font/")
-            || ct.contains("video/")
-            || ct.contains("audio/")
-            || ct.contains("zip")
-            || ct.contains("wasm")
-        {
-            return String::new();
-        }
-    }
-    let slice = &bytes[..bytes.len().min(MAX_INDEX_CHARS)];
-    if slice.contains(&0) {
-        return String::new();
-    }
-    String::from_utf8_lossy(slice).into_owned()
-}
-
-fn preview_text(bytes: &[u8]) -> Option<String> {
-    if bytes.is_empty() {
-        return None;
-    }
-    let slice = &bytes[..bytes.len().min(PREVIEW_CHARS)];
-    if slice.contains(&0) {
-        return None;
-    }
-    Some(String::from_utf8_lossy(slice).into_owned())
-}
-
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1223,6 +1185,59 @@ mod tests {
             in_scope: true,
         };
         store.insert_flow(&flow).unwrap();
+
+        let gz_body = {
+            use flate2::write::GzEncoder;
+            use flate2::Compression;
+            use std::io::Write;
+            let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+            enc.write_all(br#"{"ok":true,"notice":"gzipdecoded"}"#).unwrap();
+            enc.finish().unwrap()
+        };
+        let gz_flow = NewFlow {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.id.clone(),
+            ts: now_ms(),
+            method: "GET".into(),
+            scheme: "https".into(),
+            host: "api.example.test".into(),
+            port: 443,
+            path: "/v1/gzip".into(),
+            query: "".into(),
+            http_version: "HTTP/1.1".into(),
+            status: Some(200),
+            req_headers: vec![],
+            resp_headers: vec![
+                HeaderPair { name: "Content-Type".into(), value: "application/json".into() },
+                HeaderPair { name: "Content-Encoding".into(), value: "gzip".into() },
+            ],
+            req_body: vec![],
+            resp_body: gz_body,
+            req_len: 0,
+            resp_len: 32,
+            duration_ms: Some(4),
+            source: "browser".into(),
+            truncated: false,
+            in_scope: true,
+        };
+        store.insert_flow(&gz_flow).unwrap();
+        let gz_detail = store.get_flow(&gz_flow.id).unwrap().unwrap();
+        assert!(
+            gz_detail.resp_preview.as_deref().unwrap().contains("gzipdecoded"),
+            "preview should decode gzip: {:?}",
+            gz_detail.resp_preview
+        );
+        let (found, _) = store
+            .list_flows(
+                &FlowQuery {
+                    q: Some("gzipdecoded".into()),
+                    ..FlowQuery::default()
+                },
+                &project.id,
+            )
+            .unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].path, "/v1/gzip");
 
         let (items, total) = store
             .list_flows(

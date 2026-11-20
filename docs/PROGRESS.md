@@ -40,3 +40,12 @@ Refreshed screenshots cover main light/dark, the app menu, a lurkwire://settings
 - [x] Unpacked Chrome extension loading and Settings page
 - [x] HTTP/2 to the upstream (browser-facing MITM stays HTTP/1.1)
 
+## Night polish
+
+- [x] Decode content-encoding (gzip/br/deflate/zstd) and charset in History viewers
+- [ ] Proper Monaco workers in the packaged build
+- [ ] Fix Electron deprecations (navigationHistory, session.extensions)
+- [ ] Real tab groups (create / name / color / collapse)
+- [ ] Bookmarks manager and opt-in Chrome/Firefox import
+- [ ] Session restore (reopen last tabs)
+- [ ] Silence DevTools Autofill errors

@@ -166,15 +166,23 @@ async fn get_flow_body(
         .store
         .get_flow(&id)?
         .ok_or_else(|| ApiError::not_found("flow not found"))?;
-    let (hash, mime) = match which.as_str() {
-        "req" | "request" => (flow.req_blob, content_type(&flow.req_headers)),
-        "resp" | "response" => (flow.resp_blob, flow.summary.mime.clone()),
+    let (hash, headers, mime) = match which.as_str() {
+        "req" | "request" => {
+            let mime = content_type(&flow.req_headers);
+            (flow.req_blob, flow.req_headers, mime)
+        }
+        "resp" | "response" => (
+            flow.resp_blob,
+            flow.resp_headers,
+            flow.summary.mime.clone(),
+        ),
         _ => return Err(ApiError::bad_request("which must be req or resp")),
     };
     let Some(hash) = hash else {
         return Err(ApiError::not_found("no body stored"));
     };
-    let bytes = state.store.get_blob(&hash)?;
+    let stored = state.store.get_blob(&hash)?;
+    let bytes = crate::body_decode::decode_http_body(&stored, &headers);
     let mime = mime.unwrap_or_else(|| "application/octet-stream".to_string());
     Ok(Response::builder()
         .status(StatusCode::OK)
