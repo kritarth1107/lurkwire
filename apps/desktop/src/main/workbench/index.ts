@@ -63,3 +63,5 @@ export async function sendFromWorkbench(
 ): Promise<ReturnType<typeof sendWorkbenchRequest>> {
   return sendWorkbenchRequest(draft, transport);
 }
+
+export { runWorkbenchCollection } from "./run";

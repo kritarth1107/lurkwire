@@ -55,6 +55,6 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 ## Overnight tools (22 Nov)
 
 - [x] Firefox-style tab throbber, globe fallback, mute/crash states
-- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar, import/export, code snippets, AI helpers, Send to Repeater/Intruder, and proxy-backed send with guardrails). Still open: collection runner with data files, mock server, in-app OAuth PKCE browser flow, gRPC/WebSocket/SSE clients, standalone binary body picker
+- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar, import/export, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, and proxy-backed send with guardrails). Still open: mock server, in-app OAuth PKCE browser flow, gRPC/WebSocket/SSE clients, standalone binary body picker
 - [x] Command palette (Ctrl+K), CSRF PoC generator, and security-header reports from History
 - [ ] Additional pentester tools

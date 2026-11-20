@@ -20,12 +20,14 @@ import {
   importAny,
   kv,
   newId,
+  parseRunnerData,
   toCurl,
   type SnippetLanguage,
   type WbAuth,
   type WbAuthType,
   type WbBodyMode,
   type WbCollection,
+  type RunnerProgress,
   type WbHistoryEntry,
   type WbKv,
   type WbRequest,
@@ -104,6 +106,12 @@ export function WorkbenchPage({ url }: { url: string }) {
   const [aiOutput, setAiOutput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [openIds, setOpenIds] = useState<string[]>([]);
+  const [runOpen, setRunOpen] = useState(false);
+  const [runData, setRunData] = useState("");
+  const [runDelay, setRunDelay] = useState("0");
+  const [runStop, setRunStop] = useState(false);
+  const [runBusy, setRunBusy] = useState(false);
+  const [runResults, setRunResults] = useState<RunnerProgress[]>([]);
 
   useEffect(() => {
     void window.lurkwire.workbenchGet().then((data) => {
@@ -488,6 +496,9 @@ export function WorkbenchPage({ url }: { url: string }) {
             <button type="button" onClick={() => setImportOpen(true)}>
               Import
             </button>
+            <button type="button" disabled={!collection} onClick={() => setRunOpen(true)}>
+              Run
+            </button>
             <button
               type="button"
               disabled={!collection}
@@ -659,6 +670,83 @@ export function WorkbenchPage({ url }: { url: string }) {
           </div>
         </div>
       ) : null}
+
+      {runOpen ? (
+        <div className="wb-modal" role="dialog">
+          <div className="wb-modal-card">
+            <h2>Run collection</h2>
+            <p className="lead">
+              Sends every request in this collection through the Lurkwire proxy, applying scope, rate
+              limits, and the kill switch. Optionally iterate a CSV or JSON data file as template variables.
+            </p>
+            <label>
+              Delay between requests (ms)
+              <input value={runDelay} onChange={(event) => setRunDelay(event.target.value)} />
+            </label>
+            <label className="wb-check">
+              <input type="checkbox" checked={runStop} onChange={(event) => setRunStop(event.target.checked)} />
+              Stop on a failed test, 5xx, or send error
+            </label>
+            <textarea
+              value={runData}
+              onChange={(event) => setRunData(event.target.value)}
+              placeholder={'id,q\n1,alpha\n2,beta    or    [{"id":"1","q":"alpha"}]'}
+              spellCheck={false}
+            />
+            {runResults.length ? (
+              <div className="wb-tests">
+                {runResults.map((item) => (
+                  <div key={`${item.index}-${item.requestId}`} className={`wb-test ${item.result.error || (item.result.status ?? 0) >= 400 || item.result.tests.some((test) => !test.passed) ? "fail" : "pass"}`}>
+                    <strong>{item.result.status ?? "err"}</strong> {item.name}
+                    {item.result.error ? <div className="wb-muted">{item.result.error}</div> : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="wb-modal-actions">
+              <button type="button" onClick={() => setRunOpen(false)}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="primary"
+                disabled={runBusy || !collection}
+                onClick={() => {
+                  if (!workspace || !collection) {
+                    return;
+                  }
+                  const ids = workspace.requests.filter((item) => item.collectionId === collection.id).map((item) => item.id);
+                  let data;
+                  try {
+                    data = runData.trim() ? parseRunnerData(runData) : undefined;
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : String(err));
+                    return;
+                  }
+                  setRunBusy(true);
+                  setError(null);
+                  void window.lurkwire
+                    .workbenchSave(workspace)
+                    .then(() =>
+                      window.lurkwire.workbenchRun({
+                        requestIds: ids,
+                        data,
+                        delayMs: Number(runDelay) || 0,
+                        stopOnFail: runStop,
+                      }),
+                    )
+                    .then((items) => setRunResults(items))
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+                    .finally(() => setRunBusy(false));
+                }}
+              >
+                {runBusy ? "Running…" : "Run"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {aiOpen ? (
         <div className="wb-ai">
           <div className="wb-ai-head">

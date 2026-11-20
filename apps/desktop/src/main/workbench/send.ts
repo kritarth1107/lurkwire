@@ -202,7 +202,7 @@ function appendHistory(workspace: WbWorkspace, entry: WbHistoryEntry): void {
 export async function sendWorkbenchRequest(
   draft: WbRequest,
   transport: WorkbenchTransport,
-  options?: { persist?: boolean },
+  options?: { persist?: boolean; extraVars?: VariableMap },
 ): Promise<WbSendResult> {
   const workspace = loadWorkspace();
   const collection = workspace.collections.find((item) => item.id === draft.collectionId);
@@ -211,6 +211,7 @@ export async function sendWorkbenchRequest(
     workspace.globals,
     collection?.variables,
     environment?.variables,
+    options?.extraVars,
   ]);
 
   const scriptRequest = {

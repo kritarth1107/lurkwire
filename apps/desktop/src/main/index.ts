@@ -45,8 +45,8 @@ import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpacked
 import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, importVisits, listVisits } from "./visits";
-import { getMaskedWorkspace, importFlowToWorkbench, putWorkspace, sendFromWorkbench, transportFrom } from "./workbench";
-import type { WbRequest, WbWorkspace } from "../shared/workbench";
+import { getMaskedWorkspace, importFlowToWorkbench, putWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
+import type { RunnerSpec, WbRequest, WbWorkspace } from "../shared/workbench";
 
 app.setName(PRODUCT_NAME);
 registerLurkwireScheme();
@@ -1134,6 +1134,9 @@ function registerIpc(): void {
 
   ipcMain.handle("lurkwire:workbenchGet", () => getMaskedWorkspace());
   ipcMain.handle("lurkwire:workbenchSave", (_event, workspace: WbWorkspace) => putWorkspace(workspace));
+  ipcMain.handle("lurkwire:workbenchRun", (_event, spec: RunnerSpec) => {
+    return runWorkbenchCollection(spec, transportFrom(control, () => currentProjectId));
+  });
   ipcMain.handle("lurkwire:workbenchSend", (event, draft: WbRequest) => {
     void event;
     return sendFromWorkbench(

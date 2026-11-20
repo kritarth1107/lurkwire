@@ -28,7 +28,7 @@ import type { InstalledExtension } from "../shared/extensions";
 import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
-import type { WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
+import type { RunnerProgress, RunnerSpec, WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
   const listener = (_event: unknown, value: T) => callback(value);
@@ -179,6 +179,8 @@ const api = {
     ipcRenderer.invoke("lurkwire:workbenchSave", workspace),
   workbenchSend: (draft: WbRequest): Promise<WbSendResult> =>
     ipcRenderer.invoke("lurkwire:workbenchSend", draft),
+  workbenchRun: (spec: RunnerSpec): Promise<RunnerProgress[]> =>
+    ipcRenderer.invoke("lurkwire:workbenchRun", spec),
   workbenchImportFlow: (flowId: string): Promise<{ workspace: WbWorkspace; request: WbRequest }> =>
     ipcRenderer.invoke("lurkwire:workbenchImportFlow", flowId),
 };
