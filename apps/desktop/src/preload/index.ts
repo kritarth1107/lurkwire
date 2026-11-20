@@ -173,6 +173,7 @@ const api = {
   onFocusUrl: (callback: () => void) => listen("lurkwire:focus-url", callback),
   onOpenFind: (callback: () => void) => listen("lurkwire:open-find", callback),
   onEscape: (callback: () => void) => listen("lurkwire:escape", callback),
+  onCommandPalette: (callback: () => void) => listen("lurkwire:command-palette", callback),
   workbenchGet: (): Promise<WbWorkspace> => ipcRenderer.invoke("lurkwire:workbenchGet"),
   workbenchSave: (workspace: WbWorkspace): Promise<WbWorkspace> =>
     ipcRenderer.invoke("lurkwire:workbenchSave", workspace),

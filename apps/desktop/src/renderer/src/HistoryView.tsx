@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, formatTime, shortMime, statusClass } from "../../shared/http";
 import { flowTitle, highlightOf, tlsLabel } from "../../shared/flowMeta";
-import { AnnotationBar, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { AnnotationBar, copyCsrfPoc, copySecurityHeaderReport, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
 import { HttpViewer } from "./HttpViewer";
 
 type ColId = "#" | "host" | "method" | "url" | "status" | "length" | "mime" | "title" | "tls" | "time";
@@ -217,6 +217,12 @@ export function HistoryView({ projectId, handlers }: Props) {
             </button>
             <button type="button" onClick={() => void sendFlow(detail.id, "workbench", handlers)}>
               Send to Workbench
+            </button>
+            <button type="button" onClick={() => void copyCsrfPoc(detail.id)}>
+              CSRF PoC
+            </button>
+            <button type="button" onClick={() => void copySecurityHeaderReport(detail.id)}>
+              Header report
             </button>
           </>
         ) : null}

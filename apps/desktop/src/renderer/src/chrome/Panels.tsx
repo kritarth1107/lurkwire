@@ -318,6 +318,7 @@ function AppMenu({ state }: { state: AppSnapshot }) {
           close();
         }}
       />
+      <MenuItem label="Command palette" shortcut="Ctrl+K" onClick={() => { void window.lurkwire.command("palette"); close(); }} />
       <MenuItem label="Find and edit" submenu onClick={() => setSub("find")} />
       <MenuItem label="Save and share" submenu onClick={() => setSub("save")} />
       <MenuItem label="More tools" submenu onClick={() => setSub("more")} />

@@ -7,6 +7,7 @@ import { NavBar } from "./chrome/NavBar";
 import { InternalPage } from "./chrome/InternalPage";
 import { Sidebar } from "./chrome/Sidebar";
 import { TabStrip } from "./chrome/TabStrip";
+import { CommandPalette } from "./chrome/CommandPalette";
 import { useAppState } from "./useAppState";
 
 export function App() {
@@ -16,6 +17,7 @@ export function App() {
   const [repeaterDraft, setRepeaterDraft] = useState<FlowDetail | null>(null);
   const [intruderDraft, setIntruderDraft] = useState<FlowDetail | null>(null);
   const [findOpen, setFindOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
 
@@ -31,10 +33,15 @@ export function App() {
   useEffect(() => {
     const offFocus = window.lurkwire.onFocusUrl(() => urlRef.current?.focus());
     const offFind = window.lurkwire.onOpenFind(() => setFindOpen(true));
-    const offEsc = window.lurkwire.onEscape(() => setFindOpen(false));
+    const offPalette = window.lurkwire.onCommandPalette(() => setPaletteOpen((open) => !open));
+    const offEsc = window.lurkwire.onEscape(() => {
+      setPaletteOpen(false);
+      setFindOpen(false);
+    });
     return () => {
       offFocus();
       offFind();
+      offPalette();
       offEsc();
     };
   }, []);
@@ -94,6 +101,7 @@ export function App() {
           {showInternal ? <InternalPage state={state} url={internalUrl} /> : null}
           <main className="stage" ref={stageRef} hidden={showInternal} />
           <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
+          <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} state={state} />
         </div>
       </div>
     </div>

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { HIGHLIGHT_COLORS, highlightOf, setHighlight, type HighlightColor } from "../../shared/flowMeta";
 import { addComparerItem } from "./workbench";
+import { buildCsrfPoc } from "../../shared/csrf";
+import { analyzeSecurityHeaders, formatSecurityReport } from "../../shared/securityHeaders";
 
 export type FlowSendHandlers = {
   onSendToRepeater: (flow: FlowDetail) => void;
@@ -26,6 +28,32 @@ export async function sendFlow(id: string, target: "repeater" | "intruder" | "co
   }
   addComparerItem(flow.id, `${flow.method} ${flow.host}${flow.path}`);
   handlers.onSendToComparer?.(flow);
+}
+
+export async function copyCsrfPoc(id: string): Promise<void> {
+  const flow = await window.lurkwire.getFlow(id);
+  let body = flow.req_preview ?? "";
+  try {
+    const raw = await window.lurkwire.getFlowBody(id, "req");
+    if (raw) {
+      body = raw;
+    }
+  } catch {
+    /* preview is enough */
+  }
+  const poc = buildCsrfPoc({
+    method: flow.method,
+    url: flow.url,
+    headers: flow.req_headers,
+    body,
+  });
+  await window.lurkwire.copyText(poc.html);
+}
+
+export async function copySecurityHeaderReport(id: string): Promise<void> {
+  const flow = await window.lurkwire.getFlow(id);
+  const report = analyzeSecurityHeaders(flow.resp_headers, flow.url);
+  await window.lurkwire.copyText(formatSecurityReport(report, flow.url));
 }
 
 type MenuState = { x: number; y: number; flow: FlowSummary } | null;
@@ -87,6 +115,12 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "workbench", handlers)}>
         Send to Workbench
+      </button>
+      <button type="button" onClick={() => void copyCsrfPoc(menu.flow.id)}>
+        Copy CSRF PoC
+      </button>
+      <button type="button" onClick={() => void copySecurityHeaderReport(menu.flow.id)}>
+        Copy security header report
       </button>
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "comparer", handlers)}>
         Send to Comparer

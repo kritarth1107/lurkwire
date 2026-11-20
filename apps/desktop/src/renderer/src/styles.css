@@ -1629,3 +1629,55 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
   .wb-split { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   .wb-req { border-right: 0; border-bottom: 1px solid var(--separator); }
 }
+
+
+/* Command palette (Ctrl+K) */
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  z-index: 80;
+  display: flex;
+  justify-content: center;
+  padding: 12vh 16px 0;
+}
+.palette {
+  width: min(560px, 100%);
+  max-height: 70vh;
+  background: var(--panel);
+  color: var(--text);
+  border-radius: var(--radius-m);
+  box-shadow: var(--panel-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.palette input {
+  height: 44px;
+  border: 0;
+  border-bottom: 1px solid var(--separator);
+  background: transparent;
+  color: inherit;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+.palette-list { overflow: auto; padding: 6px; }
+.palette-item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-s);
+  font: inherit;
+  font-size: 13px;
+}
+.palette-item.active, .palette-item:hover { background: var(--button-hover); }
+.palette-hint { color: var(--muted); font-size: 11px; }
+.palette-empty { padding: 16px; color: var(--muted); text-align: center; }

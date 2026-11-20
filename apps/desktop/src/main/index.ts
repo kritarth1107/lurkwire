@@ -543,6 +543,11 @@ function handleShortcut(input: Electron.Input, win: ChromeWin, contents: Electro
     win.window.webContents.focus();
     return true;
   }
+  if (ctrl && key === "k") {
+    win.window.webContents.send("lurkwire:command-palette");
+    win.window.webContents.focus();
+    return true;
+  }
   if (ctrl && key === "r") {
     if (!killed) {
       win.tabs.reload(shift);
@@ -1187,6 +1192,10 @@ function registerIpc(): void {
         break;
       case "inspect":
         win.tabs.openDevTools("right");
+        break;
+      case "palette":
+        win.window.webContents.send("lurkwire:command-palette");
+        win.window.webContents.focus();
         break;
       default:
         break;
