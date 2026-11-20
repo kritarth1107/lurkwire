@@ -113,6 +113,7 @@ const api = {
   pageAction: (action: string, url?: string) => ipcRenderer.invoke("lurkwire:pageAction", action, url),
   copyText: (text: string) => ipcRenderer.invoke("lurkwire:copyText", text),
   openExternal: (url: string) => ipcRenderer.invoke("lurkwire:openExternal", url),
+  command: (name: string) => ipcRenderer.invoke("lurkwire:command", name),
   openPanel: (request: PanelOpenRequest) => ipcRenderer.invoke("lurkwire:openPanel", request),
   closePanel: () => ipcRenderer.invoke("lurkwire:closePanel"),
   resizePanel: (width: number, height: number) =>

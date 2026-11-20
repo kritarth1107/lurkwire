@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, Settings, Minus, Plus } from "lucide-react";
+import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare } from "lucide-react";
 import type {
   AppSnapshot,
   DownloadInfo,
@@ -62,72 +62,290 @@ function close(): void {
 }
 
 function AppMenu({ state }: { state: AppSnapshot }) {
+  const [sub, setSub] = useState<
+    "history" | "bookmarks" | "tabgroups" | "extensions" | "find" | "save" | "more" | "profile" | null
+  >(null);
   const zoom = Math.round((state.zoomFactor || 1) * 100);
+
+  if (sub === "history") {
+    return (
+      <SubMenu title="History" onBack={() => setSub(null)}>
+        <MenuItem label="History" shortcut="Ctrl+H" onClick={() => go("lurkwire://history")} />
+        <MenuItem label="Downloads" shortcut="Ctrl+J" onClick={() => go("lurkwire://downloads")} />
+        <div className="menu-sep" />
+        <RecentVisits />
+      </SubMenu>
+    );
+  }
+  if (sub === "bookmarks") {
+    return (
+      <SubMenu title="Bookmarks and lists" onBack={() => setSub(null)}>
+        <MenuItem
+          label="Bookmark this tab"
+          shortcut="Ctrl+D"
+          onClick={() => {
+            const tab = state.tabs.find((item) => item.id === state.activeTabId);
+            if (tab?.url) {
+              void window.lurkwire.addBookmark({ title: tab.title || tab.url, url: tab.url });
+            }
+            close();
+          }}
+        />
+        <MenuItem
+          label={state.prefs.bookmarksBar ? "Hide bookmarks toolbar" : "Show bookmarks toolbar"}
+          shortcut="Ctrl+Shift+B"
+          onClick={() => {
+            void window.lurkwire.setPrefs({ bookmarksBar: !state.prefs.bookmarksBar });
+            close();
+          }}
+        />
+        <MenuItem label="Bookmark manager" shortcut="Ctrl+Shift+O" onClick={() => go("lurkwire://bookmarks")} />
+      </SubMenu>
+    );
+  }
+  if (sub === "tabgroups") {
+    return (
+      <SubMenu title="Tab groups" onBack={() => setSub(null)}>
+        <p className="menu-note">Tab groups are not in this version yet. You can still pin tabs from the tab menu.</p>
+      </SubMenu>
+    );
+  }
+  if (sub === "extensions") {
+    return (
+      <SubMenu title="Extensions" onBack={() => setSub(null)}>
+        <MenuItem label="Manage extensions" onClick={() => go("lurkwire://extensions")} />
+      </SubMenu>
+    );
+  }
+  if (sub === "find") {
+    return (
+      <SubMenu title="Find and edit" onBack={() => setSub(null)}>
+        <MenuItem
+          label="Find"
+          shortcut="Ctrl+F"
+          onClick={() => {
+            void window.lurkwire.requestFind();
+            close();
+          }}
+        />
+        <MenuItem
+          label="Find next"
+          shortcut="F3"
+          onClick={() => {
+            void window.lurkwire.requestFind();
+            close();
+          }}
+        />
+      </SubMenu>
+    );
+  }
+  if (sub === "save") {
+    return (
+      <SubMenu title="Save and share" onBack={() => setSub(null)}>
+        <MenuItem
+          label="Save page as…"
+          shortcut="Ctrl+S"
+          onClick={() => {
+            void window.lurkwire.command("save");
+            close();
+          }}
+        />
+        <MenuItem
+          label="Copy URL"
+          onClick={() => {
+            const tab = state.tabs.find((item) => item.id === state.activeTabId);
+            if (tab?.url) {
+              void window.lurkwire.copyText(tab.url);
+            }
+            close();
+          }}
+        />
+      </SubMenu>
+    );
+  }
+  if (sub === "more") {
+    return (
+      <SubMenu title="More tools" onBack={() => setSub(null)}>
+        <MenuItem
+          label="Developer tools"
+          shortcut="Ctrl+Shift+I"
+          onClick={() => {
+            void window.lurkwire.command("devtools");
+            close();
+          }}
+        />
+        <MenuItem
+          label="Task manager"
+          onClick={() => {
+            void window.lurkwire.command("devtools");
+            close();
+          }}
+        />
+        <MenuItem
+          label="Lurkwire tools"
+          onClick={() => {
+            void window.lurkwire.setPrefs({ sidebarOpen: true, sidebarPanel: "history" });
+            close();
+          }}
+        />
+        <MenuItem
+          label="View source"
+          shortcut="Ctrl+U"
+          onClick={() => {
+            void window.lurkwire.command("viewSource");
+            close();
+          }}
+        />
+      </SubMenu>
+    );
+  }
+  if (sub === "profile") {
+    const project = state.projects.find((item) => item.id === state.currentProjectId);
+    return (
+      <SubMenu title="Profile" onBack={() => setSub(null)}>
+        <p className="menu-note">
+          This window uses the {project?.name ?? "default"} project
+          {state.privateMode ? " in a private session. Cookies and history are not saved." : "."}
+        </p>
+        <MenuItem label="Project settings" onClick={() => go("lurkwire://settings")} />
+      </SubMenu>
+    );
+  }
+
   return (
-    <>
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.newTab(); close(); }}>
-        New tab <kbd>Ctrl+T</kbd>
-      </button>
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.reopenTab(); close(); }}>
-        Reopen closed tab <kbd>Ctrl+Shift+T</kbd>
-      </button>
+    <div className="appmenu">
+      <MenuItem label="New tab" shortcut="Ctrl+T" onClick={() => { void window.lurkwire.newTab(); close(); }} />
+      <MenuItem label="New window" shortcut="Ctrl+N" onClick={() => { void window.lurkwire.newWindow(); close(); }} />
+      <MenuItem
+        label="New private window"
+        shortcut="Ctrl+Shift+N"
+        onClick={() => {
+          void window.lurkwire.newWindow({ privateMode: true });
+          close();
+        }}
+      />
       <div className="menu-sep" />
-      <div className="menu-label">Zoom</div>
+      <MenuItem label="Profile" submenu onClick={() => setSub("profile")} />
+      <MenuItem label="Passwords and autofill" onClick={() => go("lurkwire://settings")} />
+      <MenuItem label="History" shortcut="Ctrl+H" submenu onClick={() => setSub("history")} />
+      <MenuItem label="Downloads" shortcut="Ctrl+J" onClick={() => go("lurkwire://downloads")} />
+      <MenuItem label="Bookmarks and lists" submenu onClick={() => setSub("bookmarks")} />
+      <MenuItem label="Tab groups" submenu onClick={() => setSub("tabgroups")} />
+      <MenuItem label="Extensions" submenu onClick={() => setSub("extensions")} />
+      <MenuItem
+        label="Delete browsing data"
+        shortcut="Ctrl+Shift+Del"
+        onClick={() => {
+          void window.lurkwire.command("clearData");
+          close();
+        }}
+      />
+      <div className="menu-sep" />
       <div className="zoom-row">
+        <span className="zoom-label">Zoom</span>
         <button type="button" aria-label="Zoom out" onClick={() => void window.lurkwire.adjustZoom(-0.1)}>
-          <Minus size={14} />
+          −
         </button>
-        <span>{zoom}%</span>
+        <span className="zoom-value">{zoom}%</span>
         <button type="button" aria-label="Zoom in" onClick={() => void window.lurkwire.adjustZoom(0.1)}>
-          <Plus size={14} />
+          +
         </button>
-        <button type="button" onClick={() => void window.lurkwire.resetZoom()}>Reset</button>
+        <button
+          type="button"
+          aria-label="Fullscreen"
+          title="Fullscreen (F11)"
+          onClick={() => {
+            void window.lurkwire.command("fullscreen");
+            close();
+          }}
+        >
+          ⛶
+        </button>
       </div>
       <div className="menu-sep" />
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.setTool("history"); close(); }}>
-        <History size={16} /> History <kbd>Ctrl+H</kbd>
-      </button>
-      <button
-        type="button"
-        className="menu-item"
+      <MenuItem
+        label="Print…"
+        shortcut="Ctrl+P"
         onClick={() => {
-          void window.lurkwire.setPrefs({ bookmarksBar: !state.prefs.bookmarksBar });
+          void window.lurkwire.command("print");
           close();
         }}
-      >
-        {state.prefs.bookmarksBar ? "Hide bookmarks toolbar" : "Show bookmarks toolbar"} <kbd>Ctrl+B</kbd>
-      </button>
-      <button
-        type="button"
-        className="menu-item"
+      />
+      <MenuItem label="Find and edit" submenu onClick={() => setSub("find")} />
+      <MenuItem label="Save and share" submenu onClick={() => setSub("save")} />
+      <MenuItem label="More tools" submenu onClick={() => setSub("more")} />
+      <div className="menu-sep" />
+      <MenuItem label="Help" onClick={() => go("lurkwire://about")} />
+      <MenuItem label="Settings" shortcut="Ctrl+," onClick={() => go("lurkwire://settings")} />
+      <MenuItem
+        label="Exit"
+        shortcut="Ctrl+Q"
         onClick={() => {
-          void window.lurkwire.setPrefs({ sidebarOpen: !state.prefs.sidebarOpen });
-          close();
+          void window.lurkwire.command("quit");
         }}
-      >
-        {state.prefs.sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+      />
+    </div>
+  );
+}
+
+function go(url: string): void {
+  void window.lurkwire.navigate(url);
+  close();
+}
+
+function MenuItem({
+  label,
+  shortcut,
+  submenu,
+  onClick,
+}: {
+  label: string;
+  shortcut?: string;
+  submenu?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="menu-item" onClick={onClick}>
+      <span className="menu-label-text">{label}</span>
+      {shortcut ? <kbd>{shortcut}</kbd> : null}
+      {submenu ? <span className="menu-caret">›</span> : null}
+    </button>
+  );
+}
+
+function SubMenu({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="appmenu">
+      <button type="button" className="menu-item submenu-back" onClick={onBack}>
+        ‹ {title}
       </button>
       <div className="menu-sep" />
-      <button
-        type="button"
-        className="menu-item"
-        onClick={() => {
-          void window.lurkwire.requestFind();
-          close();
-        }}
-      >
-        Find in page <kbd>Ctrl+F</kbd>
-      </button>
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.setTool("settings"); close(); }}>
-        <Settings size={16} /> Settings <kbd>Ctrl+,</kbd>
-      </button>
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.openDevTools(); close(); }}>
-        Page Inspector <kbd>Ctrl+Shift+I</kbd>
-      </button>
-      <div className="menu-sep" />
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.windowClose(); close(); }}>
-        Quit
-      </button>
+      {children}
+    </div>
+  );
+}
+
+function RecentVisits() {
+  const [items, setItems] = useState<{ id: string; title: string; url: string }[]>([]);
+  useEffect(() => {
+    void window.lurkwire.listVisits().then((list) => setItems(list.slice(0, 6)));
+  }, []);
+  if (items.length === 0) {
+    return <p className="menu-note">No recent pages.</p>;
+  }
+  return (
+    <>
+      {items.map((item) => (
+        <MenuItem key={item.id} label={item.title || item.url} onClick={() => go(item.url)} />
+      ))}
     </>
   );
 }

@@ -26,7 +26,7 @@ Build order for v0.1. Checked items are on `main`.
 - [x] Anchor popovers next to the button that opened them
 - [x] Internal pages as tabs at lurkwire:// URLs
 - [x] Standard browser shortcuts, multi-window, tab-bar interactions
-- [ ] Chrome-style app menu with shortcuts and submenus
+- [x] Chrome-style app menu with shortcuts and submenus
 - [ ] Native per-tab Chrome DevTools (docked / undocked / inspect element)
 - [ ] Site info panel (certificate, permissions, cookies, site intel)
 - [ ] Burp-parity history, viewers, site map, Comparer, Sequencer-lite, Logger, annotations

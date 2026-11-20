@@ -256,8 +256,8 @@ export function NavBar({
         title="Application menu"
         onClick={(event) =>
           openAnchoredPanel("appmenu", event.currentTarget, {
-            width: 260,
-            height: 470,
+            width: 320,
+            height: 620,
             payload: { zoom: state.zoomFactor },
           })
         }

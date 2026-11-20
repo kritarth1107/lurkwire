@@ -953,6 +953,47 @@ function registerIpc(): void {
     win.window.webContents.focus();
   });
   ipcMain.handle("lurkwire:revealPath", (_event, filePath: string) => shell.showItemInFolder(filePath));
+  ipcMain.handle("lurkwire:command", async (event, name: string) => {
+    const win = ctx(event);
+    if (!win) {
+      return;
+    }
+    switch (name) {
+      case "print":
+        win.tabs.active()?.view.webContents.print({});
+        break;
+      case "save":
+        await saveActivePage(win);
+        break;
+      case "viewSource": {
+        const url = win.tabs.activeInfo()?.url;
+        if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+          await win.tabs.navigate(win.tabs.activeInfo()!.id, `view-source:${url}`);
+        }
+        break;
+      }
+      case "fullscreen":
+        win.window.setFullScreen(!win.window.isFullScreen());
+        break;
+      case "clearData":
+        await clearBrowsingData(win);
+        break;
+      case "quit":
+        app.quit();
+        break;
+      case "devtools":
+        win.tabs.openDevTools("detach");
+        break;
+      case "console":
+        win.tabs.openDevTools("detach");
+        break;
+      case "inspect":
+        win.tabs.openDevTools("right");
+        break;
+      default:
+        break;
+    }
+  });
 }
 
 function hookTabShortcuts(): void {

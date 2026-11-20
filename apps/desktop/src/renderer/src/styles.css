@@ -971,3 +971,14 @@ button.danger:hover { filter: brightness(1.08); }
   white-space: nowrap;
 }
 .internal-empty { color: var(--muted); padding: 24px 0; }
+
+.appmenu { min-width: 300px; padding: 6px 0; }
+.menu-item { width: 100%; display: flex; align-items: center; gap: 8px; }
+.menu-label-text { flex: 1; text-align: left; }
+.menu-caret { color: var(--muted); font-size: 16px; line-height: 1; }
+.submenu-back { font-weight: 650; }
+.menu-note { margin: 8px 14px; color: var(--muted); font-size: 12px; max-width: 280px; }
+.zoom-row { display: flex; align-items: center; gap: 6px; padding: 4px 12px; }
+.zoom-row .zoom-label { flex: 1; font-size: 13px; }
+.zoom-row .zoom-value { min-width: 40px; text-align: center; font-variant-numeric: tabular-nums; }
+.zoom-row button { min-width: 28px; height: 28px; border-radius: var(--radius-s); }
