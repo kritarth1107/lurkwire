@@ -3,7 +3,7 @@
 Build order for v0.1. Checked items are on `main`.
 
 - [x] 1. Monorepo scaffold and dev scripts
-- [ ] 2. Rust proxy with MITM, the CA, and the flow store
+- [x] 2. Rust proxy with MITM, the CA, and the flow store
 - [ ] 3. Electron browser shell (tabs, address bar, projects) wired through the proxy
 - [ ] 4. HTTP history UI with search and filters
 - [ ] 5. Repeater

@@ -54,7 +54,7 @@ flowchart LR
 
 ## Development
 
-Prerequisites: Node 20+, Rust (cargo/rustc), and the usual Linux desktop libraries Electron needs (GTK, NSS).
+Prerequisites: Node 20+, Rust (cargo/rustc), curl (for proxy MITM tests), and the usual Linux desktop libraries Electron needs (GTK, NSS).
 
 ```bash
 # from the repo root
@@ -71,6 +71,19 @@ npm run dev:proxy     # cargo run -p lurkwire-proxy
 npm run dev:ui        # Electron UI only
 npm run build         # release sidecar + packaged renderer/main
 ```
+
+### Run the proxy on its own
+
+The sidecar prints one JSON line to stdout when it is ready (listen addresses, CA path, auth token). Tracing goes to stderr.
+
+```bash
+cargo run -p lurkwire-proxy -- --data-dir ./.data --listen 127.0.0.1:8080 --control 127.0.0.1:8787
+# in another terminal:
+curl -x http://127.0.0.1:8080 --cacert ./.data/ca.pem https://example.com/
+curl -sS -H "Authorization: Bearer <token from the ready line>" http://127.0.0.1:8787/flows
+```
+
+The per-install CA is written to `<data-dir>/ca.pem` and is intended to be trusted only inside Lurkwire, not installed system-wide. The control API requires the bearer token on every route, including `/health`.
 
 ## Roadmap
 

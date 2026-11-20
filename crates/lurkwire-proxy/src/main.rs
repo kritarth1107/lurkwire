@@ -1,25 +1,34 @@
-//! Lurkwire intercepting proxy sidecar.
-//!
-//! Module 1 ships a versioned binary stub. The TLS MITM engine, CA, and
-//! traffic store land in the following module.
+use anyhow::Result;
+use clap::Parser;
+use lurkwire_proxy::config::{Args, Config};
+use lurkwire_proxy::RunningProxy;
+use tracing_subscriber::EnvFilter;
 
-fn main() {
-    let version = env!("CARGO_PKG_VERSION");
-    if std::env::args().any(|a| a == "--version" || a == "-V") {
-        println!("lurkwire-proxy {version}");
-        return;
-    }
-    println!("lurkwire-proxy {version}");
-    println!("ready: stub (MITM engine not yet wired)");
-}
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn version_is_semver() {
-        let version = env!("CARGO_PKG_VERSION");
-        let parts: Vec<&str> = version.split('.').collect();
-        assert!(parts.len() >= 3, "expected semver, got {version}");
-        assert!(parts.iter().all(|p| p.chars().all(|c| c.is_ascii_digit())));
-    }
+    let args = Args::parse();
+    let config = Config::from_args(args)?;
+    let running = RunningProxy::start(config).await?;
+    let line = serde_json::to_string(&running.ready)?;
+    println!("{line}");
+    use std::io::Write;
+    std::io::stdout().flush().ok();
+    tracing::info!(
+        proxy = %running.ready.proxy_listen,
+        control = %running.ready.control_listen,
+        ca = %running.ready.ca_path,
+        "lurkwire-proxy ready"
+    );
+
+    tokio::signal::ctrl_c().await.ok();
+    tracing::info!("shutting down");
+    running.join().await;
+    Ok(())
 }
