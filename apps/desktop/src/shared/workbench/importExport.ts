@@ -1,3 +1,4 @@
+import { looksLikeYamlOpenApi, parseYaml } from "../yaml";
 import { parseCurl } from "./curl";
 import { newId } from "./id";
 import { kv } from "./kv";
@@ -649,6 +650,26 @@ export function importCurlText(input: string): WbImportResult {
   return result;
 }
 
+
+function importParsedDocument(data: unknown, lowerName: string): WbImportResult {
+  if (isRecord(data) && isRecord(data.info) && (asString(data.info.schema).includes("postman") || asString(data.info.schema).includes("getpostman") || Array.isArray(data.item))) {
+    return importPostman(data);
+  }
+  if (isRecord(data) && (data.openapi || data.swagger)) {
+    return importOpenApi(data);
+  }
+  if (isRecord(data) && isRecord(data.log) && Array.isArray(data.log.entries)) {
+    return importHar(data);
+  }
+  if (isRecord(data) && (Array.isArray(data.resources) || data.__export_format || data._type === "export")) {
+    return importInsomnia(data);
+  }
+  if (lowerName.endsWith(".har")) {
+    return importHar(data);
+  }
+  throw new Error("Unrecognized collection or request format");
+}
+
 export function importAny(input: string, filename?: string): WbImportResult {
   const trimmed = input.trim();
   if (!trimmed) {
@@ -658,29 +679,20 @@ export function importAny(input: string, filename?: string): WbImportResult {
   if (trimmed.startsWith("curl ") || trimmed.startsWith("curl\t") || /^curl\s/m.test(trimmed.split("\n")[0] ?? "")) {
     return importCurlText(trimmed);
   }
+  const isYamlName = lowerName.endsWith(".yaml") || lowerName.endsWith(".yml");
   try {
-    const data: unknown = JSON.parse(trimmed);
-    if (isRecord(data) && isRecord(data.info) && (asString(data.info.schema).includes("postman") || asString(data.info.schema).includes("getpostman") || Array.isArray(data.item))) {
-      return importPostman(data);
-    }
-    if (isRecord(data) && (data.openapi || data.swagger)) {
-      return importOpenApi(data);
-    }
-    if (isRecord(data) && isRecord(data.log) && Array.isArray(data.log.entries)) {
-      return importHar(data);
-    }
-    if (isRecord(data) && (Array.isArray(data.resources) || data.__export_format || data._type === "export")) {
-      return importInsomnia(data);
-    }
-    if (lowerName.endsWith(".har")) {
-      return importHar(data);
-    }
+    const data: unknown = isYamlName && !trimmed.startsWith("{") && !trimmed.startsWith("[")
+      ? parseYaml(trimmed)
+      : JSON.parse(trimmed);
+    return importParsedDocument(data, lowerName);
   } catch (error) {
-    if (/^openapi:\s*/i.test(trimmed) || /^swagger:\s*/i.test(trimmed)) {
-      const result = emptyImport("openapi", [
-        "YAML OpenAPI is not imported yet. Export the spec as JSON and try again.",
-      ]);
-      return result;
+    if (isYamlName || looksLikeYamlOpenApi(trimmed)) {
+      try {
+        return importParsedDocument(parseYaml(trimmed), lowerName);
+      } catch (yamlError) {
+        const message = yamlError instanceof Error ? yamlError.message : String(yamlError);
+        throw new Error(`Could not parse OpenAPI YAML: ${message}`);
+      }
     }
     if (error instanceof Error && error.message.startsWith("Not a")) {
       throw error;

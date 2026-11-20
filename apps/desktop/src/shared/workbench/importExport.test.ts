@@ -127,3 +127,41 @@ describe("importHar and importAny", () => {
     expect(curl.requests[0]?.url).toBe("https://example.com/");
   });
 });
+
+const yamlSpec = `
+openapi: "3.0.0"
+info:
+  title: YAML Petstore
+  version: "1.0.0"
+servers:
+  - url: https://httpbin.org
+paths:
+  /get:
+    get:
+      operationId: getStatus
+      summary: Status
+      responses:
+        "200":
+          description: ok
+  /post:
+    post:
+      tags:
+        - write
+      summary: Echo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: ok
+`.trim();
+
+it("imports OpenAPI 3 YAML", () => {
+  const result = importAny(yamlSpec, "petstore.yaml");
+  expect(result.source).toBe("openapi");
+  expect(result.collections[0]?.name).toBe("YAML Petstore");
+  expect(result.requests.map((item) => item.method).sort()).toEqual(["GET", "POST"]);
+  expect(result.requests.some((item) => item.url.includes("/get"))).toBe(true);
+});
