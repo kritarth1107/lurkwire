@@ -27,6 +27,8 @@ pub fn scan_flow(flow: &ScanInput<'_>) -> Vec<FindingDraft> {
     info_banners(flow, &mut out);
     body_issues(flow, &resp_text, mime, &mut out);
     request_issues(flow, &req_text, &mut out);
+    request_smuggling_hints(flow, &mut out);
+    cache_poisoning_hints(flow, &resp_text, &mut out);
     out
 }
 
@@ -431,6 +433,88 @@ fn first_secret_evidence(text: &str) -> String {
     clip(text, 80)
 }
 
+
+fn request_smuggling_hints(flow: &ScanInput<'_>, out: &mut Vec<FindingDraft>) {
+    let cls = headers(&flow.req_headers, "content-length");
+    let tes = headers(&flow.req_headers, "transfer-encoding");
+    if !cls.is_empty() && !tes.is_empty() {
+        push(
+            out,
+            flow,
+            "cl-te-both-present",
+            "Request sends both Content-Length and Transfer-Encoding",
+            Severity::Medium,
+            "HTTP/1.1 frontends and backends that disagree on CL vs TE can be abused for request smuggling. This is a passive hint only; Lurkwire did not mutate the request.",
+            &format!("Content-Length: {cls:?}; Transfer-Encoding: {tes:?}"),
+        );
+    }
+    if cls.len() > 1 {
+        push(
+            out,
+            flow,
+            "duplicate-content-length",
+            "Duplicate Content-Length headers",
+            Severity::Medium,
+            "Conflicting Content-Length values are a classic desynchronization primitive.",
+            &cls.join(", "),
+        );
+    }
+    for te in &tes {
+        let lower = te.to_ascii_lowercase();
+        if lower.contains("chunked") && lower != "chunked" {
+            push(
+                out,
+                flow,
+                "obfuscated-transfer-encoding",
+                "Unusual Transfer-Encoding value",
+                Severity::Low,
+                "Obfuscated or stacked Transfer-Encoding values can be parsed differently by proxies and origin servers.",
+                te,
+            );
+        }
+    }
+}
+
+fn cache_poisoning_hints(flow: &ScanInput<'_>, resp_text: &str, out: &mut Vec<FindingDraft>) {
+    const UNKEYED: &[&str] = &[
+        "x-forwarded-host",
+        "x-forwarded-scheme",
+        "x-original-url",
+        "x-rewrite-url",
+        "x-host",
+        "forwarded",
+    ];
+    let vary = header(&flow.resp_headers, "vary").unwrap_or("").to_ascii_lowercase();
+    let location = header(&flow.resp_headers, "location").unwrap_or("");
+    let cors = header(&flow.resp_headers, "access-control-allow-origin").unwrap_or("");
+    for name in UNKEYED {
+        let values = headers(&flow.req_headers, name);
+        for value in values {
+            if value.len() < 3 {
+                continue;
+            }
+            let reflected = resp_text.contains(value) || location.contains(value) || cors.contains(value);
+            if !reflected {
+                continue;
+            }
+            let keyed = vary.split(',').any(|item| item.trim().eq_ignore_ascii_case(name));
+            push(
+                out,
+                flow,
+                "unkeyed-header-reflected",
+                &format!("Possible unkeyed input: {name} is reflected"),
+                if keyed { Severity::Low } else { Severity::Medium },
+                if keyed {
+                    "The header value is reflected, but Vary lists it. Confirm the cache key actually includes it."
+                } else {
+                    "The request header is reflected in the response and does not appear in Vary. If a shared cache is in front of this app, this may be a cache-poisoning primitive."
+                },
+                value,
+            );
+        }
+    }
+}
+
 fn header<'a>(headers: &'a [HeaderPair], name: &str) -> Option<&'a str> {
     headers
         .iter()
@@ -515,5 +599,28 @@ mod tests {
         let req = vec![HeaderPair { name: "Origin".into(), value: "https://evil.example".into() }];
         let ids: Vec<_> = scan_flow(&input(200, &headers, "ok", &req)).into_iter().map(|x| x.check_id).collect();
         assert!(ids.contains(&"cors-reflected-origin".into()));
+    }
+
+    #[test]
+    fn flags_cl_te_and_duplicate_content_length() {
+        let req = vec![
+            HeaderPair { name: "Content-Length".into(), value: "5".into() },
+            HeaderPair { name: "Content-Length".into(), value: "10".into() },
+            HeaderPair { name: "Transfer-Encoding".into(), value: "chunked".into() },
+        ];
+        let ids: Vec<_> = scan_flow(&input(200, &[], "ok", &req)).into_iter().map(|x| x.check_id).collect();
+        assert!(ids.contains(&"cl-te-both-present".into()));
+        assert!(ids.contains(&"duplicate-content-length".into()));
+    }
+
+    #[test]
+    fn flags_reflected_forwarded_host_without_vary() {
+        let req = vec![HeaderPair { name: "X-Forwarded-Host".into(), value: "evil.example".into() }];
+        let resp = vec![HeaderPair { name: "Content-Type".into(), value: "text/html".into() }];
+        let ids: Vec<_> = scan_flow(&input(200, &resp, "<html>https://evil.example/app</html>", &req))
+            .into_iter()
+            .map(|x| x.check_id)
+            .collect();
+        assert!(ids.contains(&"unkeyed-header-reflected".into()));
     }
 }
