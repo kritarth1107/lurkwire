@@ -28,7 +28,7 @@ export class TabManager {
 
   constructor(
     private window: BrowserWindow,
-    private getProxy: () => { listen: string; fingerprint: string } | null,
+    private getProxy: () => { listen: string; fingerprint: string; caPath?: string } | null,
     private onChange: () => void,
     private onSession: (ses: Electron.Session) => void,
     private onContextMenu: (payload: ContextMenuPayload) => void,
@@ -214,6 +214,10 @@ export class TabManager {
   setBounds(bounds: Bounds): void {
     this.bounds = bounds;
     this.layout();
+  }
+
+  contentBounds(): Bounds {
+    return this.bounds;
   }
 
   async navigate(id: string, input: string): Promise<"internal" | "external"> {
@@ -454,7 +458,7 @@ export class TabManager {
       return;
     }
     const ses = session.fromPartition(`persist:proj-${projectId}`);
-    await configureProjectSession(ses, proxy.listen, proxy.fingerprint);
+    await configureProjectSession(ses, proxy.listen, proxy.fingerprint, proxy.caPath);
     this.onSession(ses);
     this.configured.add(key);
   }

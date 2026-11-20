@@ -24,9 +24,17 @@ import { PanelManager } from "./panels";
 import { loadPrefs, savePrefs } from "./prefs";
 import { ProxySidecar } from "./proxy";
 import { clearLlmKey, completeLlm, hasLlmKey, saveLlmKey } from "./llm";
+import { isSmokeRun, isolateSmokeUserData, runSmoke } from "./smoke";
 import { isNewTabUrl, isSettingsUrl, TabManager } from "./tabs";
 
 app.setName(PRODUCT_NAME);
+isolateSmokeUserData();
+if (isSmokeRun()) {
+  app.commandLine.appendSwitch("use-gl", "angle");
+  app.commandLine.appendSwitch("use-angle", "swiftshader");
+  app.commandLine.appendSwitch("ignore-gpu-blocklist");
+  app.commandLine.appendSwitch("disable-gpu-sandbox");
+}
 
 let mainWindow: BrowserWindow | null = null;
 let tabs: TabManager | null = null;
@@ -205,7 +213,7 @@ function createWindow(): void {
     frame: false,
     autoHideMenuBar: true,
     webPreferences: {
-      preload: join(__dirname, "../preload/index.mjs"),
+      preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -213,6 +221,11 @@ function createWindow(): void {
   });
 
   mainWindow.on("ready-to-show", () => {
+    if (isSmokeRun()) {
+      mainWindow?.setPosition(60, 60);
+      mainWindow?.show();
+      return;
+    }
     mainWindow?.show();
   });
   mainWindow.on("maximize", emit);
@@ -230,6 +243,7 @@ function createWindow(): void {
         ? {
             listen: sidecar.ready.proxy_listen,
             fingerprint: sidecar.ready.ca_fingerprint_sha256,
+            caPath: sidecar.ready.ca_path,
           }
         : null,
     () => {
@@ -257,6 +271,20 @@ function createWindow(): void {
   );
 
   hookShortcuts(mainWindow);
+  if (isSmokeRun()) {
+    mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+      console.log(`SMOKE render[${level}] ${message} (${sourceId}:${line})`);
+    });
+    mainWindow.webContents.on("did-fail-load", (_event, code, desc, url) => {
+      console.log(`SMOKE did-fail-load ${code} ${desc} ${url}`);
+    });
+    mainWindow.webContents.on("preload-error", (_event, path, error) => {
+      console.log(`SMOKE preload-error ${path} ${error}`);
+    });
+    mainWindow.webContents.on("did-finish-load", () => {
+      console.log("SMOKE chrome did-finish-load");
+    });
+  }
 
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -727,6 +755,33 @@ app.whenReady().then(async () => {
     lastError = err instanceof Error ? err.message : String(err);
     proxyStatus = { status: "down" };
     emit();
+  }
+
+  if (isSmokeRun()) {
+    try {
+      const paths = await runSmoke({
+        window: () => mainWindow,
+        tabs: () => tabs,
+        control,
+        proxyReady: () => proxyStatus.status === "ready",
+        currentProjectId: () => currentProjectId,
+        setPrefs: (patch) => {
+          prefs = { ...prefs, ...patch };
+          applyTheme();
+          syncViewVisibility();
+          emit();
+        },
+        selectTool,
+        openNewTab,
+      });
+      console.log(`SMOKE ok ${paths.join(" ")}`);
+      app.exit(0);
+      return;
+    } catch (err) {
+      console.error("SMOKE failed:", err instanceof Error ? err.stack ?? err.message : err);
+      app.exit(1);
+      return;
+    }
   }
 
   app.on("activate", () => {

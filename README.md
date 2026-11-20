@@ -71,6 +71,7 @@ Useful splits:
 npm run dev:proxy     # cargo run -p lurkwire-proxy
 npm run dev:ui        # Electron UI only
 npm run build         # release sidecar + packaged renderer/main
+npm run smoke         # load https://example.com through the proxy, check History, write docs/screenshots/
 ```
 
 ### Run the proxy on its own

@@ -11,7 +11,8 @@
     "preview": "electron-vite preview",
     "test": "tsc --noEmit && vitest run",
     "typecheck": "tsc --noEmit",
-    "dist:linux": "electron-builder --linux AppImage deb"
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "smoke": "electron ."
   },
   "dependencies": {
     "lucide-react": "^1.77.0",

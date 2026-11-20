@@ -17,3 +17,5 @@ Build order for v0.1. Checked items are on `main`.
 - [ ] 13. OOB collaborator via interactsh client
 - [x] 14. Linux packaging (AppImage and deb via electron-builder)
 - [x] Proton-style browser chrome (tabs, toolbar, sidebar, new tab, settings, themes)
+
+- [x] Headless Electron smoke test (`npm run smoke`): load https://example.com through the proxy, assert the flow in History, and write PNGs to `docs/screenshots/`

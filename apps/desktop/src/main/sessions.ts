@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { Certificate, Session } from "electron";
 import { fingerprintsMatch } from "../shared/fingerprint";
 
@@ -6,6 +7,7 @@ export async function configureProjectSession(
   ses: Session,
   proxyListen: string,
   caFingerprint: string,
+  caPath?: string,
 ): Promise<void> {
   const host = proxyListen.includes("://")
     ? proxyListen
@@ -20,26 +22,40 @@ export async function configureProjectSession(
     proxyRules: `http=${proxyHost}:${proxyPort};https=${proxyHost}:${proxyPort}`,
     proxyBypassRules: "<-loopback>",
   });
-  trustCaOnlyInsideApp(ses, caFingerprint);
+  const caPem = caPath ? readFileSync(caPath, "utf8") : "";
+  trustCaOnlyInsideApp(ses, caFingerprint, caPem);
 }
 
-export function trustCaOnlyInsideApp(ses: Session, caFingerprint: string): void {
+export function trustCaOnlyInsideApp(ses: Session, caFingerprint: string, caPem = ""): void {
   ses.setCertificateVerifyProc((request, callback) => {
-    if (issuedByInstallCa(request, caFingerprint)) {
+    if (issuedByInstallCa(request, caFingerprint, caPem)) {
       callback(0);
       return;
     }
     // Defer to Chromium for anything not signed by the per-install CA.
-    callback(-2);
+    callback(-3);
   });
 }
 
 export function issuedByInstallCa(
   request: { certificate: Certificate },
   caFingerprint: string,
+  caPem = "",
 ): boolean {
   const fingerprints = collectFingerprints(request.certificate);
-  return fingerprints.some((value) => fingerprintsMatch(value, caFingerprint));
+  if (fingerprints.some((value) => fingerprintsMatch(value, caFingerprint))) {
+    return true;
+  }
+  if (!caPem) {
+    return false;
+  }
+  try {
+    const leaf = new X509Certificate(request.certificate.data);
+    const ca = new X509Certificate(caPem);
+    return leaf.verify(ca.publicKey);
+  } catch {
+    return false;
+  }
 }
 
 function collectFingerprints(cert: Certificate | undefined): string[] {

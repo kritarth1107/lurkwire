@@ -8,13 +8,32 @@ export default defineConfig({
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    build: {
+      rollupOptions: {
+        output: {
+          format: "cjs",
+          entryFileNames: "index.cjs",
+        },
+      },
+    },
   },
   renderer: {
+    base: "./",
     resolve: {
       alias: {
         "@": resolve("src/renderer/src"),
       },
     },
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: "lurkwire-file-protocol",
+        transformIndexHtml(html) {
+          // file:// loads in the packaged app cannot CORS-fetch classic
+          // crossorigin module/script tags, so React never mounts.
+          return html.replace(/\scrossorigin(="[^"]*")?/g, "");
+        },
+      },
+    ],
   },
 });

@@ -117,10 +117,11 @@ impl CertificateAuthority {
             .context("sign leaf certificate")?;
 
         let cert_der = CertificateDer::from(cert.der().as_ref().to_vec());
+        let ca_der = CertificateDer::from(pem_to_der(&self.cert_pem)?);
         let key_der = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(leaf_key.serialize_der()));
         let mut config = ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(vec![cert_der], key_der)
+            .with_single_cert(vec![cert_der, ca_der], key_der)
             .context("build rustls server config")?;
         // Force HTTP/1.1 through the MITM so we can intercept without an HTTP/2 parser yet.
         config.alpn_protocols = vec![b"http/1.1".to_vec()];

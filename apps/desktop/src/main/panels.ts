@@ -52,7 +52,7 @@ export class PanelManager {
       backgroundColor: this.themeBackground(),
       autoHideMenuBar: true,
       webPreferences: {
-        preload: join(__dirname, "../preload/index.mjs"),
+        preload: join(__dirname, "../preload/index.cjs"),
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true,
