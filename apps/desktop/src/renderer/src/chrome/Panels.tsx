@@ -9,6 +9,7 @@ import type {
 } from "../../../shared/types";
 import { projectColor } from "../../../shared/projectColor";
 import { useAppState } from "../useAppState";
+import type { SiteInfo } from "../../../shared/siteInfo";
 
 export function PanelApp() {
   const state = useAppState();
@@ -455,13 +456,130 @@ function Identity({
   state: AppSnapshot;
 }) {
   const url = String(payload.url ?? "");
-  const secure = Boolean(payload.secure);
+  const secureHint = Boolean(payload.secure);
+  const [info, setInfo] = useState<SiteInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void window.lurkwire
+      .getSiteInfo(url)
+      .then((next) => {
+        if (!cancelled) {
+          setInfo(next);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  const secure = info?.secure ?? secureHint;
+  const internal = info?.internal || url.startsWith("lurkwire://") || url.startsWith("about:");
+  const cert = info?.certificate;
   return (
     <div className="identity-card">
-      <h3>{secure ? "Connection is secure" : url ? "Connection is not secure" : "New Tab"}</h3>
-      <p>{url || "This is a built-in Lurkwire page."}</p>
-      <p>HTTPS is intercepted with a per-install CA trusted only inside this app.</p>
-      {state.proxy.fingerprint ? <div className="mono">{state.proxy.fingerprint}</div> : null}
+      <h3>
+        {internal
+          ? "Lurkwire page"
+          : secure
+            ? "Connection is secure"
+            : url
+              ? "Connection is not secure"
+              : "New Tab"}
+      </h3>
+      <p className="mono wrap">{url || "This is a built-in Lurkwire page."}</p>
+      {internal ? (
+        <p>Built-in pages stay inside the app and are not sent through the intercepting proxy.</p>
+      ) : (
+        <p>HTTPS is intercepted with a per-install CA trusted only inside this app. Certificate details below are from the real upstream server.</p>
+      )}
+      {error ? <p className="error">{error}</p> : null}
+
+      {!internal && cert ? (
+        <section>
+          <h4>Certificate</h4>
+          <p><strong>TLS</strong> {cert.protocol ?? "unknown"}{cert.authorized ? "" : " · not trusted by the system store"}</p>
+          <p><strong>Subject</strong> {cert.subject || "—"}</p>
+          <p><strong>Issuer</strong> {cert.issuer || "—"}</p>
+          <p><strong>Valid</strong> {cert.validFrom} – {cert.validTo}</p>
+          {cert.sans.length ? <p><strong>SANs</strong> {cert.sans.slice(0, 8).join(", ")}{cert.sans.length > 8 ? ` +${cert.sans.length - 8}` : ""}</p> : null}
+          {cert.fingerprint ? <p className="mono wrap">{cert.fingerprint}</p> : null}
+        </section>
+      ) : null}
+      {!internal && info?.certError ? <p className="error">{info.certError}</p> : null}
+
+      {!internal ? (
+        <section>
+          <h4>Permissions</h4>
+          {info?.permissions.length ? (
+            <ul>
+              {info.permissions.map((item) => (
+                <li key={`${item.permission}-${item.at}`}>
+                  {item.permission} · {item.state}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No site permissions have been requested in this profile yet.</p>
+          )}
+        </section>
+      ) : null}
+
+      {!internal ? (
+        <section>
+          <h4>Cookies</h4>
+          {info?.cookies.length ? (
+            <ul>
+              {info.cookies.slice(0, 12).map((cookie) => (
+                <li key={`${cookie.domain}-${cookie.name}`}>
+                  <span className="mono">{cookie.name}</span>
+                  {cookie.secure ? " · Secure" : ""}
+                  {cookie.httpOnly ? " · HttpOnly" : ""}
+                  {cookie.sameSite && cookie.sameSite !== "unspecified" ? ` · ${cookie.sameSite}` : ""}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>No cookies for this origin in the current project session.</p>
+          )}
+        </section>
+      ) : null}
+
+      {!internal ? (
+        <section>
+          <h4>Site intel</h4>
+          {info?.intel.ips.length ? <p><strong>IP</strong> {info.intel.ips.join(", ")}</p> : <p>No DNS records from the system resolver yet.</p>}
+          {info?.intel.lastStatus != null ? <p><strong>Last status</strong> {info.intel.lastStatus} · {info.intel.flowCount} captured flow(s)</p> : null}
+          {info?.intel.tech.length ? <p><strong>Tech</strong> {info.intel.tech.join(" · ")}</p> : null}
+          {info?.intel.headerSummary.length ? (
+            <ul>
+              {info.intel.headerSummary.map((header) => (
+                <li key={header.name}>
+                  <strong>{header.name}</strong> {header.value}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <button
+            type="button"
+            className="menu-item"
+            onClick={() => {
+              void window.lurkwire.setTool("recon");
+              close();
+            }}
+          >
+            Open in Recon
+          </button>
+        </section>
+      ) : null}
+      {state.proxy.fingerprint ? (
+        <p className="meta">Install CA {state.proxy.fingerprint.slice(0, 16)}…</p>
+      ) : null}
     </div>
   );
 }

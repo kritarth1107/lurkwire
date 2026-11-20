@@ -122,8 +122,8 @@ export function NavBar({
           title="Site identity"
           onClick={(event) =>
             openAnchoredPanel("identity", event.currentTarget, {
-              width: 320,
-              height: 220,
+              width: 380,
+              height: 560,
               payload: {
                 url: active?.url ?? omnibox,
                 secure: active?.secure ?? false,

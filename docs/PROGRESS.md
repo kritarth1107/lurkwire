@@ -28,6 +28,6 @@ Build order for v0.1. Checked items are on `main`.
 - [x] Standard browser shortcuts, multi-window, tab-bar interactions
 - [x] Chrome-style app menu with shortcuts and submenus
 - [x] Native per-tab Chrome DevTools (docked / undocked / inspect element)
-- [ ] Site info panel (certificate, permissions, cookies, site intel)
+- [x] Site info panel (certificate, permissions, cookies, site intel)
 - [ ] Burp-parity history, viewers, site map, Comparer, Sequencer-lite, Logger, annotations
 - [ ] Settings > AI: multi-provider connectors, model pickers, per-task routing

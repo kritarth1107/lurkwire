@@ -35,6 +35,7 @@ import {
   isInternalUrl,
   type InternalPage,
 } from "../shared/url";
+import { collectSiteInfo } from "./siteInfo";
 import { clearVisits, deleteVisit, listVisits } from "./visits";
 
 app.setName(PRODUCT_NAME);
@@ -861,6 +862,25 @@ function registerIpc(): void {
     }),
   );
   ipcMain.handle("lurkwire:getFinding", (_event, id: string) => control.getFinding(id));
+  ipcMain.handle("lurkwire:getSiteInfo", async (event, url: string) => {
+    const win = ctx(event);
+    const partition = win?.privateMode
+      ? `temp:incognito-${win.id}`
+      : currentProjectId
+        ? `persist:proj-${currentProjectId}`
+        : undefined;
+    const ses = partition ? electronSession.fromPartition(partition) : electronSession.defaultSession;
+    return collectSiteInfo(url, {
+      session: ses,
+      listFlows: (host) =>
+        control.listFlows({
+          project_id: currentProjectId ?? undefined,
+          host,
+          limit: 20,
+        }),
+      getFlow: (id) => control.getFlow(id),
+    });
+  });
   ipcMain.handle("lurkwire:listVisits", (_event, query?: string) => listVisits(query));
   ipcMain.handle("lurkwire:deleteVisit", (_event, id: string) => deleteVisit(id));
   ipcMain.handle("lurkwire:clearVisits", () => {

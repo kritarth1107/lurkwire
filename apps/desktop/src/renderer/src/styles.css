@@ -729,10 +729,17 @@ input, textarea, select {
 }
 .progress > span { display: block; height: 100%; background: var(--focus-ring); }
 
-.identity-card { padding: 12px 16px; }
+.identity-card { padding: 12px 16px 16px; max-width: 380px; }
 .identity-card h3 { margin: 0 0 6px; font-size: 14px; }
-.identity-card p { margin: 0 0 8px; color: var(--muted); }
-.identity-card .mono { word-break: break-all; }
+.identity-card h4 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.identity-card p { margin: 0 0 6px; color: var(--text); font-size: 12px; }
+.identity-card .meta, .identity-card .error { color: var(--muted); }
+.identity-card .error { color: var(--danger, #c50042); }
+.identity-card .mono { word-break: break-all; font-size: 11px; }
+.identity-card .wrap { overflow-wrap: anywhere; }
+.identity-card ul { margin: 0 0 6px; padding-left: 16px; font-size: 12px; }
+.identity-card li { margin: 2px 0; word-break: break-word; }
+.identity-card section { border-top: 1px solid var(--separator); margin-top: 8px; padding-top: 2px; }
 
 /* ——— Coming-soon / placeholders ——— */
 .placeholder {

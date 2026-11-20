@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import type { Certificate, Session } from "electron";
 import { fingerprintsMatch } from "../shared/fingerprint";
 import { handleLurkwireProtocol } from "./internal-protocol";
+import { hookPermissionHandler } from "./permissions";
 
 export async function configureProjectSession(
   ses: Session,
@@ -20,6 +21,7 @@ export async function configureProjectSession(
   // instead of leaking traffic direct. <-loopback> sends localhost through
   // the proxy as well so local targets are captured.
   handleLurkwireProtocol(ses);
+  hookPermissionHandler(ses);
   await ses.setProxy({
     proxyRules: `http=${proxyHost}:${proxyPort};https=${proxyHost}:${proxyPort}`,
     proxyBypassRules: "<-loopback>",
