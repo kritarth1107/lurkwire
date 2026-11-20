@@ -285,6 +285,16 @@ export type PanelKind =
   | "tabmenu"
   | "pagemenu";
 
+export type PanelAlign = "start" | "end";
+export type PanelPlacement = "below" | "above";
+
+export type PanelAnchor = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
 export type PanelOpenRequest = {
   kind: PanelKind;
   x: number;
@@ -292,6 +302,10 @@ export type PanelOpenRequest = {
   width?: number;
   height?: number;
   payload?: Record<string, unknown>;
+  /** Client coordinates relative to the parent window's content area. */
+  anchor?: PanelAnchor;
+  align?: PanelAlign;
+  placement?: PanelPlacement;
 };
 
 export type PanelContext = {
