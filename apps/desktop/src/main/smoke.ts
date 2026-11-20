@@ -6,6 +6,8 @@ import type { ControlClient } from "./control";
 import type { TabManager } from "./tabs";
 import type { AppPrefs, ToolId } from "../shared/types";
 import type { PanelManager } from "./panels";
+import { parseRunnerData } from "../shared/workbench";
+import { loadWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -511,6 +513,45 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
   }
 
   const paths: string[] = [];
+
+  const transport = transportFrom(hooks.control, hooks.currentProjectId);
+  const workspace = loadWorkspace();
+  const getEcho = workspace.requests.find((item) => item.name === "GET echo") ?? workspace.requests[0];
+  const postJson = workspace.requests.find((item) => item.name === "POST JSON");
+  if (!getEcho) {
+    throw new Error("starter Workbench collection is missing");
+  }
+  const sent = await sendFromWorkbench(getEcho, transport);
+  console.log(`SMOKE workbench send ${sent.status} flow=${sent.flowId ?? ""} error=${sent.error ?? ""}`);
+  if (sent.error) {
+    throw new Error(`workbench send failed: ${sent.error}`);
+  }
+  if (sent.status !== 200) {
+    throw new Error(`workbench send expected 200, got ${sent.status}`);
+  }
+  if (postJson) {
+    const posted = await sendFromWorkbench(postJson, transport);
+    console.log(`SMOKE workbench post ${posted.status} error=${posted.error ?? ""}`);
+    if (posted.error || posted.status !== 200) {
+      throw new Error(`workbench POST failed: ${posted.error ?? posted.status}`);
+    }
+  }
+  const ran = await runWorkbenchCollection({
+    requestIds: [getEcho.id],
+    data: parseRunnerData("id,q\n1,alpha\n2,beta"),
+    delayMs: 0,
+    stopOnFail: false,
+  }, transport);
+  console.log(`SMOKE workbench runner ${ran.length} ${ran.map((item) => item.result.status).join(",")}`);
+  if (ran.length !== 2 || ran.some((item) => item.result.error || item.result.status !== 200)) {
+    throw new Error(`workbench runner unexpected: ${JSON.stringify(ran.map((item) => ({ status: item.result.status, error: item.result.error })))}`);
+  }
+  const workbenchFlows = await hooks.control.listFlows({ project_id: projectId, source: "workbench", limit: 20 });
+  console.log(`SMOKE workbench history ${workbenchFlows.items.length} source=${workbenchFlows.items.map((item) => item.source).join(",")}`);
+  if (workbenchFlows.items.length < 3 || workbenchFlows.items.some((item) => item.source !== "workbench")) {
+    throw new Error(`expected workbench history entries, got ${workbenchFlows.items.length}`);
+  }
+
   hooks.setPrefs({ theme: "light", sidebarOpen: false });
   await sleep(700);
   paths.push(await captureWindow(window, out, "main-light.png", tabs));
@@ -589,6 +630,90 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
   paths.push(await captureWithPanel(window, out, "app-menu.png", tabs, hooks.panels()));
   hooks.panels()?.close();
   await sleep(200);
+
+
+  hooks.setPrefs({ sidebarOpen: false });
+  await hooks.openNewTab("lurkwire://newtab");
+  await waitFor("newtab", () => {
+    const url = hooks.tabs()?.activeInfo()?.url ?? "";
+    return url.includes("lurkwire://newtab") ? url : null;
+  });
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "newtab.png", hooks.tabs()));
+
+  await hooks.openNewTab("lurkwire://about");
+  await waitFor("about", () => {
+    const url = hooks.tabs()?.activeInfo()?.url ?? "";
+    return url.includes("lurkwire://about") ? url : null;
+  });
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "about.png", hooks.tabs()));
+
+  await hooks.openNewTab("lurkwire://workbench");
+  await waitFor("workbench", () => {
+    const url = hooks.tabs()?.activeInfo()?.url ?? "";
+    return url.includes("lurkwire://workbench") ? url : null;
+  });
+  await sleep(900);
+  paths.push(await captureWindow(window, out, "workbench.png", hooks.tabs()));
+  await window.webContents.executeJavaScript(`(() => {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    buttons.find((el) => (el.textContent || "").trim() === "Run")?.click();
+  })()`);
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "workbench-runner.png", hooks.tabs()));
+  await window.webContents.executeJavaScript(`(() => {
+    const buttons = Array.from(document.querySelectorAll("button"));
+    buttons.find((el) => (el.textContent || "").includes("Close"))?.click();
+    buttons.find((el) => (el.textContent || "").includes("AI"))?.click();
+  })()`);
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "workbench-ai.png", hooks.tabs()));
+
+  window.webContents.send("lurkwire:command-palette");
+  await sleep(400);
+  paths.push(await captureWindow(window, out, "command-palette.png", hooks.tabs()));
+  await window.webContents.executeJavaScript(`document.querySelector(".palette-backdrop")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))`);
+  await sleep(200);
+
+  hooks.setPrefs({ theme: "light", sidebarOpen: true, sidebarWidth: 420 });
+  hooks.selectTool("logger");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "sidebar-logger.png", hooks.tabs()));
+  hooks.selectTool("autorize");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "sidebar-autorize.png", hooks.tabs()));
+  hooks.selectTool("discover");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "sidebar-discover.png", hooks.tabs()));
+  hooks.selectTool("graphql");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "sidebar-graphql.png", hooks.tabs()));
+  hooks.selectTool("notes");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "sidebar-notes.png", hooks.tabs()));
+  hooks.selectTool("decode");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "sidebar-decode.png", hooks.tabs()));
+
+  hooks.setPrefs({ sidebarOpen: false });
+  const delayNav = (async () => {
+    await hooks.openNewTab("https://httpbin.org/delay/2");
+  })();
+  try {
+    await waitFor("tab throbber", () => {
+      const tab = hooks.tabs()?.activeInfo();
+      return tab?.loading ? tab : null;
+    }, 8_000);
+    paths.push(await captureWindow(window, out, "tab-throbber.png", hooks.tabs()));
+  } catch (error) {
+    console.log(`SMOKE throbber capture skipped: ${error instanceof Error ? error.message : error}`);
+  }
+  await delayNav;
+  await waitFor("delay tab settled", () => {
+    const tab = hooks.tabs()?.activeInfo();
+    return tab && !tab.loading && (tab.url ?? "").includes("httpbin.org") ? tab : null;
+  }, 20_000);
 
   await hooks.openNewTab("lurkwire://settings");
   await waitFor("settings tab", () => {
