@@ -25,6 +25,10 @@ export function SettingsPage({ state, url }: { state: AppSnapshot; url?: string 
   const [query, setQuery] = useState("");
   const [newName, setNewName] = useState("");
 
+  useEffect(() => {
+    setCat(initialCategory(url));
+  }, [url]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) {

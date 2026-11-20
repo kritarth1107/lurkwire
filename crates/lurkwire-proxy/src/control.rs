@@ -6,7 +6,7 @@ use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{delete, get, patch, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use futures_util::StreamExt;
 use serde::Deserialize;

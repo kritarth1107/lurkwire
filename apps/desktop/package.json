@@ -12,7 +12,7 @@
     "test": "tsc --noEmit && vitest run",
     "typecheck": "tsc --noEmit",
     "dist:linux": "electron-builder --linux AppImage deb",
-    "smoke": "electron ."
+    "smoke": "LURKWIRE_SMOKE=1 electron ."
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

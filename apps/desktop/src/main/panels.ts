@@ -24,6 +24,11 @@ export class PanelManager {
     return this.context;
   }
 
+  currentWindow(): BrowserWindow | null {
+    return this.window && !this.window.isDestroyed() ? this.window : null;
+  }
+
+
   close(): void {
     this.unbindParent?.();
     this.unbindParent = null;
@@ -74,6 +79,9 @@ export class PanelManager {
     });
     this.window = win;
     win.on("blur", () => {
+      if (process.env.LURKWIRE_SMOKE === "1") {
+        return;
+      }
       if (this.window === win) {
         this.close();
       }
@@ -166,6 +174,9 @@ export class PanelManager {
   }
 
   private bindParent(parent: BrowserWindow): void {
+    if (process.env.LURKWIRE_SMOKE === "1") {
+      return;
+    }
     const close = () => this.close();
     parent.on("move", close);
     parent.on("resize", close);

@@ -20,6 +20,8 @@ Build order for v0.1. Checked items are on `main`.
 
 - [x] Headless Electron smoke test (`npm run smoke`): load https://example.com through the proxy, assert the flow in History, and write PNGs to `docs/screenshots/`
 
+Refreshed screenshots cover main light/dark, the app menu, a lurkwire://settings tab, the downloads popover, site info, the history workbench, Repeater, Intruder, Scanner, Recon, AI settings, and DevTools.
+
 ## Browser UX (after v0.1 modules)
 
 - [x] Remove the vertical tabs feature (keep the tool sidebar)

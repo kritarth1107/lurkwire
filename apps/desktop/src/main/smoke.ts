@@ -1,10 +1,11 @@
-import { app, type BrowserWindow, type NativeImage } from "electron";
+import { app, BrowserWindow, type NativeImage } from "electron";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import type { ControlClient } from "./control";
 import type { TabManager } from "./tabs";
 import type { AppPrefs, ToolId } from "../shared/types";
+import type { PanelManager } from "./panels";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,7 +81,63 @@ function stitch(
   return true;
 }
 
+function stitchAtBox(
+  basePath: string,
+  overlayPath: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  outPath: string,
+): boolean {
+  const result = spawnSync(
+    "python3",
+    [
+      "-c",
+      "from PIL import Image\nimport sys\nbase_path, overlay_path, out = sys.argv[1:4]\nx, y, w, h = map(int, sys.argv[4:])\nbase = Image.open(base_path).convert('RGBA')\noverlay = Image.open(overlay_path).convert('RGBA')\nif overlay.size != (w, h) and w > 1 and h > 1:\n    overlay = overlay.resize((w, h))\nbase.paste(overlay, (x, y), overlay)\nbase.convert('RGB').save(out, 'PNG')\n",
+      basePath,
+      overlayPath,
+      outPath,
+      String(Math.round(x)),
+      String(Math.round(y)),
+      String(Math.round(w)),
+      String(Math.round(h)),
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    console.log(`SMOKE box stitch failed: ${result.stderr || result.stdout}`);
+    return false;
+  }
+  return true;
+}
 
+function stitchOverlay(
+  basePath: string,
+  overlayPath: string,
+  x: number,
+  y: number,
+  outPath: string,
+): boolean {
+  const result = spawnSync(
+    "python3",
+    [
+      "-c",
+      "from PIL import Image\nimport sys\nbase_path, overlay_path, out = sys.argv[1:4]\nx, y = map(int, sys.argv[4:])\nbase = Image.open(base_path).convert('RGBA')\noverlay = Image.open(overlay_path).convert('RGBA')\nbase.paste(overlay, (x, y), overlay)\nbase.convert('RGB').save(out, 'PNG')\n",
+      basePath,
+      overlayPath,
+      outPath,
+      String(Math.round(x)),
+      String(Math.round(y)),
+    ],
+    { encoding: "utf8" },
+  );
+  if (result.status !== 0) {
+    console.log(`SMOKE overlay stitch failed: ${result.stderr || result.stdout}`);
+    return false;
+  }
+  return true;
+}
 
 async function captureDom(contents: Electron.WebContents): Promise<Buffer> {
   const dataUrl = (await contents.executeJavaScript(`(() => {
@@ -129,11 +186,12 @@ async function captureWindow(
   dir: string,
   name: string,
   tabs: TabManager | null,
+  opts?: { wholeWindow?: boolean },
 ): Promise<string> {
   const outPath = join(dir, name);
   console.log(`SMOKE capturing ${name}`);
   await sleep(300);
-  let image = await window.webContents.capturePage();
+  let image = opts?.wholeWindow ? await window.capturePage() : await window.webContents.capturePage();
   console.log(`SMOKE webContents.capturePage ${name} solid=${isMostlySolid(image)} bytes=${image.toPNG().length}`);
   if (isMostlySolid(image)) {
     image = await window.capturePage();
@@ -147,6 +205,12 @@ async function captureWindow(
   }
   if (png.length <= 12_000) {
     throw new Error(`${name} capture is a solid color`);
+  }
+  if (opts?.wholeWindow && !isMostlySolid(image)) {
+    writeFileSync(outPath, png);
+    const size = image.getSize();
+    console.log(`SMOKE wrote ${outPath} (whole window, ${png.length} bytes, ${size.width}x${size.height})`);
+    return outPath;
   }
   const tabContents = tabs?.active()?.view.webContents;
   const bounds = tabs?.contentBounds();
@@ -180,6 +244,101 @@ async function captureWindow(
   return outPath;
 }
 
+
+async function captureContents(contents: Electron.WebContents): Promise<Buffer> {
+  let image = await contents.capturePage();
+  let png = image.toPNG();
+  if (isMostlySolid(image) || png.length <= 12_000) {
+    png = await captureDom(contents);
+  }
+  return png;
+}
+
+async function captureWithPanel(
+  window: BrowserWindow,
+  dir: string,
+  name: string,
+  tabs: TabManager | null,
+  panels: PanelManager | null,
+): Promise<string> {
+  const outPath = await captureWindow(window, dir, name, tabs);
+  const panel = panels?.currentWindow();
+  if (!panel || panel.isDestroyed()) {
+    return outPath;
+  }
+  await sleep(400);
+  try {
+    if (panel.webContents.isLoading()) {
+      await new Promise<void>((resolve) => panel.webContents.once("did-finish-load", () => resolve()));
+    }
+    const overlay = await captureContents(panel.webContents);
+    const overlayPath = join(dir, `.${name}.panel.png`);
+    writeFileSync(overlayPath, overlay);
+    const pb = panel.getBounds();
+    const mb = window.getBounds();
+    const ok = stitchOverlay(outPath, overlayPath, pb.x - mb.x, pb.y - mb.y, outPath);
+    try {
+      unlinkSync(overlayPath);
+    } catch {
+      // ignore
+    }
+    if (ok) {
+      console.log(`SMOKE wrote ${outPath} (with panel)`);
+    }
+  } catch (err) {
+    console.log(`SMOKE panel overlay skipped for ${name}: ${err instanceof Error ? err.message : err}`);
+  }
+  return outPath;
+}
+
+async function clickSelector(window: BrowserWindow, selector: string): Promise<boolean> {
+  return (await window.webContents.executeJavaScript(
+    `Boolean(document.querySelector(${JSON.stringify(selector)}) && (document.querySelector(${JSON.stringify(selector)}).click(), true))`,
+  )) as boolean;
+}
+
+
+async function captureDevtools(
+  window: BrowserWindow,
+  dir: string,
+  name: string,
+  tabs: TabManager | null,
+): Promise<string> {
+  const outPath = await captureWindow(window, dir, name, tabs);
+  const windows = BrowserWindow.getAllWindows().filter((item) => !item.isDestroyed() && item !== window);
+  const devtoolsWin =
+    windows.find((item) => item.webContents.getURL().startsWith("devtools://")) ??
+    (tabs?.active()?.view.webContents.devToolsWebContents
+      ? { webContents: tabs.active()!.view.webContents.devToolsWebContents! }
+      : null);
+  if (!devtoolsWin?.webContents || devtoolsWin.webContents.isDestroyed()) {
+    console.log(`SMOKE devtools window missing (extra windows=${windows.length})`);
+    return outPath;
+  }
+  try {
+    const overlay = await captureContents(devtoolsWin.webContents);
+    const overlayPath = join(dir, `.${name}.devtools.png`);
+    writeFileSync(overlayPath, overlay);
+    const size = window.getContentBounds();
+    const slot = {
+      x: Math.round(size.width * 0.42),
+      y: Math.round(size.height * 0.22),
+      width: Math.round(size.width * 0.56),
+      height: Math.round(size.height * 0.72),
+    };
+    stitchAtBox(outPath, overlayPath, slot.x, slot.y, slot.width, slot.height, outPath);
+    console.log(`SMOKE wrote ${outPath} (with detached devtools)`);
+    try {
+      unlinkSync(overlayPath);
+    } catch {
+      // ignore
+    }
+  } catch (err) {
+    console.log(`SMOKE devtools overlay skipped: ${err instanceof Error ? err.message : err}`);
+  }
+  return outPath;
+}
+
 export function isSmokeRun(): boolean {
   return process.env.LURKWIRE_SMOKE === "1";
 }
@@ -187,16 +346,18 @@ export function isSmokeRun(): boolean {
 export type SmokeHooks = {
   window: () => BrowserWindow | null;
   tabs: () => TabManager | null;
+  panels: () => PanelManager | null;
   control: ControlClient;
   proxyReady: () => boolean;
   currentProjectId: () => string | null;
   setPrefs: (patch: Partial<AppPrefs>) => void;
   selectTool: (tool: ToolId) => void;
   openNewTab: (url?: string) => Promise<void>;
+  openDevTools: (mode?: Electron.OpenDevToolsOptions["mode"]) => void;
 };
 
 export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
-  const out = process.env.LURKWIRE_SMOKE_OUT ?? join(process.cwd(), "docs/screenshots");
+  const out = process.env.LURKWIRE_SMOKE_OUT ?? join(__dirname, "../../../docs/screenshots");
   mkdirSync(out, { recursive: true });
 
   await waitFor("proxy ready", () => hooks.proxyReady());
@@ -263,18 +424,115 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
 
   hooks.setPrefs({ theme: "light", sidebarOpen: true, sidebarWidth: 420 });
   hooks.selectTool("history");
-  await sleep(800);
+  await sleep(600);
+  await clickSelector(window, ".history-table tbody tr");
+  await sleep(700);
   paths.push(await captureWindow(window, out, "sidebar-history.png", tabs));
 
   hooks.selectTool("repeater");
   await sleep(700);
   paths.push(await captureWindow(window, out, "sidebar-repeater.png", tabs));
 
+  hooks.selectTool("intruder");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "sidebar-intruder.png", tabs));
+
+  hooks.selectTool("scanner");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "sidebar-scanner.png", tabs));
+
+  hooks.selectTool("recon");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "sidebar-recon.png", tabs));
+
   hooks.selectTool("ai");
   await sleep(700);
   paths.push(await captureWindow(window, out, "sidebar-ai.png", tabs));
 
+  hooks.setPrefs({ sidebarOpen: false });
+  await sleep(300);
+  const identity = (await window.webContents.executeJavaScript(`(() => {
+    const el = document.querySelector('button[title="Site identity"]');
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  })()`)) as { left: number; top: number; right: number; bottom: number } | null;
+  const tabUrl = hooks.tabs()?.activeInfo()?.url ?? "https://example.com/";
+  if (identity) {
+    console.log(`SMOKE opening identity panel panels=${Boolean(hooks.panels())} url=${tabUrl}`);
+    await hooks.panels()?.open({
+      kind: "identity",
+      x: Math.round(identity.left),
+      y: Math.round(identity.bottom),
+      width: 380,
+      height: 560,
+      payload: { url: tabUrl, secure: tabUrl.startsWith("https:") },
+      anchor: identity,
+      align: "start",
+      placement: "below",
+    });
+    const panel = await waitFor("identity panel", () => hooks.panels()?.currentWindow() ?? null, 5_000);
+    console.log(`SMOKE identity panel bounds=${JSON.stringify(panel.getBounds())}`);
+    await sleep(800);
+  } else {
+    console.log("SMOKE identity button not found");
+  }
+  paths.push(await captureWithPanel(window, out, "site-info.png", tabs, hooks.panels()));
+  hooks.panels()?.close();
+  await sleep(200);
+
+  await clickSelector(window, 'button[aria-label="Downloads"]');
+  await sleep(500);
+  paths.push(await captureWithPanel(window, out, "downloads-popover.png", tabs, hooks.panels()));
+  hooks.panels()?.close();
+  await sleep(200);
+
+  await clickSelector(window, 'button[aria-label="Application menu"]');
+  await sleep(500);
+  paths.push(await captureWithPanel(window, out, "app-menu.png", tabs, hooks.panels()));
+  hooks.panels()?.close();
+  await sleep(200);
+
+  await hooks.openNewTab("lurkwire://settings");
+  await waitFor("settings tab", () => {
+    const url = hooks.tabs()?.activeInfo()?.url ?? "";
+    return url.includes("lurkwire://settings") ? url : null;
+  });
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "settings.png", hooks.tabs()));
+
+  await hooks.openNewTab("lurkwire://settings#llm");
+  await waitFor("AI settings tab", () => {
+    const url = hooks.tabs()?.activeInfo()?.url ?? "";
+    return url.includes("lurkwire://settings") ? url : null;
+  });
+  await sleep(800);
+  await window.webContents.executeJavaScript(`(() => {
+    const items = Array.from(document.querySelectorAll("button, a, .settings-nav *"));
+    const target = items.find((el) => (el.textContent || "").trim() === "AI connectors");
+    if (target) target.click();
+  })()`);
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "ai-settings.png", hooks.tabs()));
+
+  // Back to the captured site so docked DevTools have a page to inspect.
+  const project = hooks.currentProjectId();
+  const exampleId = project
+    ? hooks.tabs()?.list(project).find((tab) => tab.url.includes("example.com"))?.id
+    : undefined;
+  if (exampleId) {
+    hooks.tabs()?.show(exampleId);
+  } else {
+    await hooks.openNewTab("https://example.com/");
+  }
+  hooks.setPrefs({ sidebarOpen: false });
+  await sleep(500);
+  hooks.openDevTools("detach");
+  await sleep(1200);
+  paths.push(await captureDevtools(window, out, "devtools.png", hooks.tabs()));
+
   window.hide();
+  hooks.panels()?.close();
   return paths;
 }
 

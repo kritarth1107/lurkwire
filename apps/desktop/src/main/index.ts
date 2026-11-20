@@ -1108,6 +1108,7 @@ app.whenReady().then(async () => {
       const paths = await runSmoke({
         window: () => mainWindow,
         tabs: () => tabs,
+        panels: () => chromeWindows[0]?.panels ?? null,
         control,
         proxyReady: () => proxyStatus.status === "ready",
         currentProjectId: () => currentProjectId,
@@ -1119,6 +1120,7 @@ app.whenReady().then(async () => {
         },
         selectTool,
         openNewTab,
+        openDevTools: (mode) => tabs?.openDevTools(mode),
       });
       console.log(`SMOKE ok ${paths.join(" ")}`);
       app.exit(0);
