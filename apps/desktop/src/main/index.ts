@@ -1052,6 +1052,8 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:adjustZoom", (event, delta: number) => ctx(event)?.tabs.adjustZoom(delta));
   ipcMain.handle("lurkwire:resetZoom", (event) => ctx(event)?.tabs.resetZoom());
   ipcMain.handle("lurkwire:pinTab", (event, id: string, pinned: boolean) => ctx(event)?.tabs.pin(id, pinned));
+  ipcMain.handle("lurkwire:setTabMuted", (event, id: string, muted: boolean) => ctx(event)?.tabs.setMuted(id, muted));
+  ipcMain.handle("lurkwire:reloadTab", (event, id: string, ignoreCache?: boolean) => ctx(event)?.tabs.reloadTab(id, ignoreCache));
   ipcMain.handle("lurkwire:duplicateTab", (event, id: string) => ctx(event)?.tabs.duplicate(id));
   ipcMain.handle("lurkwire:createTabGroup", (event, tabId: string) => ctx(event)?.tabs.createGroup(tabId));
   ipcMain.handle("lurkwire:addTabToGroup", (event, tabId: string, groupId: string) =>

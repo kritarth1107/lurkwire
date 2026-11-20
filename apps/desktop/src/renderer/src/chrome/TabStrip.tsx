@@ -1,4 +1,4 @@
-import { ChevronDown, Plus } from "lucide-react";
+import { AlertTriangle, ChevronDown, Globe, Plus, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import type { AppSnapshot, TabGroup, TabInfo } from "../../../shared/types";
 import { TAB_GROUP_COLOR_HEX, groupLabel, tabStripSegments } from "../../../shared/tabGroups";
@@ -139,14 +139,18 @@ function TabButton({
   groupColor?: string;
 }) {
   const [dragging, setDragging] = useState(false);
-  const letter = (tab.title || "New Tab").slice(0, 1).toUpperCase();
   return (
     <button
       type="button"
       draggable
       className={`tab${selected ? " selected" : ""}${tab.pinned ? " pinned" : ""}${dragging ? " dragging" : ""}${tab.groupId ? " grouped" : ""}`}
       style={{ "--project": color, "--group": groupColor ?? "transparent" } as React.CSSProperties}
-      onClick={() => void window.lurkwire.switchTab(tab.id)}
+      onClick={() => {
+        if (tab.crashed || tab.failed) {
+          void window.lurkwire.reloadTab(tab.id);
+        }
+        void window.lurkwire.switchTab(tab.id);
+      }}
       onAuxClick={(event) => {
         if (event.button === 1 && !tab.pinned) {
           event.preventDefault();
@@ -182,11 +186,7 @@ function TabButton({
       }}
       title={tab.title}
     >
-      {tab.favicon ? (
-        <img className="favicon" src={tab.favicon} alt="" />
-      ) : (
-        <span className="favicon-fallback">{letter}</span>
-      )}
+      <TabGlyph tab={tab} />
       <span className="tab-title">{tab.title || "New Tab"}</span>
       {tab.pinned ? null : (
         <span
@@ -203,5 +203,37 @@ function TabButton({
       )}
       <span className="tab-container-line" />
     </button>
+  );
+}
+
+
+function TabGlyph({ tab }: { tab: TabInfo }) {
+  const showSpinner = tab.loading && !tab.crashed;
+  return (
+    <span className={`tab-glyph${tab.crashed || tab.failed ? " is-error" : ""}`}>
+      {showSpinner ? (
+        <span className="tab-throbber" role="progressbar" aria-label="Loading" />
+      ) : tab.crashed || tab.failed ? (
+        <AlertTriangle size={14} className="tab-status-icon" aria-label={tab.crashed ? "Tab crashed" : "Failed to load"} />
+      ) : tab.favicon ? (
+        <img className="favicon" src={tab.favicon} alt="" />
+      ) : (
+        <Globe size={14} className="tab-globe" aria-hidden />
+      )}
+      {tab.muted || tab.audible ? (
+        <button
+          type="button"
+          className={`tab-audio${tab.muted ? " muted" : ""}`}
+          title={tab.muted ? "Unmute tab" : "Mute tab"}
+          aria-label={tab.muted ? "Unmute tab" : "Mute tab"}
+          onClick={(event) => {
+            event.stopPropagation();
+            void window.lurkwire.setTabMuted(tab.id, !tab.muted);
+          }}
+        >
+          {tab.muted ? <VolumeX size={10} /> : <Volume2 size={10} />}
+        </button>
+      ) : null}
+    </span>
   );
 }

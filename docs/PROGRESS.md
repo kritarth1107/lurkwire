@@ -51,3 +51,9 @@ Refreshed screenshots cover main light/dark, the app menu, a lurkwire://settings
 - [x] Silence DevTools Autofill errors
 
 Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.org, and iana.org, sends a Repeater request and a two-payload Intruder sniper at httpbin.org, asserts decoded bodies, and refreshes `docs/screenshots/`.
+
+## Overnight tools (22 Nov)
+
+- [x] Firefox-style tab throbber, globe fallback, mute/crash states
+- [ ] lurkwire://workbench API client (Postman-class)
+- [ ] Additional pentester tools

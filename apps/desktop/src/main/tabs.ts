@@ -23,6 +23,10 @@ type Tab = {
   favicon: string | null;
   pinned: boolean;
   groupId: string | null;
+  crashed: boolean;
+  failed: boolean;
+  audible: boolean;
+  muted: boolean;
   view: WebContentsView;
 };
 
@@ -234,6 +238,10 @@ export class TabManager {
       favicon: null,
       pinned: opts?.pinned ?? false,
       groupId: opts?.pinned ? null : (opts?.groupId ?? null),
+      crashed: false,
+      failed: false,
+      audible: false,
+      muted: false,
       view,
     };
     this.bind(tab);
@@ -504,6 +512,31 @@ export class TabManager {
     }
   }
 
+
+  setMuted(id: string, muted: boolean): void {
+    const tab = this.tabs.get(id);
+    if (!tab || tab.view.webContents.isDestroyed()) {
+      return;
+    }
+    tab.view.webContents.setAudioMuted(muted);
+    tab.muted = muted;
+    this.onChange();
+  }
+
+  reloadTab(id: string, ignoreCache = false): void {
+    const tab = this.tabs.get(id);
+    if (!tab || tab.view.webContents.isDestroyed()) {
+      return;
+    }
+    tab.crashed = false;
+    tab.failed = false;
+    if (ignoreCache) {
+      tab.view.webContents.reloadIgnoringCache();
+    } else {
+      tab.view.webContents.reload();
+    }
+  }
+
   back(): void {
     this.active()?.view.webContents.navigationHistory.goBack();
   }
@@ -655,12 +688,38 @@ export class TabManager {
     });
     wc.on("did-start-loading", () => {
       tab.loading = true;
+      tab.failed = false;
+      tab.crashed = false;
       this.onChange();
     });
     wc.on("did-stop-loading", () => {
       tab.loading = false;
       tab.canGoBack = wc.navigationHistory.canGoBack();
       tab.canGoForward = wc.navigationHistory.canGoForward();
+      tab.audible = wc.isCurrentlyAudible();
+      tab.muted = wc.isAudioMuted();
+      this.onChange();
+    });
+    wc.on("audio-state-changed", () => {
+      tab.audible = wc.isCurrentlyAudible();
+      tab.muted = wc.isAudioMuted();
+      this.onChange();
+    });
+    wc.on("media-started-playing", () => {
+      tab.audible = true;
+      this.onChange();
+    });
+    wc.on("media-paused", () => {
+      tab.audible = wc.isCurrentlyAudible();
+      this.onChange();
+    });
+    wc.on("render-process-gone", (_event, details) => {
+      if (details.reason === "clean-exit") {
+        return;
+      }
+      tab.crashed = true;
+      tab.loading = false;
+      tab.title = tab.title || "Tab crashed";
       this.onChange();
     });
     wc.on("did-navigate", (_event, url) => {
@@ -673,7 +732,14 @@ export class TabManager {
       if (!isMainFrame) {
         return;
       }
+      // Ignore aborted loads (user navigated away) and same-document cancels.
+      if (code === -3) {
+        tab.loading = false;
+        this.onChange();
+        return;
+      }
       tab.loading = false;
+      tab.failed = true;
       tab.title = "Failed to load";
       tab.url = url;
       console.error(`tab load failed ${code} ${description} ${url}`);
@@ -779,6 +845,10 @@ function toInfo(tab: Tab): TabInfo {
     groupId: tab.groupId,
     secure: isSecure(tab.url),
     zoomFactor: tab.view.webContents.isDestroyed() ? 1 : tab.view.webContents.getZoomFactor(),
+    crashed: tab.crashed,
+    failed: tab.failed,
+    audible: tab.audible,
+    muted: tab.muted,
   };
 }
 

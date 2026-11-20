@@ -184,6 +184,55 @@ input, textarea, select {
   background: radial-gradient(circle at 100% 0, transparent var(--tab-radius), var(--tab-selected) calc(var(--tab-radius) + 0.5px));
 }
 
+
+.tab-glyph {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  display: grid;
+  place-items: center;
+}
+
+.tab-throbber {
+  width: 14px;
+  height: 14px;
+  border-radius: 99px;
+  border: 2px solid color-mix(in srgb, var(--accent, #0060df) 25%, transparent);
+  border-top-color: var(--accent, #0060df);
+  animation: tab-throb 0.7s linear infinite;
+}
+
+@keyframes tab-throb {
+  to { transform: rotate(360deg); }
+}
+
+.tab-globe, .tab-status-icon {
+  color: var(--icon, var(--muted));
+}
+
+.tab-glyph.is-error .tab-status-icon {
+  color: #e22850;
+}
+
+.tab-audio {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 99px;
+  display: grid;
+  place-items: center;
+  background: var(--tab-selected, #fff);
+  color: var(--text);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 15%);
+  padding: 0;
+}
+
+.tab-audio.muted { color: var(--muted); }
+.tab-audio:hover { background: var(--button-hover); }
+
 .tab .favicon, .tab .favicon-fallback {
   width: 16px;
   height: 16px;

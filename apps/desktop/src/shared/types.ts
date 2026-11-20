@@ -105,6 +105,10 @@ export type TabInfo = {
   secure: boolean;
   zoomFactor: number;
   groupId: string | null;
+  crashed: boolean;
+  failed: boolean;
+  audible: boolean;
+  muted: boolean;
 };
 
 export type HeaderPair = {
