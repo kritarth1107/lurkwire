@@ -49,3 +49,5 @@ Refreshed screenshots cover main light/dark, the app menu, a lurkwire://settings
 - [x] Bookmarks manager and opt-in Chrome/Firefox import
 - [x] Session restore (reopen last tabs)
 - [x] Silence DevTools Autofill errors
+
+Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.org, and iana.org, sends a Repeater request and a two-payload Intruder sniper at httpbin.org, asserts decoded bodies, and refreshes `docs/screenshots/`.
