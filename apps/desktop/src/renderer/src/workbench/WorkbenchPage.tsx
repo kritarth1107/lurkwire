@@ -7,7 +7,7 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatBytes, statusClass } from "../../../shared/http";
 import {
   SNIPPET_LABELS,
@@ -17,8 +17,12 @@ import {
   emptyBody,
   exportPostmanCollection,
   generateSnippet,
+  cookieHeaderList,
+  cookiesFromNetscape,
+  cookiesToNetscape,
   importAny,
   kv,
+  upsertCookies,
   newId,
   parseRunnerData,
   toCurl,
@@ -40,6 +44,7 @@ import { MonacoView } from "../MonacoView";
 import { queueIntruderDraft, queueRepeaterDraft } from "./pendingSend";
 import { StreamPane } from "./StreamPane";
 import { GrpcPane } from "./GrpcPane";
+import { downloadText } from "../downloadText";
 import { MATCH_TEMPLATES, rulesFromTemplate } from "../../../shared/workbench/matchTemplates";
 
 type ReqTab = "params" | "headers" | "body" | "auth" | "scripts";
@@ -119,6 +124,7 @@ export function WorkbenchPage({ url }: { url: string }) {
   const [runResults, setRunResults] = useState<RunnerProgress[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [cookiesOpen, setCookiesOpen] = useState(false);
+  const cookieFileRef = useRef<HTMLInputElement>(null);
   const [mock, setMock] = useState<{ running: boolean; url: string | null; collectionId: string | null }>({ running: false, url: null, collectionId: null });
 
   useEffect(() => {
@@ -908,8 +914,47 @@ export function WorkbenchPage({ url }: { url: string }) {
                 Add cookie
               </button>
               <button type="button" onClick={() => persist({ ...workspace, cookies: [] })}>Clear jar</button>
+              <button type="button" onClick={() => downloadText("lurkwire-cookies.txt", cookiesToNetscape(workspace.cookies ?? []), "text/plain")}>
+                Export Netscape
+              </button>
+              <button type="button" onClick={() => cookieFileRef.current?.click()}>
+                Import Netscape
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void (async () => {
+                    if (!window.lurkwire?.listSessionCookies) {
+                      return;
+                    }
+                    const session = await window.lurkwire.listSessionCookies();
+                    persist({ ...workspace, cookies: upsertCookies(workspace.cookies ?? [], session) });
+                  })();
+                }}
+              >
+                Import from browser session
+              </button>
+              <button type="button" onClick={() => void window.lurkwire.copyText(cookieHeaderList(workspace.cookies ?? []))}>
+                Copy Cookie header
+              </button>
               <button type="button" onClick={() => setCookiesOpen(false)}>Close</button>
             </div>
+            <input
+              ref={cookieFileRef}
+              type="file"
+              accept=".txt,.cookies,text/plain"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) {
+                  return;
+                }
+                void file.text().then((text) => {
+                  persist({ ...workspace, cookies: upsertCookies(workspace.cookies ?? [], cookiesFromNetscape(text)) });
+                });
+              }}
+            />
           </div>
         </div>
       ) : null}

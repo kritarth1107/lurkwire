@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, formatTime, shortMime, statusClass } from "../../shared/http";
 import { flowTitle, highlightOf, tlsLabel } from "../../shared/flowMeta";
-import { AnnotationBar, copyCsrfPoc, copySecurityHeaderReport, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { AnnotationBar, copyClickjackPoc, copyCsrfPoc, copySecurityHeaderReport, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { flowsToHar, harToString, type HarBody, type HarFlowInput } from "../../shared/harExport";
+import { downloadText } from "./downloadText";
 import { HttpViewer } from "./HttpViewer";
 
 type ColId = "#" | "host" | "method" | "url" | "status" | "length" | "mime" | "title" | "tls" | "time";
@@ -85,6 +87,7 @@ export function HistoryView({ projectId, handlers }: Props) {
   );
   const [tableHeight, setTableHeight] = useState(240);
   const { menu, setMenu } = useFlowContextMenu();
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), 200);
@@ -182,6 +185,48 @@ export function HistoryView({ projectId, handlers }: Props) {
     window.addEventListener("mouseup", onUp);
   }
 
+
+  async function bodyOf(flow: FlowDetail, which: "req" | "resp"): Promise<HarBody | undefined> {
+    const blob = which === "req" ? flow.req_blob : flow.resp_blob;
+    const preview = which === "req" ? flow.req_preview : flow.resp_preview;
+    if (blob && window.lurkwire) {
+      try {
+        const raw = await window.lurkwire.getFlowBody(flow.id, which);
+        if (raw) {
+          return { base64: raw };
+        }
+      } catch {
+        /* fall through to preview */
+      }
+    }
+    return preview ? { text: preview } : undefined;
+  }
+
+  async function exportHar() {
+    if (!window.lurkwire || exporting || items.length === 0) {
+      return;
+    }
+    setExporting(true);
+    try {
+      const chosen = items.slice(0, 250);
+      const details: HarFlowInput[] = [];
+      for (const item of chosen) {
+        const flow = await window.lurkwire.getFlow(item.id);
+        details.push({
+          ...flow,
+          requestBody: await bodyOf(flow, "req"),
+          responseBody: await bodyOf(flow, "resp"),
+        });
+      }
+      downloadText("lurkwire-history.har", harToString(flowsToHar(details)), "application/json");
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function applyPatch(flow: FlowDetail) {
     setDetail(flow);
     setItems((prev) => prev.map((item) => (item.id === flow.id ? { ...item, tags: flow.tags, note: flow.note } : item)));
@@ -204,6 +249,9 @@ export function HistoryView({ projectId, handlers }: Props) {
           {items.length}
           {total > items.length ? ` of ${total}` : ""} flows
         </span>
+        <button type="button" disabled={exporting || items.length === 0} onClick={() => void exportHar()} title="Export the visible history (up to 250 flows) as a HAR 1.2 file">
+          {exporting ? "Exporting HAR…" : "Export HAR"}
+        </button>
         {detail ? (
           <>
             <button type="button" onClick={() => void handlers.onSendToRepeater(detail)}>
@@ -220,6 +268,9 @@ export function HistoryView({ projectId, handlers }: Props) {
             </button>
             <button type="button" onClick={() => void copyCsrfPoc(detail.id)}>
               CSRF PoC
+            </button>
+            <button type="button" onClick={() => void copyClickjackPoc(detail.id)}>
+              Clickjacking PoC
             </button>
             <button type="button" onClick={() => void copySecurityHeaderReport(detail.id)}>
               Header report

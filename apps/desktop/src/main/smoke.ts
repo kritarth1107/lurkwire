@@ -726,6 +726,8 @@ message HelloReply { string message = 1; }
   await sleep(500);
   paths.push(await captureWindow(window, out, "workbench-ai.png", hooks.tabs()));
   await window.webContents.executeJavaScript(`(() => {
+    const closeAi = Array.from(document.querySelectorAll("button")).find((el) => (el.textContent || "").trim() === "Close" && el.closest(".wb-ai, .wb-drawer, aside, [class*='ai']"));
+    (closeAi ?? Array.from(document.querySelectorAll("button")).find((el) => (el.textContent || "").trim() === "Close"))?.click();
     const sel = document.querySelector('select[aria-label="Protocol"]');
     if (sel) {
       sel.value = "grpc";

@@ -66,4 +66,6 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 - [x] Logger++ filters and highlight rules; Decoder recipe chains
 - [x] High-confidence JS secrets can be accepted into Notes
 - [x] Intruder payload presets and a localhost-only CL.TE smuggling lab
+- [x] History HAR export, sitemap markdown export, and a clickjacking PoC
+- [x] Cookie jar Netscape import/export, Cookie header copy, and import from the project browser session
 - [ ] Remaining ideas (client-streaming/bidi gRPC, routing gRPC/WS through the MITM proxy)

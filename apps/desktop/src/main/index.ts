@@ -1245,6 +1245,23 @@ function registerIpc(): void {
     const list = await control.listFindings({ project_id: projectId ?? currentProjectId ?? undefined, limit: 500 });
     return exportNotesMarkdown(list.items);
   });
+  ipcMain.handle("lurkwire:listSessionCookies", async () => {
+    if (!currentProjectId) {
+      return [];
+    }
+    const ses = electronSession.fromPartition(`persist:proj-${currentProjectId}`);
+    const list = await ses.cookies.get({});
+    return list.map((cookie) => ({
+      name: cookie.name,
+      value: cookie.value,
+      domain: (cookie.domain ?? "").replace(/^\./, ""),
+      path: cookie.path || "/",
+      expires: cookie.expirationDate ? Math.round(cookie.expirationDate * 1000) : null,
+      secure: Boolean(cookie.secure),
+      httpOnly: Boolean(cookie.httpOnly),
+      sameSite: cookie.sameSite === "no_restriction" ? "None" : cookie.sameSite === "strict" ? "Strict" : cookie.sameSite === "lax" ? "Lax" : undefined,
+    }));
+  });
   ipcMain.handle("lurkwire:smugglingLabRun", () => runLocalSmugglingLab());
   ipcMain.handle("lurkwire:activeSend", (_event, req: RepeaterSendRequest) => {
     return control.sendWorkbench({ ...req, project_id: req.project_id ?? currentProjectId ?? undefined });

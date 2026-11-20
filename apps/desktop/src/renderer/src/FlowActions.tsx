@@ -3,6 +3,8 @@ import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { HIGHLIGHT_COLORS, highlightOf, setHighlight, type HighlightColor } from "../../shared/flowMeta";
 import { addComparerItem } from "./workbench";
 import { buildCsrfPoc } from "../../shared/csrf";
+import { buildClickjackPoc } from "../../shared/clickjack";
+import { base64ToBytes, fromBytes } from "../../shared/codec";
 import { analyzeSecurityHeaders, formatSecurityReport } from "../../shared/securityHeaders";
 
 export type FlowSendHandlers = {
@@ -36,7 +38,7 @@ export async function copyCsrfPoc(id: string): Promise<void> {
   try {
     const raw = await window.lurkwire.getFlowBody(id, "req");
     if (raw) {
-      body = raw;
+      body = fromBytes(base64ToBytes(raw));
     }
   } catch {
     /* preview is enough */
@@ -47,6 +49,13 @@ export async function copyCsrfPoc(id: string): Promise<void> {
     headers: flow.req_headers,
     body,
   });
+  await window.lurkwire.copyText(poc.html);
+}
+
+
+export async function copyClickjackPoc(id: string): Promise<void> {
+  const flow = await window.lurkwire.getFlow(id);
+  const poc = buildClickjackPoc({ url: flow.url });
   await window.lurkwire.copyText(poc.html);
 }
 
@@ -118,6 +127,9 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void copyCsrfPoc(menu.flow.id)}>
         Copy CSRF PoC
+      </button>
+      <button type="button" onClick={() => void copyClickjackPoc(menu.flow.id)}>
+        Copy clickjacking PoC
       </button>
       <button type="button" onClick={() => void copySecurityHeaderReport(menu.flow.id)}>
         Copy security header report

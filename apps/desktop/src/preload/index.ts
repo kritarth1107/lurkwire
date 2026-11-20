@@ -237,6 +237,8 @@ const api = {
   notesGet: (): Promise<NotesStore> => ipcRenderer.invoke("lurkwire:notesGet"),
   notesSave: (store: NotesStore): Promise<NotesStore> => ipcRenderer.invoke("lurkwire:notesSave", store),
   notesExport: (projectId?: string): Promise<string> => ipcRenderer.invoke("lurkwire:notesExport", projectId),
+  listSessionCookies: (): Promise<import("../shared/workbench").WbCookie[]> =>
+    ipcRenderer.invoke("lurkwire:listSessionCookies"),
   smugglingLabRun: (): Promise<{ kind: string; smuggled: boolean; leftover: string; detail: string; port: number; bytesSent: number }> =>
     ipcRenderer.invoke("lurkwire:smugglingLabRun"),
   activeSend: (req: RepeaterSendRequest) => ipcRenderer.invoke("lurkwire:activeSend", req),

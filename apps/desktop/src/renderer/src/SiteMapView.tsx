@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, statusClass } from "../../shared/http";
 import { AnnotationBar, FlowContextMenu, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
+import { sitemapToMarkdown } from "../../shared/sitemapExport";
+import { downloadText } from "./downloadText";
 import { HttpViewer } from "./HttpViewer";
 
 type TreeNode = {
@@ -149,6 +151,13 @@ export function SiteMapView({ projectId, handlers }: { projectId: string | null;
         <div className="sitemap-tree">
           <div className="workbench-toolbar">
             <span className="muted">{tree.length} hosts</span>
+            <button
+              type="button"
+              disabled={items.length === 0}
+              onClick={() => downloadText("lurkwire-sitemap.md", sitemapToMarkdown(items), "text/markdown")}
+            >
+              Export markdown
+            </button>
           </div>
           {tree.length === 0 ? <p className="muted empty-pane">Browse a site to build the map.</p> : tree.map((node) => renderNode(node, 0))}
         </div>
