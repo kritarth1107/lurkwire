@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { FlowDetail, ToolId } from "../../shared/types";
 import { HistoryView } from "./HistoryView";
+import { RepeaterView } from "./RepeaterView";
 import { useAppState } from "./useAppState";
 
 const tools: { id: ToolId; label: string }[] = [
@@ -166,13 +167,9 @@ export function App() {
           }}
         />
       ) : (
-        <Placeholder
-          title="Repeater"
-          body={
-            repeaterDraft
-              ? `Queued ${repeaterDraft.method} ${repeaterDraft.url}. The editor UI lands next.`
-              : "The sidecar already has POST /repeater/send. The editor UI lands next."
-          }
+        <RepeaterView
+          draft={repeaterDraft}
+          onDraftConsumed={() => setRepeaterDraft(null)}
         />
       )}
     </div>
@@ -262,14 +259,3 @@ function BrowserStage({ hasUrl }: { hasUrl: boolean }) {
   );
 }
 
-function Placeholder({ title, body }: { title: string; body: string }) {
-  return (
-    <main className="stage">
-      <div className="welcome">
-        <p className="eyebrow">Coming up</p>
-        <h1>{title}</h1>
-        <p className="lede">{body}</p>
-      </div>
-    </main>
-  );
-}
