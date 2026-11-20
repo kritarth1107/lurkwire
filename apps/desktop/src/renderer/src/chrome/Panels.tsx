@@ -10,7 +10,9 @@ import type {
 import { TAB_GROUP_COLORS, TAB_GROUP_COLOR_HEX, groupLabel } from "../../../shared/tabGroups";
 import { projectColor } from "../../../shared/projectColor";
 import { useAppState } from "../useAppState";
-import type { SiteInfo } from "../../../shared/siteInfo";
+import type { SiteCookie, SiteInfo, SiteStorage, SiteStorageItem } from "../../../shared/siteInfo";
+import { cookiesToNetscape, cookieHeaderList } from "../../../shared/workbench";
+import type { WbCookie } from "../../../shared/workbench";
 
 export function PanelApp() {
   const state = useAppState();
@@ -498,6 +500,14 @@ function Identity({
   const secureHint = Boolean(payload.secure);
   const [info, setInfo] = useState<SiteInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [storage, setStorage] = useState<SiteStorage | null>(null);
+  const [showValues, setShowValues] = useState(false);
+  const reloadSite = () => {
+    void window.lurkwire.getSiteInfo(url).then(setInfo).catch((err: unknown) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+    void window.lurkwire.getTabStorage().then(setStorage).catch(() => setStorage(null));
+  };
   useEffect(() => {
     let cancelled = false;
     void window.lurkwire
@@ -512,10 +522,33 @@ function Identity({
           setError(err instanceof Error ? err.message : String(err));
         }
       });
+    void window.lurkwire
+      .getTabStorage()
+      .then((next) => {
+        if (!cancelled) {
+          setStorage(next);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStorage(null);
+        }
+      });
     return () => {
       cancelled = true;
     };
   }, [url]);
+
+  function asJar(cookies: SiteCookie[]): WbCookie[] {
+    return cookies.map((cookie) => ({
+      name: cookie.name,
+      value: cookie.value,
+      domain: cookie.domain,
+      path: cookie.path,
+      secure: cookie.secure,
+      httpOnly: cookie.httpOnly,
+    }));
+  }
 
   const secure = info?.secure ?? secureHint;
   const internal = info?.internal || url.startsWith("lurkwire://") || url.startsWith("about:");
@@ -571,20 +604,84 @@ function Identity({
 
       {!internal ? (
         <section>
-          <h4>Cookies</h4>
+          <h4>Cookies ({info?.cookies.length ?? 0})</h4>
           {info?.cookies.length ? (
-            <ul>
-              {info.cookies.slice(0, 12).map((cookie) => (
-                <li key={`${cookie.domain}-${cookie.name}`}>
-                  <span className="mono">{cookie.name}</span>
-                  {cookie.secure ? " · Secure" : ""}
-                  {cookie.httpOnly ? " · HttpOnly" : ""}
-                  {cookie.sameSite && cookie.sameSite !== "unspecified" ? ` · ${cookie.sameSite}` : ""}
-                </li>
-              ))}
-            </ul>
+            <>
+              <label className="check">
+                <input type="checkbox" checked={showValues} onChange={(event) => setShowValues(event.target.checked)} />
+                Show values
+              </label>
+              <ul className="identity-list">
+                {info.cookies.map((cookie) => (
+                  <li key={`${cookie.domain}-${cookie.path}-${cookie.name}`}>
+                    <div>
+                      <span className="mono">{cookie.name}</span>
+                      {cookie.secure ? " · Secure" : ""}
+                      {cookie.httpOnly ? " · HttpOnly" : ""}
+                      {cookie.sameSite && cookie.sameSite !== "unspecified" ? ` · ${cookie.sameSite}` : ""}
+                      {showValues ? <div className="mono wrap identity-value">{cookie.value}</div> : null}
+                    </div>
+                    <span className="identity-actions">
+                      <button type="button" onClick={() => void window.lurkwire.copyText(`${cookie.name}=${cookie.value}`)}>
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void window.lurkwire.removeSessionCookie(cookie).then(() => reloadSite());
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="identity-actions">
+                <button type="button" onClick={() => void window.lurkwire.copyText(cookieHeaderList(asJar(info.cookies)))}>
+                  Copy Cookie header
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void window.lurkwire.copyText(cookiesToNetscape(asJar(info.cookies)))}
+                >
+                  Copy Netscape
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void window.lurkwire.clearSessionCookies(url).then(() => reloadSite());
+                  }}
+                >
+                  Clear site cookies
+                </button>
+              </div>
+            </>
           ) : (
             <p>No cookies for this origin in the current project session.</p>
+          )}
+        </section>
+      ) : null}
+
+      {!internal ? (
+        <section>
+          <h4>Web storage</h4>
+          {storage && (storage.localStorage.length || storage.sessionStorage.length) ? (
+            <>
+              {(["localStorage", "sessionStorage"] as const).map((area) => (
+                <StorageList
+                  key={area}
+                  title={area}
+                  items={storage[area]}
+                  showValues={showValues}
+                  onRemove={(key) => {
+                    void window.lurkwire.removeTabStorage({ area, key }).then(() => reloadSite());
+                  }}
+                />
+              ))}
+            </>
+          ) : (
+            <p>No localStorage or sessionStorage entries on this tab.</p>
           )}
         </section>
       ) : null}
@@ -623,7 +720,47 @@ function Identity({
   );
 }
 
+function StorageList({
+  title,
+  items,
+  showValues,
+  onRemove,
+}: {
+  title: string;
+  items: SiteStorageItem[];
+  showValues: boolean;
+  onRemove: (key: string) => void;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <p><strong>{title}</strong> ({items.length})</p>
+      <ul className="identity-list">
+        {items.map((item) => (
+          <li key={`${title}-${item.key}`}>
+            <div>
+              <span className="mono">{item.key}</span>
+              {showValues ? <div className="mono wrap identity-value">{item.value}</div> : null}
+            </div>
+            <span className="identity-actions">
+              <button type="button" onClick={() => void window.lurkwire.copyText(item.value)}>
+                Copy
+              </button>
+              <button type="button" onClick={() => onRemove(item.key)}>
+                Delete
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 function LurkwireMenu() {
+
   const tools = [
     { id: "history", label: "History", icon: History },
     { id: "sitemap", label: "Site map", icon: FolderTree },

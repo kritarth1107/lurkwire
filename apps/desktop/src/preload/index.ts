@@ -23,7 +23,7 @@ import type {
   ToolId,
   Visit,
 } from "../shared/types";
-import type { SiteInfo } from "../shared/siteInfo";
+import type { SiteCookie, SiteInfo, SiteStorage } from "../shared/siteInfo";
 import type { InstalledExtension } from "../shared/extensions";
 import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
@@ -113,6 +113,11 @@ const api = {
   listFindings: (query: FindingQuery) => ipcRenderer.invoke("lurkwire:listFindings", query),
   getFinding: (id: string) => ipcRenderer.invoke("lurkwire:getFinding", id),
   getSiteInfo: (url: string): Promise<SiteInfo> => ipcRenderer.invoke("lurkwire:getSiteInfo", url),
+  getTabStorage: (): Promise<SiteStorage> => ipcRenderer.invoke("lurkwire:getTabStorage"),
+  removeTabStorage: (input: { area: "localStorage" | "sessionStorage"; key: string }) =>
+    ipcRenderer.invoke("lurkwire:removeTabStorage", input),
+  removeSessionCookie: (cookie: SiteCookie) => ipcRenderer.invoke("lurkwire:removeSessionCookie", cookie),
+  clearSessionCookies: (url: string) => ipcRenderer.invoke("lurkwire:clearSessionCookies", url),
   listVisits: (query?: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:listVisits", query),
   deleteVisit: (id: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:deleteVisit", id),
   clearVisits: () => ipcRenderer.invoke("lurkwire:clearVisits"),

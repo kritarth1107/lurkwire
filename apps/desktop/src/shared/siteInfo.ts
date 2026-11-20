@@ -20,6 +20,23 @@ export type SiteCookie = {
   sameSite: string;
 };
 
+export type SiteStorageItem = {
+  key: string;
+  value: string;
+};
+
+export type SiteStorage = {
+  origin: string;
+  localStorage: SiteStorageItem[];
+  sessionStorage: SiteStorageItem[];
+};
+
+export function cookieTargetUrl(cookie: Pick<SiteCookie, "domain" | "path" | "secure">): string {
+  const host = cookie.domain.replace(/^\./, "") || "localhost";
+  const path = cookie.path || "/";
+  return `${cookie.secure ? "https" : "http"}://${host}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export type SitePermission = {
   origin: string;
   permission: string;

@@ -41,6 +41,7 @@ import {
   type InternalPage,
 } from "../shared/url";
 import { collectSiteInfo } from "./siteInfo";
+import { cookieTargetUrl, type SiteCookie, type SiteStorage } from "../shared/siteInfo";
 import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpackedExtension } from "./extensions";
 import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
@@ -996,6 +997,83 @@ function registerIpc(): void {
         }),
       getFlow: (id) => control.getFlow(id),
     });
+  });
+
+  ipcMain.handle("lurkwire:getTabStorage", async (event): Promise<SiteStorage> => {
+    const empty: SiteStorage = { origin: "", localStorage: [], sessionStorage: [] };
+    const win = ctx(event);
+    const tab = win?.tabs.active();
+    const wc = tab?.view.webContents;
+    if (!wc || wc.isDestroyed()) {
+      return empty;
+    }
+    const url = wc.getURL();
+    if (!url || isInternalUrl(url) || !/^https?:/i.test(url)) {
+      return empty;
+    }
+    try {
+      const result = (await wc.executeJavaScript(`(() => {
+        const entries = (store) => {
+          const out = [];
+          for (let i = 0; i < store.length; i++) {
+            const key = store.key(i);
+            if (key != null) {
+              out.push({ key, value: store.getItem(key) || "" });
+            }
+          }
+          return out;
+        };
+        return {
+          origin: location.origin,
+          localStorage: entries(localStorage),
+          sessionStorage: entries(sessionStorage),
+        };
+      })()`)) as SiteStorage;
+      return result ?? empty;
+    } catch {
+      return empty;
+    }
+  });
+  ipcMain.handle("lurkwire:removeTabStorage", async (event, input: { area: "localStorage" | "sessionStorage"; key: string }) => {
+    const win = ctx(event);
+    const wc = win?.tabs.active()?.view.webContents;
+    if (!wc || wc.isDestroyed()) {
+      return;
+    }
+    const area = input.area === "sessionStorage" ? "sessionStorage" : "localStorage";
+    await wc.executeJavaScript(`${area}.removeItem(${JSON.stringify(input.key)})`);
+  });
+  ipcMain.handle("lurkwire:removeSessionCookie", async (event, cookie: SiteCookie) => {
+    const win = ctx(event);
+    const partition = win?.privateMode
+      ? `temp:incognito-${win.id}`
+      : currentProjectId
+        ? `persist:proj-${currentProjectId}`
+        : undefined;
+    const ses = partition ? electronSession.fromPartition(partition) : electronSession.defaultSession;
+    await ses.cookies.remove(cookieTargetUrl(cookie), cookie.name);
+  });
+  ipcMain.handle("lurkwire:clearSessionCookies", async (event, url: string) => {
+    const win = ctx(event);
+    const partition = win?.privateMode
+      ? `temp:incognito-${win.id}`
+      : currentProjectId
+        ? `persist:proj-${currentProjectId}`
+        : undefined;
+    const ses = partition ? electronSession.fromPartition(partition) : electronSession.defaultSession;
+    const list = await ses.cookies.get({ url });
+    for (const cookie of list) {
+      const mapped: SiteCookie = {
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain ?? "",
+        path: cookie.path || "/",
+        secure: Boolean(cookie.secure),
+        httpOnly: Boolean(cookie.httpOnly),
+        sameSite: String(cookie.sameSite ?? ""),
+      };
+      await ses.cookies.remove(cookieTargetUrl(mapped), cookie.name);
+    }
   });
   ipcMain.handle("lurkwire:listVisits", (_event, query?: string) => listVisits(query));
   ipcMain.handle("lurkwire:deleteVisit", (_event, id: string) => deleteVisit(id));

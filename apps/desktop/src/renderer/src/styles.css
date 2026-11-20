@@ -878,6 +878,11 @@ input, textarea, select {
 .identity-card .wrap { overflow-wrap: anywhere; }
 .identity-card ul { margin: 0 0 6px; padding-left: 16px; font-size: 12px; }
 .identity-card li { margin: 2px 0; word-break: break-word; }
+.identity-list { list-style: none; padding-left: 0; }
+.identity-list li { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.identity-value { margin-top: 2px; color: var(--muted); max-height: 4.5em; overflow: auto; }
+.identity-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.identity-actions button, .identity-card .check { font-size: 11px; }
 .identity-card section { border-top: 1px solid var(--separator); margin-top: 8px; padding-top: 2px; }
 
 /* ——— Coming-soon / placeholders ——— */
