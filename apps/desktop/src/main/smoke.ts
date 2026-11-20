@@ -340,6 +340,26 @@ async function captureDevtools(
 }
 
 
+
+function flowMatches(item: { url: string; path?: string }, urlOrPath: string): boolean {
+  try {
+    const parsed = new URL(item.url);
+    if (item.url === urlOrPath || parsed.href === urlOrPath) {
+      return true;
+    }
+    if (urlOrPath.startsWith("/")) {
+      return parsed.pathname === urlOrPath || parsed.pathname.startsWith(`${urlOrPath}/`);
+    }
+    if (urlOrPath.startsWith("http")) {
+      const target = new URL(urlOrPath);
+      return parsed.hostname === target.hostname && (parsed.pathname === target.pathname || parsed.pathname === `${target.pathname}/`);
+    }
+    return parsed.hostname.includes(urlOrPath) && (parsed.pathname === "/" || parsed.pathname === "");
+  } catch {
+    return item.url.includes(urlOrPath);
+  }
+}
+
 async function assertDecodedBody(hooks: SmokeHooks, id: string, needle: string): Promise<void> {
   const detail = await hooks.control.getFlow(id);
   const preview = `${detail.resp_preview ?? ""} ${detail.req_preview ?? ""}`;
@@ -423,8 +443,8 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
 
   const projectId = hooks.currentProjectId() ?? undefined;
   const flow = await waitFor("example.com history flow", async () => {
-    const list = await hooks.control.listFlows({ project_id: projectId, host: "example.com", limit: 20 });
-    return list.items.find((item) => item.host === "example.com" || item.url.includes("example.com")) ?? null;
+    const list = await hooks.control.listFlows({ project_id: projectId, host: "example.com", limit: 50 });
+    return list.items.find((item) => flowMatches(item, "https://example.com/")) ?? null;
   });
   console.log(`SMOKE history hit ${flow.method} ${flow.url} status=${flow.status} id=${flow.id}`);
   await assertDecodedBody(hooks, flow.id, "Example Domain");
@@ -440,8 +460,8 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
       return url.includes(site.host) ? url : null;
     }, 45_000);
     const hit = await waitFor(`${site.host} history flow`, async () => {
-      const list = await hooks.control.listFlows({ project_id: projectId, host: site.host, limit: 20 });
-      return list.items.find((item) => item.host.includes(site.host) || item.url.includes(site.host)) ?? null;
+      const list = await hooks.control.listFlows({ project_id: projectId, host: site.host, limit: 50 });
+      return list.items.find((item) => flowMatches(item, site.url)) ?? null;
     }, 45_000);
     console.log(`SMOKE history hit ${hit.method} ${hit.url} status=${hit.status} id=${hit.id}`);
     await assertDecodedBody(hooks, hit.id, site.needle);
