@@ -13,3 +13,6 @@ export * from "./runner";
 export * from "./matchReplace";
 export * from "./oauthPkce";
 export * from "./mockMatch";
+export * from "./protoParse";
+export * from "./matchTemplates";
+export * from "./streamHistory";

@@ -28,7 +28,8 @@ import type { InstalledExtension } from "../shared/extensions";
 import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
-import type { RunnerProgress, RunnerSpec, WbOAuth2, WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
+import type { ProtoDocument, RunnerProgress, RunnerSpec, WbOAuth2, WbRequest, WbSendResult, WbWorkspace } from "../shared/workbench";
+import type { StreamHistoryStore, StreamSessionRecord } from "../shared/workbench/streamHistory";
 import type { NotesStore } from "../shared/notes";
 
 function listen<T>(channel: string, callback: (value: T) => void): () => void {
@@ -202,6 +203,24 @@ const api = {
     ipcRenderer.invoke("lurkwire:workbenchStreamOpen", input),
   workbenchStreamSend: (id: string, text: string) => ipcRenderer.invoke("lurkwire:workbenchStreamSend", id, text),
   workbenchStreamClose: (id: string) => ipcRenderer.invoke("lurkwire:workbenchStreamClose", id),
+  workbenchStreamHistory: (): Promise<StreamHistoryStore> => ipcRenderer.invoke("lurkwire:workbenchStreamHistory"),
+  workbenchStreamHistoryGet: (id: string): Promise<StreamSessionRecord | null> =>
+    ipcRenderer.invoke("lurkwire:workbenchStreamHistoryGet", id),
+  workbenchStreamHistoryClear: (): Promise<StreamHistoryStore> => ipcRenderer.invoke("lurkwire:workbenchStreamHistoryClear"),
+  workbenchGrpcDescribe: (proto: string): Promise<ProtoDocument> => ipcRenderer.invoke("lurkwire:workbenchGrpcDescribe", proto),
+  workbenchGrpcReflect: (target: string): Promise<string> => ipcRenderer.invoke("lurkwire:workbenchGrpcReflect", target),
+  workbenchGrpcInvoke: (input: {
+    target: string;
+    proto: string;
+    service: string;
+    method: string;
+    body: string;
+    metadata?: { name: string; value: string }[];
+    deadlineMs?: number;
+    projectId?: string | null;
+    requestId?: string;
+  }): Promise<{ sessionId: string; error?: string }> => ipcRenderer.invoke("lurkwire:workbenchGrpcInvoke", input),
+  workbenchPickProto: (): Promise<{ fileName: string; text: string } | null> => ipcRenderer.invoke("lurkwire:workbenchPickProto"),
   onWorkbenchStream: (
     callback: (frame: { sessionId: string; id: string; at: number; dir: "in" | "out" | "sys"; text: string }) => void,
   ) => listen("lurkwire:workbenchStream", callback),
@@ -218,6 +237,8 @@ const api = {
   notesGet: (): Promise<NotesStore> => ipcRenderer.invoke("lurkwire:notesGet"),
   notesSave: (store: NotesStore): Promise<NotesStore> => ipcRenderer.invoke("lurkwire:notesSave", store),
   notesExport: (projectId?: string): Promise<string> => ipcRenderer.invoke("lurkwire:notesExport", projectId),
+  smugglingLabRun: (): Promise<{ kind: string; smuggled: boolean; leftover: string; detail: string; port: number; bytesSent: number }> =>
+    ipcRenderer.invoke("lurkwire:smugglingLabRun"),
   activeSend: (req: RepeaterSendRequest) => ipcRenderer.invoke("lurkwire:activeSend", req),
 };
 

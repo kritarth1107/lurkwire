@@ -39,6 +39,8 @@ import {
 import { MonacoView } from "../MonacoView";
 import { queueIntruderDraft, queueRepeaterDraft } from "./pendingSend";
 import { StreamPane } from "./StreamPane";
+import { GrpcPane } from "./GrpcPane";
+import { MATCH_TEMPLATES, rulesFromTemplate } from "../../../shared/workbench/matchTemplates";
 
 type ReqTab = "params" | "headers" | "body" | "auth" | "scripts";
 type RespTab = "pretty" | "raw" | "headers" | "cookies" | "tests" | "timing";
@@ -116,6 +118,7 @@ export function WorkbenchPage({ url }: { url: string }) {
   const [runBusy, setRunBusy] = useState(false);
   const [runResults, setRunResults] = useState<RunnerProgress[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [cookiesOpen, setCookiesOpen] = useState(false);
   const [mock, setMock] = useState<{ running: boolean; url: string | null; collectionId: string | null }>({ running: false, url: null, collectionId: null });
 
   useEffect(() => {
@@ -511,6 +514,9 @@ export function WorkbenchPage({ url }: { url: string }) {
             <button type="button" onClick={() => setRulesOpen(true)}>
               Match / replace
             </button>
+            <button type="button" onClick={() => setCookiesOpen(true)}>
+              Cookies
+            </button>
             <button
               type="button"
               disabled={!collection}
@@ -560,6 +566,7 @@ export function WorkbenchPage({ url }: { url: string }) {
                 <option value="http">HTTP</option>
                 <option value="websocket">WebSocket</option>
                 <option value="sse">SSE</option>
+                <option value="grpc">gRPC</option>
               </select>
               <select value={request.method} onChange={(event) => patchRequest({ method: event.target.value })}>
                 {WB_METHODS.map((method) => (
@@ -619,6 +626,7 @@ export function WorkbenchPage({ url }: { url: string }) {
             </div>
             {mock.running && mock.url ? <p className="wb-muted">Mock server: {mock.url}</p> : null}
             {(request.protocol === "websocket" || request.protocol === "sse") ? <StreamPane request={request} /> : null}
+            {request.protocol === "grpc" ? <GrpcPane request={request} onChange={patchRequest} /> : null}
             <div className="wb-split">
               <div className="wb-req">
                 <div className="wb-subtabs">
@@ -822,6 +830,27 @@ export function WorkbenchPage({ url }: { url: string }) {
               </div>
             ))}
             <div className="wb-modal-actions">
+              <label>
+                Template pack
+                <select
+                  defaultValue=""
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    event.currentTarget.value = "";
+                    if (!id) {
+                      return;
+                    }
+                    persist({ ...workspace, matchRules: [...(workspace.matchRules ?? []), ...rulesFromTemplate(id)] });
+                  }}
+                >
+                  <option value="">Add a template pack…</option>
+                  {MATCH_TEMPLATES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 onClick={() => {
@@ -842,6 +871,44 @@ export function WorkbenchPage({ url }: { url: string }) {
               <button type="button" onClick={() => setRulesOpen(false)}>
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+
+      {cookiesOpen ? (
+        <div className="wb-modal" role="dialog">
+          <div className="wb-modal-card">
+            <h2>Cookie jar</h2>
+            <p className="lead">These cookies are attached to matching Workbench requests and updated from Set-Cookie responses.</p>
+            {(workspace.cookies ?? []).map((cookie, index) => (
+              <div key={`${cookie.name}-${cookie.domain}-${index}`} className="wb-rule">
+                <input value={cookie.name} onChange={(event) => {
+                  const cookies = workspace.cookies.map((item, i) => i === index ? { ...item, name: event.target.value } : item);
+                  persist({ ...workspace, cookies });
+                }} placeholder="Name" />
+                <input value={cookie.value} onChange={(event) => {
+                  const cookies = workspace.cookies.map((item, i) => i === index ? { ...item, value: event.target.value } : item);
+                  persist({ ...workspace, cookies });
+                }} placeholder="Value" spellCheck={false} />
+                <input value={cookie.domain} onChange={(event) => {
+                  const cookies = workspace.cookies.map((item, i) => i === index ? { ...item, domain: event.target.value } : item);
+                  persist({ ...workspace, cookies });
+                }} placeholder="Domain" />
+                <input value={cookie.path} onChange={(event) => {
+                  const cookies = workspace.cookies.map((item, i) => i === index ? { ...item, path: event.target.value } : item);
+                  persist({ ...workspace, cookies });
+                }} placeholder="/" />
+                <button type="button" onClick={() => persist({ ...workspace, cookies: workspace.cookies.filter((_, i) => i !== index) })}>Delete</button>
+              </div>
+            ))}
+            <div className="wb-modal-actions">
+              <button type="button" onClick={() => persist({ ...workspace, cookies: [...workspace.cookies, { name: "", value: "", domain: "", path: "/" }] })}>
+                Add cookie
+              </button>
+              <button type="button" onClick={() => persist({ ...workspace, cookies: [] })}>Clear jar</button>
+              <button type="button" onClick={() => setCookiesOpen(false)}>Close</button>
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { WbRequest } from "../../../shared/workbench";
+import type { StreamSessionRecord } from "../../../shared/workbench/streamHistory";
 
 type Frame = { sessionId: string; id: string; at: number; dir: "in" | "out" | "sys"; text: string };
 
@@ -10,6 +11,10 @@ export function StreamPane({ request }: { request: WbRequest }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const kind = request.protocol === "sse" ? "sse" : "websocket";
+  const [history, setHistory] = useState<StreamSessionRecord[]>([]);
+  useEffect(() => {
+    void window.lurkwire.workbenchStreamHistory().then((data) => setHistory(data.sessions.filter((item) => item.kind === kind)));
+  }, [kind, sessionId, frames.length]);
 
   useEffect(() => {
     return window.lurkwire.onWorkbenchStream((frame) => {
@@ -92,6 +97,31 @@ export function StreamPane({ request }: { request: WbRequest }) {
           </div>
         ))}
       </div>
+      {history.length ? (
+        <div className="wb-history-mini">
+          <div className="wb-stream-actions">
+            <h3 className="wb-sub">Stream history</h3>
+            <button type="button" onClick={() => void window.lurkwire.workbenchStreamHistoryClear().then((data) => setHistory(data.sessions.filter((item) => item.kind === kind)))}>
+              Clear
+            </button>
+          </div>
+          <ul className="discover-hits">
+            {history.slice(0, 10).map((item) => (
+              <li key={item.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSessionId(item.id);
+                    setFrames(item.frames);
+                  }}
+                >
+                  {item.url} <span className="wb-muted">{item.frames.length} frames</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

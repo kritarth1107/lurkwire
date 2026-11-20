@@ -50,9 +50,13 @@ import type { RunnerSpec, WbOAuth2, WbRequest, WbWorkspace } from "../shared/wor
 import { pickBinary } from "./workbench/binary";
 import { mockStatus, startMock, stopMock } from "./workbench/mockServer";
 import { closeStream, openStream, sendStream, type StreamOpen } from "./workbench/stream";
+import { describeProto, runGrpcCall, reflectProto } from "./workbench/grpc";
+import { clearStreamHistory, getStreamSession, loadStreamHistory } from "./workbench/streamStore";
+import type { GrpcInvokeInput } from "./workbench/grpcClient";
 import { exchangeOauthCode, startOauthBrowserFlow } from "./workbench/oauth";
 import { parseRedirectCallback } from "../shared/workbench/oauthPkce";
 import { exportNotesMarkdown, loadNotes, saveNotes } from "./notesStore";
+import { runLocalSmugglingLab } from "./smugglingLab";
 import type { NotesStore } from "../shared/notes";
 
 app.setName(PRODUCT_NAME);
@@ -1186,6 +1190,45 @@ function registerIpc(): void {
     });
   });
   ipcMain.handle("lurkwire:workbenchStreamClose", (_event, id: string) => closeStream(id));
+  ipcMain.handle("lurkwire:workbenchStreamHistory", () => loadStreamHistory());
+  ipcMain.handle("lurkwire:workbenchStreamHistoryGet", (_event, id: string) => getStreamSession(id));
+  ipcMain.handle("lurkwire:workbenchStreamHistoryClear", () => clearStreamHistory());
+  ipcMain.handle("lurkwire:workbenchGrpcDescribe", (_event, proto: string) => describeProto(proto));
+  ipcMain.handle("lurkwire:workbenchGrpcReflect", async (_event, target: string) => {
+    const kill = await control.getKill();
+    if (kill.killed) {
+      throw new Error("The kill switch is on.");
+    }
+    return reflectProto(target);
+  });
+  ipcMain.handle("lurkwire:workbenchGrpcInvoke", (event, input: GrpcInvokeInput & { projectId?: string | null; requestId?: string }) => {
+    return runGrpcCall({ ...input, projectId: input.projectId ?? currentProjectId }, control, (frame) => {
+      if (!event.sender.isDestroyed()) {
+        event.sender.send("lurkwire:workbenchStream", {
+          sessionId: frame.sessionId,
+          id: `${Date.now()}`,
+          at: Date.now(),
+          dir: frame.dir,
+          text: frame.text,
+        });
+      }
+    });
+  });
+  ipcMain.handle("lurkwire:workbenchPickProto", async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options: Electron.OpenDialogOptions = {
+      title: "Open a .proto file",
+      properties: ["openFile"],
+      filters: [{ name: "Protocol Buffers", extensions: ["proto"] }],
+    };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    const file = result.filePaths[0];
+    if (result.canceled || !file) {
+      return null;
+    }
+    const { readFile } = await import("node:fs/promises");
+    return { fileName: file.split("/").pop() ?? "service.proto", text: await readFile(file, "utf8") };
+  });
   ipcMain.handle("lurkwire:workbenchOauthStart", (event, oauth: WbOAuth2) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const partition = currentProjectId ? `persist:proj-${currentProjectId}` : undefined;
@@ -1202,6 +1245,7 @@ function registerIpc(): void {
     const list = await control.listFindings({ project_id: projectId ?? currentProjectId ?? undefined, limit: 500 });
     return exportNotesMarkdown(list.items);
   });
+  ipcMain.handle("lurkwire:smugglingLabRun", () => runLocalSmugglingLab());
   ipcMain.handle("lurkwire:activeSend", (_event, req: RepeaterSendRequest) => {
     return control.sendWorkbench({ ...req, project_id: req.project_id ?? currentProjectId ?? undefined });
   });

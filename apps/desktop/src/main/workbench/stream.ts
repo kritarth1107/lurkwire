@@ -1,6 +1,7 @@
 import type { ControlClient } from "../control";
 import { assertActiveAllowed } from "../../shared/scope";
 import { newId } from "../../shared/workbench";
+import { appendStreamFrame, endStreamRecord, startStreamRecord } from "./streamStore";
 
 export type StreamKind = "websocket" | "sse";
 
@@ -50,6 +51,10 @@ async function guard(control: ControlClient, url: string, projectId?: string | n
 
 function emit(push: StreamEmitter, sessionId: string, dir: StreamFrame["dir"], text: string): StreamFrame {
   const frame: StreamFrame = { sessionId, id: newId(), at: Date.now(), dir, text };
+  appendStreamFrame(sessionId, frame);
+  if (dir === "sys" && /^Closed|Stream ended/.test(text)) {
+    endStreamRecord(sessionId);
+  }
   push(frame);
   return frame;
 }
@@ -69,6 +74,7 @@ export async function openStream(input: StreamOpen, control: ControlClient, push
   const id = newId();
   const session: Session = { id, kind: input.kind, url: input.url };
   sessions.set(id, session);
+  startStreamRecord({ id, kind: input.kind, url: input.url });
   if (input.kind === "websocket") {
     const protocols = input.protocols?.split(",").map((item) => item.trim()).filter(Boolean);
     const ws = protocols && protocols.length ? new WebSocket(input.url, protocols) : new WebSocket(input.url);
@@ -146,6 +152,7 @@ export function closeStream(id: string): void {
   }
   session.abort?.abort();
   session.ws?.close();
+  endStreamRecord(id);
   sessions.delete(id);
 }
 
