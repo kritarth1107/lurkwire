@@ -10,6 +10,7 @@ import type { PanelManager } from "./panels";
 import { parseRunnerData } from "../shared/workbench";
 import { loadWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
 import { runLocalSmugglingLab } from "./smugglingLab";
+import { analyzeCors, CORS_PROBE_ORIGIN, corsProbeHeaders } from "../shared/corsProbe";
 import { invokeGrpc } from "./workbench/grpcClient";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
@@ -556,7 +557,21 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
   if (workbenchFlows.items.length < 3 || workbenchFlows.items.some((item) => item.source !== "workbench")) {
     throw new Error(`expected workbench history entries, got ${workbenchFlows.items.length}`);
   }
-
+  const corsFlow = await hooks.control.sendWorkbench({
+    project_id: projectId ?? undefined,
+    method: "OPTIONS",
+    url: "https://httpbin.org/get",
+    headers: corsProbeHeaders("GET"),
+    source: "scanner",
+  });
+  const cors = analyzeCors(corsFlow.resp_headers);
+  console.log(`SMOKE cors status=${corsFlow.status} acao=${cors.allowOrigin ?? ""} wildcard=${cors.wildcard}`);
+  if (corsFlow.status && corsFlow.status >= 400) {
+    throw new Error(`CORS preflight to httpbin.org failed: ${corsFlow.status}`);
+  }
+  if (cors.allowOrigin !== "*" && cors.allowOrigin !== CORS_PROBE_ORIGIN) {
+    throw new Error(`unexpected CORS policy from httpbin.org: ${cors.summary}`);
+  }
 
   const lab = await runLocalSmugglingLab();
   console.log(`SMOKE smuggling lab port=${lab.port} smuggled=${lab.smuggled}`);

@@ -6,6 +6,7 @@ import { buildCsrfPoc } from "../../shared/csrf";
 import { buildClickjackPoc } from "../../shared/clickjack";
 import { base64ToBytes, fromBytes } from "../../shared/codec";
 import { flowToCurl } from "../../shared/http";
+import { analyzeCors, corsProbeHeaders } from "../../shared/corsProbe";
 import { analyzeSecurityHeaders, formatSecurityReport } from "../../shared/securityHeaders";
 
 export type FlowSendHandlers = {
@@ -67,6 +68,22 @@ export async function copyFlowCurl(id: string): Promise<void> {
     /* preview is enough */
   }
   await window.lurkwire.copyText(flowToCurl(flow, body || undefined));
+}
+
+
+export async function retestCors(id: string): Promise<string> {
+  const flow = await window.lurkwire.getFlow(id);
+  if (!flow.in_scope) {
+    throw new Error("CORS retest only runs against in-scope hosts.");
+  }
+  const sent = await window.lurkwire.activeSend({
+    project_id: flow.project_id,
+    method: "OPTIONS",
+    url: flow.url,
+    headers: corsProbeHeaders(flow.method),
+    source: "scanner",
+  });
+  return analyzeCors(sent.resp_headers).summary;
 }
 
 export async function addFlowHostToScope(id: string): Promise<void> {
@@ -188,6 +205,9 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void addFlowHostToScope(menu.flow.id)}>
         Add host to scope
+      </button>
+      <button type="button" onClick={() => void retestCors(menu.flow.id).then((summary) => window.alert(summary))}>
+        Retest CORS
       </button>
     </div>
   );
