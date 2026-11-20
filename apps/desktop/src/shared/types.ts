@@ -336,3 +336,44 @@ export type AuditEntry = {
 export type KillState = {
   killed: boolean;
 };
+
+export type AttackType = "sniper" | "pitchfork" | "battering_ram";
+
+export type IntruderJobStatus = "running" | "done" | "stopped" | "error";
+
+export type IntruderStart = {
+  project_id?: string;
+  method: string;
+  url: string;
+  headers: HeaderPair[];
+  body?: string;
+  body_base64?: boolean;
+  attack: AttackType;
+  payloads: string[][];
+  grep?: string;
+  max_requests?: number;
+};
+
+export type IntruderResultRow = {
+  index: number;
+  position: number | null;
+  payload: string;
+  status: number | null;
+  length: number;
+  duration_ms: number;
+  grep_hit: boolean;
+  flow_id: string | null;
+  error: string | null;
+};
+
+export type IntruderJob = {
+  id: string;
+  status: IntruderJobStatus;
+  attack: AttackType;
+  total: number;
+  finished: number;
+  results: IntruderResultRow[];
+  error: string | null;
+  started_at: number;
+};
+

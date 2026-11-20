@@ -425,10 +425,24 @@ fn apply_url_override(
 }
 
 /// Send a request on behalf of Repeater and wait until the flow is stored.
+pub struct ActiveSend {
+    pub detail: crate::types::FlowDetail,
+    pub resp_body: Vec<u8>,
+}
+
 pub async fn send_repeater(
     state: &AppState,
     req: RepeaterSendRequest,
 ) -> Result<crate::types::FlowDetail> {
+    Ok(send_active(state, req, "repeater", None).await?.detail)
+}
+
+pub async fn send_active(
+    state: &AppState,
+    req: RepeaterSendRequest,
+    source: &str,
+    permit: Option<crate::guardrails::RatePermit>,
+) -> Result<ActiveSend> {
     let url = url::Url::parse(&req.url).context("invalid repeater URL")?;
     let scheme = url.scheme().to_string();
     if scheme != "http" && scheme != "https" {
@@ -453,27 +467,32 @@ pub async fn send_repeater(
         .unwrap_or_else(|| state.default_project_id.clone());
 
     let rules = state.store.list_scope_rules(&project_id)?;
-    let permit = crate::guardrails::preflight_active(
-        state.kill.is_on(),
-        &rules,
-        &state.rate,
-        &host,
-        port,
-        &path,
-    );
-    if let Err(err) = &permit {
-        let _ = state.store.append_audit(
-            "repeater",
-            "tool.denied",
-            Some(&project_id),
-            serde_json::json!({
-                "host": host,
-                "url": req.url,
-                "reason": err.to_string(),
-            }),
-        );
-    }
-    let _permit = permit.map_err(anyhow::Error::from)?;
+    let _permit = match permit {
+        Some(existing) => existing,
+        None => {
+            let acquired = crate::guardrails::preflight_active(
+                state.kill.is_on(),
+                &rules,
+                &state.rate,
+                &host,
+                port,
+                &path,
+            );
+            if let Err(err) = &acquired {
+                let _ = state.store.append_audit(
+                    source,
+                    "tool.denied",
+                    Some(&project_id),
+                    serde_json::json!({
+                        "host": host,
+                        "url": req.url,
+                        "reason": err.to_string(),
+                    }),
+                );
+            }
+            acquired.map_err(anyhow::Error::from)?
+        }
+    };
 
     let upstream_uri = crate::types::url_from_parts(&scheme, &host, port, &path, &query);
     let mut builder = Request::builder().method(method.clone()).uri(&upstream_uri);
@@ -527,7 +546,7 @@ pub async fn send_repeater(
         req_body: req_stored.0,
         resp_body: resp_stored.0,
         duration_ms: Some(started.elapsed().as_millis() as u64),
-        source: "repeater".into(),
+        source: source.to_string(),
         truncated: req_stored.1 || resp_stored.1,
         in_scope: crate::scope::is_in_scope(&rules, &host, port, &path),
     };
@@ -536,16 +555,22 @@ pub async fn send_repeater(
         "kind": "flow",
         "flow": summary,
     }));
-    let _ = state.store.append_audit(
-        "repeater",
-        "tool.send",
-        Some(&summary.project_id),
-        serde_json::json!({ "flow_id": summary.id, "host": summary.host, "url": summary.url }),
-    );
-    state
+    if source == "repeater" {
+        let _ = state.store.append_audit(
+            "repeater",
+            "tool.send",
+            Some(&summary.project_id),
+            serde_json::json!({ "flow_id": summary.id, "host": summary.host, "url": summary.url }),
+        );
+    }
+    let detail = state
         .store
         .get_flow(&summary.id)?
-        .context("stored repeater flow missing")
+        .context("stored active-tool flow missing")?;
+    Ok(ActiveSend {
+        detail,
+        resp_body: resp_bytes.to_vec(),
+    })
 }
 
 fn decode_body(req: &RepeaterSendRequest) -> Result<Vec<u8>> {

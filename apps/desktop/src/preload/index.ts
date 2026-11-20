@@ -13,6 +13,7 @@ import type {
   NewScopeRule,
   PanelContext,
   PanelOpenRequest,
+  IntruderStart,
   RepeaterSendRequest,
   ToolId,
 } from "../shared/types";
@@ -64,6 +65,10 @@ const api = {
   setLlmKey: (key: string): Promise<boolean> => ipcRenderer.invoke("lurkwire:setLlmKey", key),
   clearLlmKey: () => ipcRenderer.invoke("lurkwire:clearLlmKey"),
   llmComplete: (request: LlmRequest) => ipcRenderer.invoke("lurkwire:llmComplete", request),
+  startIntruder: (req: IntruderStart) => ipcRenderer.invoke("lurkwire:startIntruder", req),
+  getIntruder: (id: string) => ipcRenderer.invoke("lurkwire:getIntruder", id),
+  listIntruder: () => ipcRenderer.invoke("lurkwire:listIntruder"),
+  stopIntruder: (id: string) => ipcRenderer.invoke("lurkwire:stopIntruder", id),
   windowMinimize: () => ipcRenderer.invoke("lurkwire:windowMinimize"),
   windowToggleMaximize: () => ipcRenderer.invoke("lurkwire:windowToggleMaximize"),
   windowClose: () => ipcRenderer.invoke("lurkwire:windowClose"),

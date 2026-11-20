@@ -3,6 +3,7 @@ pub mod config;
 pub mod control;
 pub mod guardrails;
 pub mod intercept;
+pub mod intruder;
 pub mod proxy;
 pub mod scope;
 pub mod store;
@@ -31,6 +32,7 @@ pub struct AppState {
     pub client: HttpsClient,
     pub events: broadcast::Sender<serde_json::Value>,
     pub intercept: InterceptEngine,
+    pub intruder: crate::intruder::IntruderEngine,
     pub kill: std::sync::Arc<KillSwitch>,
     pub rate: std::sync::Arc<RateLimiter>,
     pub default_project_id: String,
@@ -88,6 +90,7 @@ impl RunningProxy {
             client,
             events,
             intercept: InterceptEngine::new(),
+            intruder: crate::intruder::IntruderEngine::new(),
             kill: std::sync::Arc::new(KillSwitch::default()),
             rate: RateLimiter::production(),
             default_project_id: default_project.id.clone(),

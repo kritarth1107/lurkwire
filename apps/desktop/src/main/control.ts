@@ -10,6 +10,8 @@ import type {
   NewScopeRule,
   PausedItem,
   Project,
+  IntruderJob,
+  IntruderStart,
   RepeaterSendRequest,
   ScopeRule,
 } from "../shared/types";
@@ -107,6 +109,22 @@ export class ControlClient {
   listAudit(projectId?: string): Promise<AuditEntry[]> {
     const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
     return this.json("GET", `/audit${qs}`);
+  }
+
+  startIntruder(req: IntruderStart): Promise<IntruderJob> {
+    return this.json("POST", "/intruder", req);
+  }
+
+  getIntruder(id: string): Promise<IntruderJob> {
+    return this.json("GET", `/intruder/${encodeURIComponent(id)}`);
+  }
+
+  listIntruder(): Promise<IntruderJob[]> {
+    return this.json("GET", "/intruder");
+  }
+
+  stopIntruder(id: string): Promise<IntruderJob> {
+    return this.json("POST", `/intruder/${encodeURIComponent(id)}/stop`);
   }
 
   private url(path: string): string {

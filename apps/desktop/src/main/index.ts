@@ -8,6 +8,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  IntruderStart,
   LlmRequest,
   NewScopeRule,
   PanelOpenRequest,
@@ -605,6 +606,15 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:llmComplete", async (_event, request: LlmRequest) => {
     return completeLlm(prefs.llm, request, (id) => control.getFlow(id));
   });
+  ipcMain.handle("lurkwire:startIntruder", (_event, req: IntruderStart) =>
+    control.startIntruder({
+      ...req,
+      project_id: req.project_id ?? currentProjectId ?? undefined,
+    }),
+  );
+  ipcMain.handle("lurkwire:getIntruder", (_event, id: string) => control.getIntruder(id));
+  ipcMain.handle("lurkwire:listIntruder", () => control.listIntruder());
+  ipcMain.handle("lurkwire:stopIntruder", (_event, id: string) => control.stopIntruder(id));
   ipcMain.handle("lurkwire:windowMinimize", () => mainWindow?.minimize());
   ipcMain.handle("lurkwire:windowToggleMaximize", () => {
     if (!mainWindow) {

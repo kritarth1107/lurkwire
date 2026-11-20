@@ -15,6 +15,7 @@ import { HistoryView } from "../HistoryView";
 import { InterceptView } from "../InterceptView";
 import { RepeaterView } from "../RepeaterView";
 import { AiView } from "./AiView";
+import { IntruderView } from "../IntruderView";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "tabs", label: "Vertical tabs", icon: Columns2 },
@@ -109,6 +110,14 @@ export function Sidebar({
                     void window.lurkwire.setTool("repeater");
                   }}
                 />
+              ) : panel === "intruder" ? (
+                <IntruderView
+                  projectId={state.currentProjectId}
+                  onSendToRepeater={(flow) => {
+                    onRepeaterDraft(flow);
+                    void window.lurkwire.setTool("repeater");
+                  }}
+                />
               ) : (
                 <ComingSoon panel={panel} />
               )}
@@ -175,14 +184,6 @@ function VerticalTabs({ state }: { state: AppSnapshot }) {
 
 export function ComingSoon({ panel }: { panel: string }) {
   const copy: Record<string, { title: string; body: string }> = {
-    ai: {
-      title: "AI panel",
-      body: "Explain, suggest, and draft requests into Repeater. A human always sends. This arrives in the LLM module.",
-    },
-    intruder: {
-      title: "Intruder-lite",
-      body: "Payload positions, sniper and pitchfork attacks, and wordlists will live here.",
-    },
     recon: {
       title: "Recon",
       body: "crt.sh, DNS, RDAP/WHOIS, and Wayback lookups will appear in this panel.",

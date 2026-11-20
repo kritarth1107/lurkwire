@@ -16,6 +16,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::guardrails::GuardError;
 use crate::intercept::{Decision, ForwardEdit, InterceptConfig, PausedItem};
+use crate::intruder::{self, IntruderJob, IntruderStart};
 use crate::proxy::send_repeater;
 use crate::scope::{NewScopeRule, ScopeKind, ScopeRule};
 use crate::store::AuditEntry;
@@ -49,6 +50,9 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/scope", get(list_scope).post(add_scope).put(replace_scope))
         .route("/scope/{id}", delete(delete_scope))
         .route("/audit", get(list_audit))
+        .route("/intruder", get(list_intruder).post(start_intruder))
+        .route("/intruder/{id}", get(get_intruder))
+        .route("/intruder/{id}/stop", post(stop_intruder))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state)
 }
@@ -286,6 +290,41 @@ fn tokens_equal(a: &str, b: &str) -> bool {
         return false;
     }
     a.as_bytes().ct_eq(b.as_bytes()).into()
+}
+
+
+async fn start_intruder(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<IntruderStart>,
+) -> Result<Json<IntruderJob>, ApiError> {
+    let job = intruder::start_job(state, body)?;
+    Ok(Json(job))
+}
+
+async fn list_intruder(State(state): State<Arc<AppState>>) -> Json<Vec<IntruderJob>> {
+    Json(state.intruder.list())
+}
+
+async fn get_intruder(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<IntruderJob>, ApiError> {
+    state
+        .intruder
+        .get(&id)
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("intruder job not found"))
+}
+
+async fn stop_intruder(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<IntruderJob>, ApiError> {
+    state
+        .intruder
+        .stop(&id)
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("intruder job not found"))
 }
 
 pub struct ApiError {

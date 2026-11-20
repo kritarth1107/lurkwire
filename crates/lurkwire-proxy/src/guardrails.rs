@@ -90,6 +90,26 @@ impl RateLimiter {
             host: host.to_ascii_lowercase(),
         })
     }
+
+    /// Wait until a token is available, or the kill/cancel flag trips.
+    pub async fn acquire(
+        self: &Arc<Self>,
+        host: &str,
+        stop: impl Fn() -> bool,
+    ) -> Result<RatePermit, GuardError> {
+        loop {
+            if stop() {
+                return Err(GuardError::Killed);
+            }
+            match self.try_acquire(host) {
+                Ok(permit) => return Ok(permit),
+                Err(GuardError::RateLimited) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+                Err(err) => return Err(err),
+            }
+        }
+    }
 }
 
 impl Drop for RatePermit {
