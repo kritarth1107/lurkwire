@@ -8,7 +8,7 @@ Pre-alpha, under active development. Ubuntu/Linux first, then macOS and Windows.
 
 ## What it is
 
-Lurkwire is an AI-native security browser for developers, pentesters, and bug bounty hunters. It is a daily-driver Chromium browser with a built-in intercepting proxy, Repeater, fuzzer, and scanner, plus your own or local LLMs. Capture works with zero setup because we own the browser — and the AI drafts while a human always sends.
+Lurkwire is an AI-native security browser for developers, pentesters, and bug bounty hunters. It is a daily-driver Chromium browser with a built-in intercepting proxy, Repeater, fuzzer, and scanner, plus your own or local LLMs. Capture works with zero setup because the proxy is built into the browser — and the AI drafts while a human always sends.
 
 ## Planned v0.1 features
 
@@ -38,7 +38,7 @@ Lurkwire is an AI-native security browser for developers, pentesters, and bug bo
 ```mermaid
 flowchart LR
   Shell[Electron / Chromium shell] --> Proxy[Rust proxy sidecar]
-  Proxy --> Targets[In-scope targets]
+  Proxy --> Targets[Targets]
   Proxy --> Store[(SQLite traffic store)]
   Shell --> Store
   Shell --> LLM[LLM layer]
@@ -50,9 +50,9 @@ flowchart LR
 
 Linux first, then macOS and Windows.
 
-## Responsible use
+## Disclaimer
 
-Lurkwire is built for authorized security testing: systems you own, systems you have written permission to test, and targets that are in scope for a bug bounty or vulnerability disclosure program you're participating in. Respect each program's rules, scope and rate limits. Lurkwire's scope allowlist makes it easy to load a program's in-scope assets and keep active testing inside them.
+Lurkwire is provided "as is", without warranty of any kind. You are solely responsible for how you use it and for complying with all applicable laws and the terms of any service or program you interact with. The authors and contributors accept no liability for any misuse, damage, data loss or legal consequences arising from the use of this software.
 
 ## License
 
