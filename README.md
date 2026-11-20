@@ -8,7 +8,7 @@ Pre-alpha, under active development. Ubuntu/Linux first, then macOS and Windows.
 
 ## What it is
 
-Lurkwire is an AI-native security browser for developers and pentesters. It is a daily-driver Chromium browser with a built-in intercepting proxy, Repeater, fuzzer, and scanner, plus your own or local LLMs. Capture works with zero setup because we own the browser — and the AI drafts while a human always sends.
+Lurkwire is an AI-native security browser for developers, pentesters, and bug bounty hunters. It is a daily-driver Chromium browser with a built-in intercepting proxy, Repeater, fuzzer, and scanner, plus your own or local LLMs. Capture works with zero setup because we own the browser — and the AI drafts while a human always sends.
 
 ## Planned v0.1 features
 
@@ -52,7 +52,7 @@ Linux first, then macOS and Windows.
 
 ## Responsible use
 
-Lurkwire is only for systems you own or are explicitly authorized to test. Do not use it against systems without permission.
+Lurkwire is built for authorized security testing: systems you own, systems you have written permission to test, and targets that are in scope for a bug bounty or vulnerability disclosure program you're participating in. Respect each program's rules, scope and rate limits. Lurkwire's scope allowlist makes it easy to load a program's in-scope assets and keep active testing inside them.
 
 ## License
 
