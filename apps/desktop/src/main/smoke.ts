@@ -1,6 +1,7 @@
 import { app, BrowserWindow, type NativeImage } from "electron";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync, unlinkSync } from "node:fs";
+import { mkdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ControlClient } from "./control";
 import type { TabManager } from "./tabs";
@@ -8,6 +9,10 @@ import type { AppPrefs, ToolId } from "../shared/types";
 import type { PanelManager } from "./panels";
 import { parseRunnerData } from "../shared/workbench";
 import { loadWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
+import { runLocalSmugglingLab } from "./smugglingLab";
+import { invokeGrpc } from "./workbench/grpcClient";
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -552,6 +557,57 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
     throw new Error(`expected workbench history entries, got ${workbenchFlows.items.length}`);
   }
 
+
+  const lab = await runLocalSmugglingLab();
+  console.log(`SMOKE smuggling lab port=${lab.port} smuggled=${lab.smuggled}`);
+  if (!lab.smuggled) {
+    throw new Error(`local smuggling lab did not confirm the CL.TE leftover: ${lab.detail}`);
+  }
+  const proto = `
+syntax = "proto3";
+package helloworld;
+service Greeter {
+  rpc SayHello (HelloRequest) returns (HelloReply);
+}
+message HelloRequest { string name = 1; }
+message HelloReply { string message = 1; }
+`;
+  const tmp = mkdtempSync(join(tmpdir(), "lurkwire-smoke-grpc-"));
+  writeFileSync(join(tmp, "hello.proto"), proto);
+  const packed = grpc.loadPackageDefinition(protoLoader.loadSync(join(tmp, "hello.proto"), { keepCase: true, longs: String, enums: String, defaults: true }));
+  const Greeter = (packed.helloworld as { Greeter: grpc.ServiceClientConstructor }).Greeter;
+  const grpcServer = new grpc.Server();
+  grpcServer.addService(Greeter.service, {
+    SayHello: (call: grpc.ServerUnaryCall<{ name: string }, { message: string }>, cb: grpc.sendUnaryData<{ message: string }>) => {
+      cb(null, { message: `hello ${call.request.name}` });
+    },
+  });
+  const grpcTarget = await new Promise<string>((resolve, reject) => {
+    grpcServer.bindAsync("127.0.0.1:0", grpc.ServerCredentials.createInsecure(), (error, port) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(`127.0.0.1:${port}`);
+    });
+  });
+  if (projectId) {
+    await hooks.control.addScope({ project_id: projectId, kind: "include", host: "127.0.0.1", enabled: true });
+  }
+  const grpcResult = await invokeGrpc({
+    target: grpcTarget,
+    proto,
+    service: "helloworld.Greeter",
+    method: "SayHello",
+    body: JSON.stringify({ name: "smoke" }),
+  });
+  console.log(`SMOKE grpc ${grpcResult.error ?? "ok"} events=${grpcResult.events.length}`);
+  if (grpcResult.error || !grpcResult.events.some((item) => item.text.includes("hello smoke"))) {
+    throw new Error(`gRPC smoke failed: ${grpcResult.error ?? "missing greeting"}`);
+  }
+  await new Promise<void>((resolve) => grpcServer.tryShutdown(() => resolve()));
+  rmSync(tmp, { recursive: true, force: true });
+
   hooks.setPrefs({ theme: "light", sidebarOpen: false });
   await sleep(700);
   paths.push(await captureWindow(window, out, "main-light.png", tabs));
@@ -669,6 +725,15 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
   })()`);
   await sleep(500);
   paths.push(await captureWindow(window, out, "workbench-ai.png", hooks.tabs()));
+  await window.webContents.executeJavaScript(`(() => {
+    const sel = document.querySelector('select[aria-label="Protocol"]');
+    if (sel) {
+      sel.value = "grpc";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  })()`);
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "workbench-grpc.png", hooks.tabs()));
 
   window.webContents.send("lurkwire:command-palette");
   await sleep(400);
@@ -695,6 +760,14 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
   hooks.selectTool("decode");
   await sleep(600);
   paths.push(await captureWindow(window, out, "sidebar-decode.png", hooks.tabs()));
+  hooks.selectTool("scanner");
+  await sleep(400);
+  await window.webContents.executeJavaScript(`(() => {
+    const btn = Array.from(document.querySelectorAll("button")).find((el) => (el.textContent || "").includes("Local smuggling lab"));
+    btn?.click();
+  })()`);
+  await sleep(800);
+  paths.push(await captureWindow(window, out, "sidebar-scanner-lab.png", hooks.tabs()));
 
   hooks.setPrefs({ sidebarOpen: false });
   const delayNav = (async () => {
