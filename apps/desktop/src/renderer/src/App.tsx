@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { FlowDetail } from "../../shared/types";
-import { isNewTabUrl, isSettingsUrl } from "../../shared/url";
+import { isInternalUrl, parseInternalPage } from "../../shared/url";
 import { BookmarksBar } from "./chrome/BookmarksBar";
 import { FindBar } from "./chrome/FindBar";
 import { NavBar } from "./chrome/NavBar";
-import { NewTabPage } from "./chrome/NewTabPage";
-import { SettingsPage } from "./chrome/SettingsPage";
+import { InternalPage } from "./chrome/InternalPage";
 import { Sidebar } from "./chrome/Sidebar";
 import { TabStrip } from "./chrome/TabStrip";
 import { useAppState } from "./useAppState";
@@ -25,12 +24,8 @@ export function App() {
   }, [state.theme]);
 
   useEffect(() => {
-    if (state.chromePage === "settings") {
-      setOmnibox("lurkwire://settings");
-      return;
-    }
-    setOmnibox(activeTab?.url ?? "");
-  }, [activeTab?.id, activeTab?.url, state.chromePage]);
+    setOmnibox(activeTab?.url ?? "lurkwire://newtab");
+  }, [activeTab?.id, activeTab?.url]);
 
   useEffect(() => {
     const offFocus = window.lurkwire.onFocusUrl(() => urlRef.current?.focus());
@@ -43,8 +38,9 @@ export function App() {
     };
   }, []);
 
-  const showSettings = state.chromePage === "settings" || isSettingsUrl(activeTab?.url ?? "");
-  const showNewTab = !showSettings && isNewTabUrl(activeTab?.url ?? "");
+  const internalUrl = activeTab?.url ?? "";
+  const showInternal = isInternalUrl(internalUrl);
+  const internalPage = parseInternalPage(internalUrl);
 
   useEffect(() => {
     const node = stageRef.current;
@@ -73,8 +69,8 @@ export function App() {
     state.prefs.sidebarWidth,
     state.prefs.bookmarksBar,
     findOpen,
-    showSettings,
-    showNewTab,
+    showInternal,
+    internalPage,
   ]);
 
   return (
@@ -91,9 +87,8 @@ export function App() {
         />
         <div className="content-col">
           {state.error ? <div className="banner">{state.error}</div> : null}
-          {showSettings ? <SettingsPage state={state} /> : null}
-          {showNewTab ? <NewTabPage product={state.product} /> : null}
-          <main className="stage" ref={stageRef} hidden={showSettings || showNewTab} />
+          {showInternal ? <InternalPage state={state} url={internalUrl} /> : null}
+          <main className="stage" ref={stageRef} hidden={showInternal} />
           <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
         </div>
       </div>

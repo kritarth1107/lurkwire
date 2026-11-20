@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { isNewTabUrl, isSettingsUrl, normalizeUrl } from "./url";
+import {
+  canonicalizeInternalUrl,
+  isInternalUrl,
+  isNewTabUrl,
+  isSettingsUrl,
+  normalizeUrl,
+  parseInternalPage,
+  titleForInternalPage,
+} from "./url";
 
 describe("normalizeUrl", () => {
   it("adds https when the scheme is missing", () => {
@@ -13,6 +21,10 @@ describe("normalizeUrl", () => {
   it("trims whitespace and ignores blanks", () => {
     expect(normalizeUrl("  ")).toBe("");
   });
+
+  it("canonicalizes about:preferences to lurkwire://settings", () => {
+    expect(normalizeUrl("about:preferences")).toBe("lurkwire://settings");
+  });
 });
 
 describe("internal pages", () => {
@@ -23,9 +35,27 @@ describe("internal pages", () => {
     expect(isNewTabUrl("https://example.com")).toBe(false);
   });
 
-  it("recognizes settings", () => {
+  it("recognizes settings aliases", () => {
     expect(isSettingsUrl("lurkwire://settings")).toBe(true);
     expect(isSettingsUrl("about:preferences")).toBe(true);
     expect(isSettingsUrl("https://example.com")).toBe(false);
+  });
+
+  it("parses every lurkwire:// host", () => {
+    expect(parseInternalPage("lurkwire://downloads")).toBe("downloads");
+    expect(parseInternalPage("lurkwire://history#today")).toBe("history");
+    expect(parseInternalPage("lurkwire://bookmarks/")).toBe("bookmarks");
+    expect(parseInternalPage("lurkwire://extensions")).toBe("extensions");
+    expect(parseInternalPage("lurkwire://about")).toBe("about");
+    expect(parseInternalPage("chrome://extensions")).toBe("extensions");
+    expect(parseInternalPage("lurkwire://unknown")).toBeNull();
+  });
+
+  it("canonicalizes aliases and keeps settings hashes", () => {
+    expect(canonicalizeInternalUrl("about:downloads")).toBe("lurkwire://downloads");
+    expect(canonicalizeInternalUrl("lurkwire://settings#privacy")).toBe("lurkwire://settings#privacy");
+    expect(titleForInternalPage("lurkwire://extensions")).toBe("Extensions");
+    expect(isInternalUrl("lurkwire://about")).toBe(true);
+    expect(isInternalUrl("https://example.com")).toBe(false);
   });
 });

@@ -237,6 +237,14 @@ export type Bookmark = {
   createdAt: number;
 };
 
+export type Visit = {
+  id: string;
+  url: string;
+  title: string;
+  visitedAt: number;
+  count: number;
+};
+
 export type DownloadInfo = {
   id: string;
   filename: string;

@@ -24,7 +24,7 @@ Build order for v0.1. Checked items are on `main`.
 
 - [x] Remove the vertical tabs feature (keep the tool sidebar)
 - [x] Anchor popovers next to the button that opened them
-- [ ] Internal pages as tabs at lurkwire:// URLs
+- [x] Internal pages as tabs at lurkwire:// URLs
 - [ ] Standard browser shortcuts, multi-window, tab-bar interactions
 - [ ] Chrome-style app menu with shortcuts and submenus
 - [ ] Native per-tab Chrome DevTools (docked / undocked / inspect element)

@@ -17,6 +17,7 @@ import type {
   IntruderStart,
   RepeaterSendRequest,
   ToolId,
+  Visit,
 } from "../shared/types";
 import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
@@ -73,6 +74,9 @@ const api = {
   stopIntruder: (id: string) => ipcRenderer.invoke("lurkwire:stopIntruder", id),
   listFindings: (query: FindingQuery) => ipcRenderer.invoke("lurkwire:listFindings", query),
   getFinding: (id: string) => ipcRenderer.invoke("lurkwire:getFinding", id),
+  listVisits: (query?: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:listVisits", query),
+  deleteVisit: (id: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:deleteVisit", id),
+  clearVisits: () => ipcRenderer.invoke("lurkwire:clearVisits"),
   runRecon: (request: ReconRequest): Promise<ReconResult> =>
     ipcRenderer.invoke("lurkwire:runRecon", request),
   hasShodanKey: (): Promise<boolean> => ipcRenderer.invoke("lurkwire:hasShodanKey"),

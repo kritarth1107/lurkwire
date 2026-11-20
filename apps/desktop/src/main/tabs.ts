@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { BrowserWindow, clipboard, WebContentsView, session } from "electron";
 import type { Bounds, ContextMenuPayload, FindResult, TabInfo } from "../shared/types";
-import { isSettingsUrl, normalizeUrl } from "../shared/url";
+import {
+  canonicalizeInternalUrl,
+  isInternalUrl,
+  normalizeUrl,
+  titleForInternalPage,
+} from "../shared/url";
+import { recordVisit } from "./visits";
 import { configureProjectSession } from "./sessions";
 
 type Tab = {
@@ -94,9 +100,7 @@ export class TabManager {
     }
     this.window.contentView.addChildView(view);
     this.show(id);
-    if (url) {
-      await this.navigate(id, url);
-    }
+    await this.navigate(id, url || "lurkwire://newtab");
     this.layout();
     this.onChange();
     return id;
@@ -225,26 +229,19 @@ export class TabManager {
     if (!tab) {
       return "external";
     }
-    const url = normalizeUrl(input);
-    if (!url) {
-      return "external";
-    }
-    if (isInternalPage(url)) {
-      tab.url = url;
-      tab.title = titleForInternal(url);
-      tab.loading = false;
-      tab.favicon = null;
-      tab.canGoBack = tab.view.webContents.canGoBack();
-      tab.canGoForward = tab.view.webContents.canGoForward();
-      this.onChange();
-      return "internal";
-    }
+    const raw = normalizeUrl(input) || "lurkwire://newtab";
+    const url = canonicalizeInternalUrl(raw) ?? raw;
+    const internal = isInternalUrl(url);
     await this.prepareSession(tab.projectId);
     tab.url = url;
-    tab.loading = true;
+    tab.title = internal ? titleForInternalPage(url) : tab.title || url;
+    tab.loading = !internal;
+    if (internal) {
+      tab.favicon = null;
+    }
     this.onChange();
     await tab.view.webContents.loadURL(url);
-    return "external";
+    return internal ? "internal" : "external";
   }
 
   back(): void {
@@ -377,7 +374,11 @@ export class TabManager {
       return { action: "deny" };
     });
     wc.on("page-title-updated", (_event, title) => {
-      tab.title = title || tab.url || "New Tab";
+      if (isInternalUrl(tab.url)) {
+        tab.title = titleForInternalPage(tab.url);
+      } else {
+        tab.title = title || tab.url || "New Tab";
+      }
       this.onChange();
     });
     wc.on("page-favicon-updated", (_event, favicons) => {
@@ -395,16 +396,10 @@ export class TabManager {
       this.onChange();
     });
     wc.on("did-navigate", (_event, url) => {
-      tab.url = url;
-      tab.canGoBack = wc.canGoBack();
-      tab.canGoForward = wc.canGoForward();
-      this.onChange();
+      this.applyNavigated(tab, url);
     });
     wc.on("did-navigate-in-page", (_event, url) => {
-      tab.url = url;
-      tab.canGoBack = wc.canGoBack();
-      tab.canGoForward = wc.canGoForward();
-      this.onChange();
+      this.applyNavigated(tab, url, { inPage: true });
     });
     wc.on("did-fail-load", (_event, code, description, url, isMainFrame) => {
       if (!isMainFrame) {
@@ -448,6 +443,22 @@ export class TabManager {
     });
   }
 
+  private applyNavigated(tab: Tab, url: string, opts?: { inPage?: boolean }): void {
+    const canonical = canonicalizeInternalUrl(url) ?? url;
+    tab.url = canonical;
+    if (isInternalUrl(canonical)) {
+      tab.title = titleForInternalPage(canonical);
+      tab.favicon = null;
+      tab.loading = false;
+    }
+    tab.canGoBack = tab.view.webContents.canGoBack();
+    tab.canGoForward = tab.view.webContents.canGoForward();
+    if (!opts?.inPage && (canonical.startsWith("http://") || canonical.startsWith("https://"))) {
+      recordVisit(canonical, tab.title);
+    }
+    this.onChange();
+  }
+
   private async prepareSession(projectId: string): Promise<void> {
     const proxy = this.getProxy();
     if (!proxy) {
@@ -462,22 +473,6 @@ export class TabManager {
     this.onSession(ses);
     this.configured.add(key);
   }
-}
-
-function isInternalPage(url: string): boolean {
-  return (
-    url.startsWith("lurkwire://") ||
-    url === "about:preferences" ||
-    url === "about:settings" ||
-    url === "about:blank"
-  );
-}
-
-function titleForInternal(url: string): string {
-  if (isSettingsUrl(url)) {
-    return "Settings";
-  }
-  return "New Tab";
 }
 
 function isSecure(url: string): boolean {

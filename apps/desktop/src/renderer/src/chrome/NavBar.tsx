@@ -141,6 +141,7 @@ export function NavBar({
           ) : (
             <Unlock size={14} />
           )}
+          {identityKind === "internal" ? <span className="url-badge">Lurkwire</span> : null}
         </button>
         <input
           ref={urlRef}

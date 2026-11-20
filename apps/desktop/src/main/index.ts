@@ -27,9 +27,17 @@ import { ProxySidecar } from "./proxy";
 import { clearLlmKey, completeLlm, hasLlmKey, saveLlmKey } from "./llm";
 import { clearShodanKey, hasShodanKey, runRecon, saveShodanKey } from "./recon";
 import { isSmokeRun, isolateSmokeUserData, runSmoke } from "./smoke";
-import { isNewTabUrl, isSettingsUrl, TabManager } from "./tabs";
+import { handleLurkwireProtocol, registerLurkwireScheme } from "./internal-protocol";
+import { isSettingsUrl, TabManager } from "./tabs";
+import {
+  canonicalizeInternalUrl,
+  isInternalUrl,
+  type InternalPage,
+} from "../shared/url";
+import { clearVisits, deleteVisit, listVisits } from "./visits";
 
 app.setName(PRODUCT_NAME);
+registerLurkwireScheme();
 isolateSmokeUserData();
 if (isSmokeRun()) {
   app.commandLine.appendSwitch("use-gl", "angle");
@@ -135,19 +143,14 @@ function setChromePage(next: ChromePage): void {
 
 function syncViewVisibility(): void {
   const active = tabs?.activeInfo();
-  const showPage =
-    !killed &&
-    chromePage === "content" &&
-    Boolean(active?.url) &&
-    !isNewTabUrl(active?.url ?? "") &&
-    !isSettingsUrl(active?.url ?? "");
+  const showPage = !killed && Boolean(active?.url) && !isInternalUrl(active?.url ?? "");
   tabs?.setVisible(showPage);
 }
 
 function selectTool(next: ToolId): void {
   tool = next;
   if (next === "settings") {
-    setChromePage("settings");
+    void openInternalPage("settings");
     return;
   }
   if (next === "browser") {
@@ -342,7 +345,7 @@ function hookShortcuts(window: BrowserWindow): void {
       return true;
     }
     if (ctrl && key === "h") {
-      selectTool("history");
+      void openInternalPage("history");
       return true;
     }
     if (ctrl && key === "b") {
@@ -364,7 +367,7 @@ function hookShortcuts(window: BrowserWindow): void {
       return true;
     }
     if (ctrl && key === ",") {
-      setChromePage("settings");
+      void openInternalPage("settings");
       return true;
     }
     if ((ctrl && shift && key === "i") || key === "f12") {
@@ -443,7 +446,7 @@ function handleAppShortcut(input: Electron.Input, contents: Electron.WebContents
     } else if (ctrl && key === "r") {
       tabs?.reload(shift);
     } else if (ctrl && key === "h") {
-      selectTool("history");
+      void openInternalPage("history");
     } else if (ctrl && key === "b") {
       prefs = { ...prefs, bookmarksBar: !prefs.bookmarksBar };
       savePrefs(prefs);
@@ -455,7 +458,7 @@ function handleAppShortcut(input: Electron.Input, contents: Electron.WebContents
     } else if (ctrl && key === "0") {
       tabs?.resetZoom();
     } else if (ctrl && key === ",") {
-      setChromePage("settings");
+      void openInternalPage("settings");
     } else if (ctrl && shift && key === "i") {
       tabs?.openDevTools();
     }
@@ -481,16 +484,34 @@ function handleAppShortcut(input: Electron.Input, contents: Electron.WebContents
   return false;
 }
 
+async function openInternalPage(page: InternalPage): Promise<void> {
+  if (!currentProjectId || !tabs) {
+    return;
+  }
+  const url = `lurkwire://${page}`;
+  const active = tabs.activeInfo();
+  if (active) {
+    await tabs.navigate(active.id, url);
+  } else {
+    await tabs.create(currentProjectId, url);
+  }
+  tool = page === "settings" ? "settings" : "browser";
+  chromePage = page === "settings" ? "settings" : "content";
+  syncViewVisibility();
+  emit();
+}
+
 async function openNewTab(url?: string): Promise<void> {
   if (!currentProjectId || !tabs) {
     throw new Error("No project is selected");
   }
-  if (killed && url) {
+  const target = url ? (canonicalizeInternalUrl(url) ?? url) : "lurkwire://newtab";
+  if (killed && !isInternalUrl(target)) {
     lastError = "Kill switch is on. Traffic is blocked.";
     emit();
     return;
   }
-  await tabs.create(currentProjectId, url ?? "");
+  await tabs.create(currentProjectId, target);
   tool = "browser";
   chromePage = "content";
   syncViewVisibility();
@@ -516,7 +537,8 @@ function registerIpc(): void {
     emit();
   });
   ipcMain.handle("lurkwire:navigate", async (_event, url: string) => {
-    if (killed) {
+    const target = canonicalizeInternalUrl(url) ?? url;
+    if (killed && !isInternalUrl(target)) {
       lastError = "Kill switch is on. Traffic is blocked.";
       emit();
       return;
@@ -526,12 +548,10 @@ function registerIpc(): void {
       return;
     }
     const kind = await tabs?.navigate(id, url);
-    if (kind === "internal" && isSettingsUrl(normalizeOr(url))) {
-      setChromePage("settings");
-      return;
-    }
-    tool = "browser";
-    setChromePage("content");
+    tool = kind === "internal" && isSettingsUrl(target) ? "settings" : "browser";
+    chromePage = tool === "settings" ? "settings" : "content";
+    syncViewVisibility();
+    emit();
   });
   ipcMain.handle("lurkwire:back", () => {
     if (!killed) {
@@ -652,6 +672,11 @@ function registerIpc(): void {
     }),
   );
   ipcMain.handle("lurkwire:getFinding", (_event, id: string) => control.getFinding(id));
+  ipcMain.handle("lurkwire:listVisits", (_event, query?: string) => listVisits(query));
+  ipcMain.handle("lurkwire:deleteVisit", (_event, id: string) => deleteVisit(id));
+  ipcMain.handle("lurkwire:clearVisits", () => {
+    clearVisits();
+  });
   ipcMain.handle("lurkwire:runRecon", (_event, request: { domain: string; sources?: string[] }) =>
     runRecon(request as Parameters<typeof runRecon>[0]),
   );
@@ -734,17 +759,11 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:revealPath", (_event, filePath: string) => shell.showItemInFolder(filePath));
 }
 
-function normalizeOr(input: string): string {
-  const trimmed = input.trim();
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
-    return trimmed;
-  }
-  return `https://${trimmed}`;
-}
 
 hookTabShortcuts();
 
 app.whenReady().then(async () => {
+  handleLurkwireProtocol(electronSession.defaultSession);
   prefs = loadPrefs();
   bookmarks = loadBookmarksSafe();
   nativeTheme.themeSource = prefs.theme;

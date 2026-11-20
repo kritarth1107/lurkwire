@@ -2,6 +2,7 @@ import { createHash, X509Certificate } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { Certificate, Session } from "electron";
 import { fingerprintsMatch } from "../shared/fingerprint";
+import { handleLurkwireProtocol } from "./internal-protocol";
 
 export async function configureProjectSession(
   ses: Session,
@@ -18,6 +19,7 @@ export async function configureProjectSession(
   // Fail closed: always point at the sidecar. If it is down, Chromium errors
   // instead of leaking traffic direct. <-loopback> sends localhost through
   // the proxy as well so local targets are captured.
+  handleLurkwireProtocol(ses);
   await ses.setProxy({
     proxyRules: `http=${proxyHost}:${proxyPort};https=${proxyHost}:${proxyPort}`,
     proxyBypassRules: "<-loopback>",
