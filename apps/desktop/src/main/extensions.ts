@@ -53,13 +53,13 @@ export async function attachExtensions(ses: Session): Promise<void> {
   if (!ses.isPersistent()) {
     return;
   }
-  const already = new Set(ses.getAllExtensions().map((item) => item.path));
+  const already = new Set(ses.extensions.getAllExtensions().map((item) => item.path));
   for (const item of loadSavedExtensions()) {
     if (already.has(item.path)) {
       continue;
     }
     try {
-      await ses.loadExtension(item.path, { allowFileAccess: true });
+      await ses.extensions.loadExtension(item.path, { allowFileAccess: true });
     } catch (err) {
       console.warn(`Failed to load unpacked extension at ${item.path}:`, err);
     }
@@ -69,7 +69,7 @@ export async function attachExtensions(ses: Session): Promise<void> {
 export async function listExtensions(): Promise<InstalledExtension[]> {
   const byId = new Map<string, InstalledExtension>();
   for (const ses of persistentSessions()) {
-    for (const ext of ses.getAllExtensions()) {
+    for (const ext of ses.extensions.getAllExtensions()) {
       byId.set(ext.id, {
         id: ext.id,
         name: ext.name,
@@ -89,9 +89,9 @@ export async function addUnpackedExtension(folder: string): Promise<InstalledExt
     saveExtensions(saved);
   }
   for (const ses of persistentSessions()) {
-    const already = ses.getAllExtensions().some((item) => item.path === folder);
+    const already = ses.extensions.getAllExtensions().some((item) => item.path === folder);
     if (!already) {
-      await ses.loadExtension(folder, { allowFileAccess: true });
+      await ses.extensions.loadExtension(folder, { allowFileAccess: true });
     }
   }
   return listExtensions();
@@ -112,10 +112,10 @@ export async function pickUnpackedExtension(win?: BrowserWindow | null): Promise
 export async function removeUnpackedExtension(id: string): Promise<InstalledExtension[]> {
   let path = "";
   for (const ses of persistentSessions()) {
-    const found = ses.getAllExtensions().find((item) => item.id === id);
+    const found = ses.extensions.getAllExtensions().find((item) => item.id === id);
     if (found) {
       path = found.path;
-      ses.removeExtension(id);
+      ses.extensions.removeExtension(id);
     }
   }
   if (path) {

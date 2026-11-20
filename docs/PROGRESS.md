@@ -44,8 +44,8 @@ Refreshed screenshots cover main light/dark, the app menu, a lurkwire://settings
 
 - [x] Decode content-encoding (gzip/br/deflate/zstd) and charset in History viewers
 - [x] Proper Monaco workers in the packaged build
-- [ ] Fix Electron deprecations (navigationHistory, session.extensions)
+- [x] Fix Electron deprecations (navigationHistory, session.extensions)
 - [ ] Real tab groups (create / name / color / collapse)
 - [ ] Bookmarks manager and opt-in Chrome/Firefox import
 - [ ] Session restore (reopen last tabs)
-- [ ] Silence DevTools Autofill errors
+- [x] Silence DevTools Autofill errors

@@ -46,6 +46,12 @@ import { clearVisits, deleteVisit, listVisits } from "./visits";
 app.setName(PRODUCT_NAME);
 registerLurkwireScheme();
 isolateSmokeUserData();
+// DevTools otherwise probes the Autofill CDP domain, which Electron does not
+// implement, and logs Autofill.enable / Autofill.setAddresses errors.
+app.commandLine.appendSwitch(
+  "disable-features",
+  "Autofill,AutofillServerCommunication,AutofillEnableAccountWalletStorage,AutofillAddressProfileSavePrompt",
+);
 if (isSmokeRun()) {
   app.commandLine.appendSwitch("use-gl", "angle");
   app.commandLine.appendSwitch("use-angle", "swiftshader");

@@ -314,11 +314,11 @@ export class TabManager {
   }
 
   back(): void {
-    this.active()?.view.webContents.goBack();
+    this.active()?.view.webContents.navigationHistory.goBack();
   }
 
   forward(): void {
-    this.active()?.view.webContents.goForward();
+    this.active()?.view.webContents.navigationHistory.goForward();
   }
 
   reload(ignoreCache = false): void {
@@ -468,8 +468,8 @@ export class TabManager {
     });
     wc.on("did-stop-loading", () => {
       tab.loading = false;
-      tab.canGoBack = wc.canGoBack();
-      tab.canGoForward = wc.canGoForward();
+      tab.canGoBack = wc.navigationHistory.canGoBack();
+      tab.canGoForward = wc.navigationHistory.canGoForward();
       this.onChange();
     });
     wc.on("did-navigate", (_event, url) => {
@@ -512,8 +512,8 @@ export class TabManager {
         canCut: params.editFlags.canCut,
         canUndo: params.editFlags.canUndo,
         canRedo: params.editFlags.canRedo,
-        canGoBack: wc.canGoBack(),
-        canGoForward: wc.canGoForward(),
+        canGoBack: wc.navigationHistory.canGoBack(),
+        canGoForward: wc.navigationHistory.canGoForward(),
         hasImage: Boolean(params.hasImageContents || params.srcURL),
         isEditable: params.isEditable,
         inspectX: params.x,
@@ -530,8 +530,8 @@ export class TabManager {
       tab.favicon = null;
       tab.loading = false;
     }
-    tab.canGoBack = tab.view.webContents.canGoBack();
-    tab.canGoForward = tab.view.webContents.canGoForward();
+    tab.canGoBack = tab.view.webContents.navigationHistory.canGoBack();
+    tab.canGoForward = tab.view.webContents.navigationHistory.canGoForward();
     if (
       !this.privateMode &&
       !opts?.inPage &&
