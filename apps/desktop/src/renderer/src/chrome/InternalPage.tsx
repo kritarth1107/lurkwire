@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { AppSnapshot, Bookmark, DownloadInfo, Visit } from "../../../shared/types";
 import { parseInternalPage, type InternalPage as PageId, INTERNAL_TITLES } from "../../../shared/url";
 import { SettingsPage } from "./SettingsPage";
+import { ExtensionsPage } from "./ExtensionsPage";
 import { NewTabPage } from "./NewTabPage";
 
 export function InternalPage({ state, url }: { state: AppSnapshot; url: string }) {
@@ -25,7 +26,11 @@ export function InternalPage({ state, url }: { state: AppSnapshot; url: string }
     return <BookmarksPage />;
   }
   if (page === "extensions") {
-    return <ExtensionsPage />;
+    return (
+      <PageShell page="extensions">
+        <ExtensionsPage />
+      </PageShell>
+    );
   }
   return <AboutPage state={state} />;
 }
@@ -179,19 +184,6 @@ function BookmarksPage() {
           ))}
         </div>
       )}
-    </PageShell>
-  );
-}
-
-function ExtensionsPage() {
-  return (
-    <PageShell page="extensions">
-      <p className="lead">
-        Lurkwire can load unpacked Chrome extensions from a local folder. The Chrome Web Store is
-        not supported. Extensions run in Electron&apos;s chrome.* subset, and Manifest V3 service
-        workers have the same limits as Chromium.
-      </p>
-      <p className="internal-empty">No extensions loaded yet. Use Settings to add an unpacked folder.</p>
     </PageShell>
   );
 }

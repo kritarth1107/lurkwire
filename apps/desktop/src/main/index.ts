@@ -11,6 +11,7 @@ import type {
   InterceptConfig,
   FindingQuery,
   IntruderStart,
+  LlmAction,
   LlmProvider,
   LlmRequest,
   NewScopeRule,
@@ -37,6 +38,8 @@ import {
   type InternalPage,
 } from "../shared/url";
 import { collectSiteInfo } from "./siteInfo";
+import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpackedExtension } from "./extensions";
+import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, listVisits } from "./visits";
 
@@ -853,6 +856,13 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:clearLlmKey", (_event, provider?: LlmProvider) => {
     clearLlmKey(provider);
   });
+  ipcMain.handle("lurkwire:listExtensions", () => listExtensions());
+  ipcMain.handle("lurkwire:addUnpackedExtension", (event) =>
+    pickUnpackedExtension(BrowserWindow.fromWebContents(event.sender)),
+  );
+  ipcMain.handle("lurkwire:removeExtension", (_event, id: string) => removeUnpackedExtension(id));
+  ipcMain.handle("lurkwire:listAiMemory", (_event, action?: LlmAction) => listAiMemory(action));
+  ipcMain.handle("lurkwire:clearAiMemory", (_event, action?: LlmAction) => clearAiMemory(action));
   ipcMain.handle("lurkwire:getInteractsh", () => interactshState());
   ipcMain.handle("lurkwire:registerInteractsh", (_event, server?: string) => registerInteractsh(server));
   ipcMain.handle("lurkwire:deregisterInteractsh", () => deregisterInteractsh());
@@ -1063,6 +1073,7 @@ app.whenReady().then(async () => {
   registerIpc();
   if (!isSmokeRun()) {
     loadInteractsh();
+    void attachExtensions(electronSession.defaultSession);
   }
   createWindow();
   downloads.hook(electronSession.defaultSession);

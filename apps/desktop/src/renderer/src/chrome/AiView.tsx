@@ -15,9 +15,11 @@ export function AiView({
   const [result, setResult] = useState<LlmResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasKey, setHasKey] = useState(false);
+  const [memoryCount, setMemoryCount] = useState(0);
 
   useEffect(() => {
     void window.lurkwire.hasLlmKey().then(setHasKey);
+    void window.lurkwire.listAiMemory().then((items) => setMemoryCount(items.length));
     void window.lurkwire
       .listFlows({ project_id: projectId ?? undefined, limit: 30 })
       .then((list) => {
@@ -37,6 +39,7 @@ export function AiView({
         raw: raw || undefined,
       });
       setResult(next);
+      void window.lurkwire.listAiMemory().then((items) => setMemoryCount(items.length));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -85,6 +88,15 @@ export function AiView({
       <div className="workbench-toolbar">
         <span className="meta">AI drafts, you send</span>
         {hasKey ? <span className="meta">Key saved</span> : <span className="meta">No API key (Ollama can run without one)</span>}
+        <span className="meta">{memoryCount} memorized turn{memoryCount === 1 ? "" : "s"}</span>
+        <button
+          type="button"
+          onClick={() => {
+            void window.lurkwire.clearAiMemory().then(() => setMemoryCount(0));
+          }}
+        >
+          Clear memory
+        </button>
       </div>
       <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 0, flex: 1 }}>
         {error ? <div className="banner">{error}</div> : null}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppSnapshot, AuditEntry, ScopeKind, ScopeRule, ThemePref } from "../../../shared/types";
 import { AiSettings } from "./AiSettings";
+import { ExtensionsPage } from "./ExtensionsPage";
 import { projectColor } from "../../../shared/projectColor";
 
 const categories = [
@@ -12,6 +13,7 @@ const categories = [
   { id: "scope", label: "Scope" },
   { id: "audit", label: "Audit log" },
   { id: "llm", label: "AI connectors" },
+  { id: "extensions", label: "Extensions" },
   { id: "recon", label: "Recon" },
   { id: "about", label: "About" },
 ] as const;
@@ -191,6 +193,7 @@ export function SettingsPage({ state, url }: { state: AppSnapshot; url?: string 
         {cat === "scope" ? <ScopeSection projectId={state.currentProjectId} /> : null}
         {cat === "audit" ? <AuditSection projectId={state.currentProjectId} /> : null}
         {cat === "llm" ? <AiSettings state={state} /> : null}
+        {cat === "extensions" ? <ExtensionsPage /> : null}
         {cat === "recon" ? <ReconSettings /> : null}
         {cat === "about" ? (
           <section>

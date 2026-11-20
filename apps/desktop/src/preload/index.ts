@@ -10,6 +10,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  LlmAction,
   LlmProvider,
   InteractshState,
   LlmRequest,
@@ -23,6 +24,8 @@ import type {
   Visit,
 } from "../shared/types";
 import type { SiteInfo } from "../shared/siteInfo";
+import type { InstalledExtension } from "../shared/extensions";
+import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
 import { PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
 
@@ -91,6 +94,15 @@ const api = {
   deregisterInteractsh: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:deregisterInteractsh"),
   pollInteractsh: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:pollInteractsh"),
   newInteractshPayload: (): Promise<InteractshState> => ipcRenderer.invoke("lurkwire:newInteractshPayload"),
+  listExtensions: (): Promise<InstalledExtension[]> => ipcRenderer.invoke("lurkwire:listExtensions"),
+  addUnpackedExtension: (): Promise<InstalledExtension[] | null> =>
+    ipcRenderer.invoke("lurkwire:addUnpackedExtension"),
+  removeExtension: (id: string): Promise<InstalledExtension[]> =>
+    ipcRenderer.invoke("lurkwire:removeExtension", id),
+  listAiMemory: (action?: LlmAction): Promise<AiMemoryEntry[]> =>
+    ipcRenderer.invoke("lurkwire:listAiMemory", action),
+  clearAiMemory: (action?: LlmAction): Promise<AiMemoryStore> =>
+    ipcRenderer.invoke("lurkwire:clearAiMemory", action),
   startIntruder: (req: IntruderStart) => ipcRenderer.invoke("lurkwire:startIntruder", req),
   getIntruder: (id: string) => ipcRenderer.invoke("lurkwire:getIntruder", id),
   listIntruder: () => ipcRenderer.invoke("lurkwire:listIntruder"),

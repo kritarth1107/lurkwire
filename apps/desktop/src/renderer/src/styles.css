@@ -1206,3 +1206,8 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
 .oob-split { display: flex; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
 .oob-list { width: 42%; overflow: auto; border-right: 1px solid var(--border); }
 .oob-detail { flex: 1; margin: 0; overflow: auto; }
+
+.extension-list { list-style: none; padding: 0; margin: 12px 0; }
+.extension-list li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.extension-list .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; word-break: break-all; }
+.memory-section { margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--border); }

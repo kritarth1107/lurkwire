@@ -31,3 +31,10 @@ Build order for v0.1. Checked items are on `main`.
 - [x] Site info panel (certificate, permissions, cookies, site intel)
 - [x] Burp-parity history, viewers, site map, Comparer, Sequencer-lite, Logger, annotations
 - [x] Settings > AI: multi-provider connectors, model pickers, per-task routing
+
+## v0.1 polish
+
+- [x] Per-task local AI memory
+- [x] Unpacked Chrome extension loading and Settings page
+- [x] HTTP/2 to the upstream (browser-facing MITM stays HTTP/1.1)
+

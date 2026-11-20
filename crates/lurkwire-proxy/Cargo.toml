@@ -28,7 +28,7 @@ http = "1.5.0"
 http-body-util = "0.1.5"
 httparse = "1.10.1"
 hyper = { version = "1.12.0", features = ["http1", "http2", "client", "server"] }
-hyper-rustls = { version = "0.27.10", default-features = false, features = ["http1", "tls12", "ring", "webpki-tokio"] }
+hyper-rustls = { version = "0.27.10", default-features = false, features = ["http1", "http2", "tls12", "ring", "webpki-tokio"] }
 hyper-util = { version = "0.1.21", features = ["full"] }
 mime = "0.3.18"
 rcgen = { version = "0.14.10", features = ["pem", "ring", "x509-parser"] }

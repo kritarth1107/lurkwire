@@ -12,6 +12,7 @@ import type {
 } from "../shared/types";
 import { modelsUrl, ollamaTagsUrl, parseModelList, providerInfo, resolveLlmForTask } from "../shared/llm";
 import { isLocalLlmUrl, redactForCloud } from "../shared/redact";
+import { appendAiMemory, memoryPromptFor } from "./aiMemory";
 
 function keysDir(): string {
   return join(app.getPath("userData"), "llm-keys");
@@ -139,10 +140,25 @@ export async function completeLlm(
 
   const shouldRedact = !isLocalLlmUrl(settings.baseUrl);
   const prepared = shouldRedact ? redactForCloud(raw) : { text: raw, redacted: false };
-  const text = await invokeProvider(settings, key, systemPrompt(request.action), prepared.text);
+  let user = prepared.text;
+  let memoryRedacted = false;
+  const memory = memoryPromptFor(request.action);
+  if (memory) {
+    const preparedMem = shouldRedact ? redactForCloud(memory) : { text: memory, redacted: false };
+    memoryRedacted = preparedMem.redacted;
+    user = `${preparedMem.text}\n\n---\n\n${prepared.text}`;
+  }
+  const text = await invokeProvider(settings, key, systemPrompt(request.action), user);
+  appendAiMemory({
+    action: request.action,
+    input: prepared.text,
+    output: text,
+    model: settings.model,
+    provider: settings.provider,
+  });
   return {
     text,
-    redacted: prepared.redacted,
+    redacted: prepared.redacted || memoryRedacted,
     provider: settings.provider,
     model: settings.model,
     draft: request.action === "draft" ? parseDraft(text) : undefined,

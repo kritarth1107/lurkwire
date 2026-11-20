@@ -10,19 +10,21 @@ Pre-alpha, under active development. Ubuntu/Linux first, then macOS and Windows.
 
 Lurkwire is an AI-native security browser for developers, pentesters, and bug bounty hunters. It is a daily-driver Chromium browser with a built-in intercepting proxy, Repeater, fuzzer, and scanner, plus your own or local LLMs. Capture works with zero setup because the proxy is built into the browser — and the AI drafts while a human always sends.
 
-## Planned v0.1 features
+## Features (v0.1)
 
-- Electron/Chromium daily-driver browser
-- Rust intercepting TLS MITM proxy with a per-install CA trusted only inside the app
-- Per-project traffic store (HTTP history)
+- Electron/Chromium daily-driver browser with Proton-style chrome, multi-window, private windows, and lurkwire:// settings tabs
+- Rust intercepting TLS MITM proxy with a per-install CA trusted only inside the app (never system-wide)
+- HTTP/2 to the upstream when the target supports it; the browser-facing MITM stays HTTP/1.1
+- Per-project traffic store and Burp-parity workbench: sortable HTTP history, Monaco Raw/Pretty/Hex/Headers/Render, site map, Comparer, Sequencer-lite, Logger, highlights, comments, and Send to Repeater/Intruder/Comparer
 - Intercept (pause, edit, forward, or drop)
-- Repeater
-- Intruder-lite
+- Repeater and Intruder-lite
 - JWT/session tooling and encode/decode
-- OOB collaborator
+- Interactsh OOB collaborator
 - Passive scanner and anomaly detection
-- Recon / site-intel panel
-- Provider-agnostic LLM layer (bring your own OpenAI, Anthropic, Gemini, or Grok keys, or run local Ollama, LM Studio, or any OpenAI-compatible endpoint) — AI drafts, a human sends
+- Recon / site-intel panel (crt.sh, DNS, RDAP/WHOIS, Wayback, optional Shodan) plus a lock-icon site info panel
+- Native per-tab Chrome DevTools
+- Unpacked Chrome extension loading (no Web Store; Electron `chrome.*` subset)
+- Settings > AI connectors: OpenAI, Anthropic, Gemini, xAI Grok, OpenRouter, Ollama, LM Studio, or a custom OpenAI-compatible endpoint, with list-models, connection tests, per-task routing, and local per-task memory — AI drafts, a human always sends
 
 ## Guardrails by design
 

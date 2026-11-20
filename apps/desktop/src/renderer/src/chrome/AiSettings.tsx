@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppSnapshot, LlmAction, LlmProvider, LlmSettings } from "../../../shared/types";
+import type { AiMemoryEntry } from "../../../shared/aiMemory";
 import {
   LLM_PROVIDERS,
   providerInfo,
@@ -99,6 +100,7 @@ export function AiSettings({ state }: { state: AppSnapshot }) {
           onKeysChange={setKeys}
         />
       ))}
+      <MemorySection />
     </section>
   );
 }
@@ -275,6 +277,32 @@ function ConnectorCard({
           {status ? <p className={status.toLowerCase().includes("fail") || status.toLowerCase().includes("error") ? "banner" : "muted"}>{status}</p> : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function MemorySection() {
+  const [items, setItems] = useState<AiMemoryEntry[]>([]);
+  useEffect(() => {
+    void window.lurkwire.listAiMemory().then(setItems);
+  }, []);
+  return (
+    <div className="memory-section">
+      <h4>Per-task memory</h4>
+      <p className="muted">
+        Lurkwire keeps a short local history of Explain, Suggest, and Draft so later turns of the
+        same task have context. Memory never leaves this machine except as part of a later prompt,
+        and cloud prompts are redacted first.
+      </p>
+      <p className="muted">{items.length} stored turn{items.length === 1 ? "" : "s"}.</p>
+      <button
+        type="button"
+        onClick={() => {
+          void window.lurkwire.clearAiMemory().then(() => setItems([]));
+        }}
+      >
+        Clear all memory
+      </button>
     </div>
   );
 }

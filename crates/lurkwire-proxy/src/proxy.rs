@@ -62,6 +62,7 @@ pub fn build_client(extra_roots: &[CertificateDer<'static>]) -> Result<HttpsClie
         .with_tls_config(tls)
         .https_or_http()
         .enable_http1()
+        .enable_http2()
         .wrap_connector(http);
 
     Ok(Client::builder(TokioExecutor::new()).build(https))
@@ -336,7 +337,7 @@ async fn intercept(
     let flow_id = uuid::Uuid::new_v4().to_string();
     let project_id = state.default_project_id.clone();
     let method_s = method.as_str().to_string();
-    let http_version = format!("{version:?}").replace("HTTP_", "HTTP/");
+    let http_version = format!("{resp_version:?}").replace("HTTP_", "HTTP/");
     let source = source.to_string();
     let state_store = state.clone();
     let target_clone = target.clone();
@@ -395,7 +396,14 @@ async fn intercept(
         }
     });
 
-    let mut response = Response::builder().status(status).version(resp_version);
+    // Never pin an HTTP/2 version onto the HTTP/1.1 browser connection.
+    let client_version = if version == hyper::Version::HTTP_10 {
+        hyper::Version::HTTP_10
+    } else {
+        hyper::Version::HTTP_11
+    };
+    let mut response = Response::builder().status(status).version(client_version);
+
     copy_response_headers(response.headers_mut().expect("headers"), &resp_headers);
     response.body(client_body).context("build client response")
 }

@@ -4,6 +4,7 @@ import type { Certificate, Session } from "electron";
 import { fingerprintsMatch } from "../shared/fingerprint";
 import { handleLurkwireProtocol } from "./internal-protocol";
 import { hookPermissionHandler } from "./permissions";
+import { attachExtensions } from "./extensions";
 
 export async function configureProjectSession(
   ses: Session,
@@ -28,6 +29,7 @@ export async function configureProjectSession(
   });
   const caPem = caPath ? readFileSync(caPath, "utf8") : "";
   trustCaOnlyInsideApp(ses, caFingerprint, caPem);
+  await attachExtensions(ses);
 }
 
 export function trustCaOnlyInsideApp(ses: Session, caFingerprint: string, caPem = ""): void {
