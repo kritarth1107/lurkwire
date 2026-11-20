@@ -748,7 +748,10 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle("lurkwire:stop", (event) => ctx(event)?.tabs.stop());
-  ipcMain.handle("lurkwire:openDevTools", (event) => ctx(event)?.tabs.openDevTools());
+  ipcMain.handle("lurkwire:openDevTools", (event, mode?: Electron.OpenDevToolsOptions["mode"]) =>
+    ctx(event)?.tabs.openDevTools(mode ?? "detach"),
+  );
+  ipcMain.handle("lurkwire:inspectElement", (event, x: number, y: number) => ctx(event)?.tabs.inspectElement(x, y));
   ipcMain.handle("lurkwire:setTool", (event, next: ToolId) => {
     selectTool(next, ctx(event));
   });

@@ -281,6 +281,8 @@ export type ContextMenuPayload = {
   canGoForward: boolean;
   hasImage: boolean;
   isEditable: boolean;
+  inspectX?: number;
+  inspectY?: number;
 };
 
 export type PanelKind =

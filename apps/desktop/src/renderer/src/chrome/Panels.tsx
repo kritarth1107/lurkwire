@@ -170,14 +170,28 @@ function AppMenu({ state }: { state: AppSnapshot }) {
           label="Developer tools"
           shortcut="Ctrl+Shift+I"
           onClick={() => {
-            void window.lurkwire.command("devtools");
+            void window.lurkwire.openDevTools("detach");
+            close();
+          }}
+        />
+        <MenuItem
+          label="Dock Developer tools to bottom"
+          onClick={() => {
+            void window.lurkwire.openDevTools("bottom");
+            close();
+          }}
+        />
+        <MenuItem
+          label="Dock Developer tools to right"
+          onClick={() => {
+            void window.lurkwire.openDevTools("right");
             close();
           }}
         />
         <MenuItem
           label="Task manager"
           onClick={() => {
-            void window.lurkwire.command("devtools");
+            void window.lurkwire.openDevTools("detach");
             close();
           }}
         />
@@ -650,8 +664,20 @@ function PageMenu({ payload }: { payload: Record<string, unknown> }) {
       <button type="button" className="menu-item" onClick={() => { void window.lurkwire.setTool("history"); close(); }}>
         History
       </button>
-      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.openDevTools(); close(); }}>
+      <button
+        type="button"
+        className="menu-item"
+        onClick={() => {
+          const x = Number(payload.inspectX ?? 0);
+          const y = Number(payload.inspectY ?? 0);
+          void window.lurkwire.inspectElement(x, y);
+          close();
+        }}
+      >
         Inspect
+      </button>
+      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.openDevTools("detach"); close(); }}>
+        Developer tools <kbd>Ctrl+Shift+I</kbd>
       </button>
     </>
   );

@@ -341,6 +341,14 @@ export class TabManager {
     this.active()?.view.webContents.openDevTools({ mode });
   }
 
+  inspectElement(x: number, y: number): void {
+    const wc = this.active()?.view.webContents;
+    if (!wc || wc.isDestroyed()) {
+      return;
+    }
+    wc.inspectElement(Math.round(x), Math.round(y));
+  }
+
   setZoom(factor: number): void {
     const wc = this.active()?.view.webContents;
     if (!wc) {
@@ -508,6 +516,8 @@ export class TabManager {
         canGoForward: wc.canGoForward(),
         hasImage: Boolean(params.hasImageContents || params.srcURL),
         isEditable: params.isEditable,
+        inspectX: params.x,
+        inspectY: params.y,
       });
     });
   }

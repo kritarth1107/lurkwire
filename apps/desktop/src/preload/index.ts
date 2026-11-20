@@ -45,7 +45,9 @@ const api = {
   forward: () => ipcRenderer.invoke("lurkwire:forward"),
   reload: () => ipcRenderer.invoke("lurkwire:reload"),
   stop: () => ipcRenderer.invoke("lurkwire:stop"),
-  openDevTools: () => ipcRenderer.invoke("lurkwire:openDevTools"),
+  openDevTools: (mode?: "detach" | "bottom" | "right" | "undocked" | "left") =>
+    ipcRenderer.invoke("lurkwire:openDevTools", mode),
+  inspectElement: (x: number, y: number) => ipcRenderer.invoke("lurkwire:inspectElement", x, y),
   setTool: (tool: ToolId) => ipcRenderer.invoke("lurkwire:setTool", tool),
   setProject: (id: string) => ipcRenderer.invoke("lurkwire:setProject", id),
   createProject: (name: string) => ipcRenderer.invoke("lurkwire:createProject", name),
