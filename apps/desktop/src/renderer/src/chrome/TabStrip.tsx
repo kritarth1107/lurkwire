@@ -1,4 +1,5 @@
 import { ChevronDown, Plus } from "lucide-react";
+import { useState } from "react";
 import type { AppSnapshot, TabInfo } from "../../../shared/types";
 import { projectColor } from "../../../shared/projectColor";
 import { openAnchoredPanel, openAtCursor } from "./openPanel";
@@ -6,8 +7,15 @@ import { WindowControls } from "./WindowControls";
 
 export function TabStrip({ state }: { state: AppSnapshot }) {
   return (
-    <div className="tabstrip" onDoubleClick={() => void window.lurkwire.windowToggleMaximize()}>
-      <div className="tab-scroll">
+    <div className={`tabstrip${state.privateMode ? " private" : ""}`}>
+      <div
+        className="tab-scroll"
+        onDoubleClick={(event) => {
+          if (event.target === event.currentTarget) {
+            void window.lurkwire.newTab();
+          }
+        }}
+      >
         {state.tabs.map((tab) => (
           <TabButton
             key={tab.id}
@@ -21,7 +29,7 @@ export function TabStrip({ state }: { state: AppSnapshot }) {
         type="button"
         className="new-tab"
         aria-label="New tab"
-        title="New tab"
+        title="New tab (Ctrl+T)"
         onClick={() => void window.lurkwire.newTab()}
       >
         <Plus size={16} />
@@ -51,13 +59,40 @@ function TabButton({
   selected: boolean;
   color: string;
 }) {
+  const [dragging, setDragging] = useState(false);
   const letter = (tab.title || "New Tab").slice(0, 1).toUpperCase();
   return (
     <button
       type="button"
-      className={`tab${selected ? " selected" : ""}${tab.pinned ? " pinned" : ""}`}
+      draggable
+      className={`tab${selected ? " selected" : ""}${tab.pinned ? " pinned" : ""}${dragging ? " dragging" : ""}`}
       style={{ "--project": color } as React.CSSProperties}
       onClick={() => void window.lurkwire.switchTab(tab.id)}
+      onAuxClick={(event) => {
+        if (event.button === 1 && !tab.pinned) {
+          event.preventDefault();
+          void window.lurkwire.closeTab(tab.id);
+        }
+      }}
+      onDragStart={(event) => {
+        setDragging(true);
+        event.dataTransfer.setData("text/lurkwire-tab", tab.id);
+        event.dataTransfer.effectAllowed = "move";
+      }}
+      onDragEnd={() => setDragging(false)}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("text/lurkwire-tab")) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const id = event.dataTransfer.getData("text/lurkwire-tab");
+        if (id && id !== tab.id) {
+          void window.lurkwire.moveTab(id, tab.id);
+        }
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         openAtCursor("tabmenu", event, {

@@ -17,6 +17,7 @@ const empty: AppSnapshot = {
   zoomFactor: 1,
   theme: "dark",
   maximized: false,
+  privateMode: false,
 };
 
 export function useAppState(): AppSnapshot {

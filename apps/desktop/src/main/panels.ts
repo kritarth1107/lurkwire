@@ -124,16 +124,22 @@ export class PanelManager {
     const workArea = screen.getDisplayMatching(content).workArea;
     const width = Math.round(request.width ?? 280);
     const height = Math.round(request.height ?? 320);
-    const anchor = request.anchor ?? {
-      left: request.x,
-      top: request.y,
-      right: request.x,
-      bottom: request.y,
-    };
+    if (request.anchor) {
+      return computePanelPosition({
+        content,
+        workArea,
+        anchor: request.anchor,
+        width,
+        height,
+        align: request.align,
+        placement: request.placement,
+      });
+    }
+    // x/y are already screen coordinates (context menus).
     return computePanelPosition({
-      content,
+      content: { x: 0, y: 0, width: workArea.width, height: workArea.height },
       workArea,
-      anchor,
+      anchor: { left: request.x, top: request.y, right: request.x, bottom: request.y },
       width,
       height,
       align: request.align,

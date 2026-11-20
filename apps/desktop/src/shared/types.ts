@@ -187,6 +187,7 @@ export type AppSnapshot = {
   zoomFactor: number;
   theme: "light" | "dark";
   maximized: boolean;
+  privateMode: boolean;
 };
 
 export type InterceptConfig = {

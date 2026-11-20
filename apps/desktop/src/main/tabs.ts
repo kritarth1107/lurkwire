@@ -32,6 +32,9 @@ export class TabManager {
   private visible = true;
   private configured = new Set<string>();
 
+  private privateMode = false;
+  private privatePartition = "";
+
   constructor(
     private window: BrowserWindow,
     private getProxy: () => { listen: string; fingerprint: string; caPath?: string } | null,
@@ -39,7 +42,73 @@ export class TabManager {
     private onSession: (ses: Electron.Session) => void,
     private onContextMenu: (payload: ContextMenuPayload) => void,
     private onFind: (result: FindResult) => void,
-  ) {}
+    options?: { privateMode?: boolean; privatePartition?: string },
+  ) {
+    this.privateMode = options?.privateMode ?? false;
+    this.privatePartition = options?.privatePartition ?? "";
+  }
+
+  isPrivate(): boolean {
+    return this.privateMode;
+  }
+
+  hasWebContents(contents: Electron.WebContents): boolean {
+    for (const tab of this.tabs.values()) {
+      if (!tab.view.webContents.isDestroyed() && tab.view.webContents === contents) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  cycle(projectId: string, delta: number): void {
+    const listed = this.list(projectId);
+    if (listed.length === 0) {
+      return;
+    }
+    const index = listed.findIndex((tab) => tab.id === this.activeId);
+    const next = listed[(index + delta + listed.length) % listed.length];
+    if (next) {
+      this.show(next.id);
+    }
+  }
+
+  selectByNumber(projectId: string, number: number): void {
+    const listed = this.list(projectId);
+    if (listed.length === 0) {
+      return;
+    }
+    const tab = number === 9 ? listed[listed.length - 1] : listed[number - 1];
+    if (tab) {
+      this.show(tab.id);
+    }
+  }
+
+  move(id: string, beforeId: string | null): void {
+    const tab = this.tabs.get(id);
+    if (!tab || id === beforeId) {
+      return;
+    }
+    const from = this.order.indexOf(id);
+    if (from < 0) {
+      return;
+    }
+    const target = beforeId ? this.tabs.get(beforeId) : null;
+    if (target && target.pinned !== tab.pinned) {
+      return;
+    }
+    if (!beforeId && tab.pinned) {
+      return;
+    }
+    this.order.splice(from, 1);
+    if (!beforeId) {
+      this.order.push(id);
+    } else {
+      const to = this.order.indexOf(beforeId);
+      this.order.splice(to < 0 ? this.order.length : to, 0, id);
+    }
+    this.onChange();
+  }
 
   list(projectId: string): TabInfo[] {
     return this.order
@@ -71,7 +140,7 @@ export class TabManager {
     const id = randomUUID();
     const view = new WebContentsView({
       webPreferences: {
-        partition: `persist:proj-${projectId}`,
+        partition: this.partitionFor(projectId),
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -268,8 +337,8 @@ export class TabManager {
     this.active()?.view.webContents.stop();
   }
 
-  openDevTools(): void {
-    this.active()?.view.webContents.openDevTools({ mode: "detach" });
+  openDevTools(mode: Electron.OpenDevToolsOptions["mode"] = "detach"): void {
+    this.active()?.view.webContents.openDevTools({ mode });
   }
 
   setZoom(factor: number): void {
@@ -453,10 +522,21 @@ export class TabManager {
     }
     tab.canGoBack = tab.view.webContents.canGoBack();
     tab.canGoForward = tab.view.webContents.canGoForward();
-    if (!opts?.inPage && (canonical.startsWith("http://") || canonical.startsWith("https://"))) {
+    if (
+      !this.privateMode &&
+      !opts?.inPage &&
+      (canonical.startsWith("http://") || canonical.startsWith("https://"))
+    ) {
       recordVisit(canonical, tab.title);
     }
     this.onChange();
+  }
+
+  private partitionFor(projectId: string): string {
+    if (this.privateMode && this.privatePartition) {
+      return this.privatePartition;
+    }
+    return `persist:proj-${projectId}`;
   }
 
   private async prepareSession(projectId: string): Promise<void> {
@@ -464,11 +544,11 @@ export class TabManager {
     if (!proxy) {
       throw new Error("Proxy is down. Traffic is blocked until the sidecar comes back.");
     }
-    const key = `${projectId}:${proxy.listen}`;
+    const key = `${this.partitionFor(projectId)}:${proxy.listen}`;
     if (this.configured.has(key)) {
       return;
     }
-    const ses = session.fromPartition(`persist:proj-${projectId}`);
+    const ses = session.fromPartition(this.partitionFor(projectId));
     await configureProjectSession(ses, proxy.listen, proxy.fingerprint, proxy.caPath);
     this.onSession(ses);
     this.configured.add(key);

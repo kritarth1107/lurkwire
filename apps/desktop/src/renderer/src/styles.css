@@ -155,6 +155,8 @@ input, textarea, select {
 }
 
 .tab:hover { background: var(--tab-hover); color: var(--text); }
+.tab.dragging { opacity: 0.45; }
+.tabstrip.private { box-shadow: inset 0 -2px 0 color-mix(in srgb, #7c3aed 70%, transparent); }
 
 .tab.selected {
   background: var(--tab-selected);

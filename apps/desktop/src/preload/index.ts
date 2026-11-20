@@ -36,6 +36,8 @@ const api = {
   getState: (): Promise<AppSnapshot> => ipcRenderer.invoke("lurkwire:getState"),
   onState: (callback: (state: AppSnapshot) => void) => listen("lurkwire:state", callback),
   newTab: (url?: string) => ipcRenderer.invoke("lurkwire:newTab", url),
+  newWindow: (opts?: { privateMode?: boolean }) => ipcRenderer.invoke("lurkwire:newWindow", opts),
+  moveTab: (id: string, beforeId: string | null) => ipcRenderer.invoke("lurkwire:moveTab", id, beforeId),
   closeTab: (id: string) => ipcRenderer.invoke("lurkwire:closeTab", id),
   switchTab: (id: string) => ipcRenderer.invoke("lurkwire:switchTab", id),
   navigate: (url: string) => ipcRenderer.invoke("lurkwire:navigate", url),

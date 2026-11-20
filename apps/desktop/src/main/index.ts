@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, ipcMain, nativeTheme, session as electronSession, shell } from "electron";
+import { randomUUID } from "node:crypto";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, session as electronSession, shell } from "electron";
 import { join } from "node:path";
 import type {
   AppPrefs,
@@ -46,20 +47,26 @@ if (isSmokeRun()) {
   app.commandLine.appendSwitch("disable-gpu-sandbox");
 }
 
+type ChromeWin = {
+  id: string;
+  window: BrowserWindow;
+  tabs: TabManager;
+  panels: PanelManager;
+  tool: ToolId;
+  chromePage: ChromePage;
+  privateMode: boolean;
+};
+
+const chromeWindows: ChromeWin[] = [];
+
 let mainWindow: BrowserWindow | null = null;
 let tabs: TabManager | null = null;
 const sidecar = new ProxySidecar();
 const control = new ControlClient(() => sidecar.ready);
 const downloads = new DownloadManager(() => emitDownloads());
-const panels = new PanelManager(
-  () => mainWindow,
-  () => (resolveTheme() === "dark" ? "#2b2a33" : "#f9f9fb"),
-);
 
 let prefs: AppPrefs = { ...DEFAULT_PREFS };
 let bookmarks = loadBookmarksSafe();
-let tool: ToolId = "browser";
-let chromePage: ChromePage = "content";
 let killed = false;
 let currentProjectId: string | null = null;
 let projects: AppSnapshot["projects"] = [];
@@ -81,82 +88,135 @@ function resolveTheme(): "light" | "dark" {
   return prefs.theme;
 }
 
+function liveWindows(): ChromeWin[] {
+  return chromeWindows.filter((item) => !item.window.isDestroyed());
+}
+
+function chromeOfContents(contents: Electron.WebContents): ChromeWin | undefined {
+  return liveWindows().find((item) => {
+    if (item.window.webContents === contents) {
+      return true;
+    }
+    if (item.panels.isPanel(contents)) {
+      return true;
+    }
+    return item.tabs.hasWebContents(contents);
+  });
+}
+
+function focusedChrome(): ChromeWin | undefined {
+  return liveWindows().find((item) => item.window.isFocused()) ?? liveWindows()[0];
+}
+
+function activate(win: ChromeWin): void {
+  mainWindow = win.window;
+  tabs = win.tabs;
+}
+
+function ctx(event?: { sender: Electron.WebContents }): ChromeWin | undefined {
+  if (event) {
+    return chromeOfContents(event.sender) ?? focusedChrome();
+  }
+  return focusedChrome();
+}
+
 function applyTheme(): void {
   nativeTheme.themeSource = prefs.theme;
   const dark = resolveTheme() === "dark";
-  mainWindow?.setBackgroundColor(dark ? "#1c1b22" : "#f0f0f4");
+  const background = dark ? "#1c1b22" : "#f0f0f4";
+  for (const win of liveWindows()) {
+    win.window.setBackgroundColor(background);
+  }
   emit();
 }
 
-function snapshot(): AppSnapshot {
-  const active = tabs?.activeInfo() ?? null;
+function snapshot(win: ChromeWin): AppSnapshot {
+  const active = win.tabs.activeInfo();
   return {
     product: PRODUCT_NAME,
     version: PRODUCT_VERSION,
     proxy: proxyStatus,
     projects,
     currentProjectId,
-    tabs: currentProjectId && tabs ? tabs.list(currentProjectId) : [],
+    tabs: currentProjectId ? win.tabs.list(currentProjectId) : [],
     activeTabId: active?.id ?? null,
-    tool,
+    tool: win.tool,
     error: lastError,
     prefs,
     killed,
-    chromePage,
+    chromePage: win.chromePage,
     zoomFactor: active?.zoomFactor ?? 1,
     theme: resolveTheme(),
-    maximized: mainWindow?.isMaximized() ?? false,
+    maximized: win.window.isMaximized(),
+    privateMode: win.privateMode,
   };
 }
 
-function emit(): void {
-  const snap = snapshot();
-  mainWindow?.webContents.send("lurkwire:state", snap);
-  panels.send("lurkwire:state", snap);
+function emit(target?: ChromeWin): void {
+  const list = target ? [target] : liveWindows();
+  for (const win of list) {
+    if (win.window.webContents.isDestroyed()) {
+      continue;
+    }
+    const snap = snapshot(win);
+    win.window.webContents.send("lurkwire:state", snap);
+    win.panels.send("lurkwire:state", snap);
+  }
 }
 
 function emitDownloads(): void {
   const list = downloads.list();
-  mainWindow?.webContents.send("lurkwire:downloads", list);
-  panels.send("lurkwire:downloads", list);
+  for (const win of liveWindows()) {
+    win.window.webContents.send("lurkwire:downloads", list);
+    win.panels.send("lurkwire:downloads", list);
+  }
 }
 
 function emitBookmarks(): void {
-  mainWindow?.webContents.send("lurkwire:bookmarks", bookmarks);
-  panels.send("lurkwire:bookmarks", bookmarks);
-}
-
-function emitFind(result: unknown): void {
-  mainWindow?.webContents.send("lurkwire:find", result);
-}
-
-function setChromePage(next: ChromePage): void {
-  chromePage = next;
-  if (next === "settings") {
-    tool = "settings";
-  } else if (tool === "settings") {
-    tool = "browser";
+  for (const win of liveWindows()) {
+    win.window.webContents.send("lurkwire:bookmarks", bookmarks);
+    win.panels.send("lurkwire:bookmarks", bookmarks);
   }
-  syncViewVisibility();
-  emit();
 }
 
-function syncViewVisibility(): void {
-  const active = tabs?.activeInfo();
-  const showPage = !killed && Boolean(active?.url) && !isInternalUrl(active?.url ?? "");
-  tabs?.setVisible(showPage);
+function emitFind(result: unknown, win?: ChromeWin): void {
+  const target = win ?? focusedChrome();
+  target?.window.webContents.send("lurkwire:find", result);
 }
 
-function selectTool(next: ToolId): void {
-  tool = next;
+function setChromePage(win: ChromeWin, next: ChromePage): void {
+  win.chromePage = next;
   if (next === "settings") {
-    void openInternalPage("settings");
+    win.tool = "settings";
+  } else if (win.tool === "settings") {
+    win.tool = "browser";
+  }
+  syncViewVisibility(win);
+  emit(win);
+}
+
+function syncViewVisibility(target?: ChromeWin): void {
+  const list = target ? [target] : liveWindows();
+  for (const win of list) {
+    const active = win.tabs.activeInfo();
+    const showPage = !killed && Boolean(active?.url) && !isInternalUrl(active?.url ?? "");
+    win.tabs.setVisible(showPage);
+  }
+}
+
+function selectTool(next: ToolId, win = focusedChrome()): void {
+  if (!win) {
+    return;
+  }
+  win.tool = next;
+  if (next === "settings") {
+    void openInternalPage("settings", win);
     return;
   }
   if (next === "browser") {
     prefs = { ...prefs, sidebarOpen: false };
     savePrefs(prefs);
-    setChromePage("content");
+    setChromePage(win, "content");
     return;
   }
   prefs = {
@@ -165,7 +225,7 @@ function selectTool(next: ToolId): void {
     sidebarPanel: next as SidebarPanel,
   };
   savePrefs(prefs);
-  setChromePage("content");
+  setChromePage(win, "content");
 }
 
 async function refreshProjects(): Promise<void> {
@@ -189,8 +249,10 @@ async function applyProxyReady(): Promise<void> {
   };
   lastError = null;
   await refreshProjects();
-  if (currentProjectId && tabs) {
-    await tabs.ensureTab(currentProjectId);
+  if (currentProjectId) {
+    for (const win of liveWindows()) {
+      await win.tabs.ensureTab(currentProjectId);
+    }
   }
   try {
     killed = (await control.getKill()).killed;
@@ -204,9 +266,10 @@ async function applyProxyReady(): Promise<void> {
   emit();
 }
 
-function createWindow(): void {
+function createWindow(options?: { privateMode?: boolean }): ChromeWin {
+  const privateMode = options?.privateMode ?? false;
   const dark = resolveTheme() === "dark";
-  mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1440,
     height: 920,
     minWidth: 960,
@@ -224,25 +287,23 @@ function createWindow(): void {
       sandbox: true,
     },
   });
+  window.setTitle(privateMode ? `${PRODUCT_NAME} (Private)` : PRODUCT_NAME);
 
-  mainWindow.on("ready-to-show", () => {
-    if (isSmokeRun()) {
-      mainWindow?.setPosition(60, 60);
-      mainWindow?.show();
-      return;
-    }
-    mainWindow?.show();
-  });
-  mainWindow.on("maximize", emit);
-  mainWindow.on("unmaximize", emit);
+  const win: ChromeWin = {
+    id: randomUUID(),
+    window,
+    tabs: null as unknown as TabManager,
+    panels: new PanelManager(
+      () => window,
+      () => (resolveTheme() === "dark" ? "#2b2a33" : "#f9f9fb"),
+    ),
+    tool: "browser",
+    chromePage: "content",
+    privateMode,
+  };
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url);
-    return { action: "deny" };
-  });
-
-  tabs = new TabManager(
-    mainWindow,
+  win.tabs = new TabManager(
+    window,
     () =>
       sidecar.ready
         ? {
@@ -252,18 +313,22 @@ function createWindow(): void {
           }
         : null,
     () => {
-      const active = tabs?.activeInfo();
+      const active = win.tabs.activeInfo();
       if (active && isSettingsUrl(active.url)) {
-        chromePage = "settings";
-      } else if (chromePage === "settings" && active && !isSettingsUrl(active.url)) {
-        chromePage = "content";
+        win.chromePage = "settings";
+        win.tool = "settings";
+      } else if (win.chromePage === "settings" && active && !isSettingsUrl(active.url)) {
+        win.chromePage = "content";
+        if (win.tool === "settings") {
+          win.tool = "browser";
+        }
       }
-      syncViewVisibility();
-      emit();
+      syncViewVisibility(win);
+      emit(win);
     },
     (ses) => downloads.hook(ses),
     (payload) => {
-      void panels.open({
+      void win.panels.open({
         kind: "pagemenu",
         x: payload.x,
         y: payload.y,
@@ -272,237 +337,328 @@ function createWindow(): void {
         payload: payload as unknown as Record<string, unknown>,
       });
     },
-    emitFind,
+    (result) => emitFind(result, win),
+    privateMode
+      ? { privateMode: true, privatePartition: `temp:incognito-${win.id}` }
+      : undefined,
   );
 
-  hookShortcuts(mainWindow);
+  chromeWindows.push(win);
+  activate(win);
+
+  window.on("ready-to-show", () => {
+    if (isSmokeRun()) {
+      window.setPosition(60, 60);
+    }
+    window.show();
+  });
+  window.on("focus", () => activate(win));
+  window.on("maximize", () => emit(win));
+  window.on("unmaximize", () => emit(win));
+  window.on("closed", () => {
+    const index = chromeWindows.findIndex((item) => item.id === win.id);
+    if (index >= 0) {
+      chromeWindows.splice(index, 1);
+    }
+    win.panels.close();
+    if (mainWindow === window) {
+      const next = focusedChrome();
+      mainWindow = next?.window ?? null;
+      tabs = next?.tabs ?? null;
+    }
+  });
+
+  window.webContents.setWindowOpenHandler((details) => {
+    if (details.url.startsWith("http://") || details.url.startsWith("https://")) {
+      void openNewTab(details.url, win);
+      return { action: "deny" };
+    }
+    shell.openExternal(details.url);
+    return { action: "deny" };
+  });
+
+  hookShortcuts(win);
   if (isSmokeRun()) {
-    mainWindow.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    window.webContents.on("console-message", (_event, level, message, line, sourceId) => {
       console.log(`SMOKE render[${level}] ${message} (${sourceId}:${line})`);
     });
-    mainWindow.webContents.on("did-fail-load", (_event, code, desc, url) => {
+    window.webContents.on("did-fail-load", (_event, code, desc, url) => {
       console.log(`SMOKE did-fail-load ${code} ${desc} ${url}`);
     });
-    mainWindow.webContents.on("preload-error", (_event, path, error) => {
+    window.webContents.on("preload-error", (_event, path, error) => {
       console.log(`SMOKE preload-error ${path} ${error}`);
     });
-    mainWindow.webContents.on("did-finish-load", () => {
+    window.webContents.on("did-finish-load", () => {
       console.log("SMOKE chrome did-finish-load");
     });
   }
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+    void window.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
+    void window.loadFile(join(__dirname, "../renderer/index.html"));
   }
+
+  if (currentProjectId && proxyStatus.status === "ready") {
+    void win.tabs.ensureTab(currentProjectId);
+  }
+  return win;
 }
 
-function hookShortcuts(window: BrowserWindow): void {
-  const handle = (input: Electron.Input, contents: Electron.WebContents): boolean => {
-    if (input.type !== "keyDown") {
-      return false;
-    }
-    const ctrl = input.control || input.meta;
-    const shift = input.shift;
-    const key = input.key.toLowerCase();
-    if (ctrl && key === "t") {
-      void openNewTab();
-      return true;
-    }
-    if (ctrl && shift && key === "t") {
-      if (currentProjectId) {
-        void tabs?.reopen(currentProjectId);
-      }
-      return true;
-    }
-    if (ctrl && key === "w") {
-      const id = tabs?.activeInfo()?.id;
-      if (id && currentProjectId) {
-        tabs?.close(id, currentProjectId);
-      }
-      return true;
-    }
-    if (ctrl && key === "l") {
-      mainWindow?.webContents.send("lurkwire:focus-url");
-      mainWindow?.webContents.focus();
-      return true;
-    }
-    if (ctrl && key === "f") {
-      mainWindow?.webContents.send("lurkwire:open-find");
-      mainWindow?.webContents.focus();
-      return true;
-    }
-    if (ctrl && key === "r") {
-      if (killed) {
-        return true;
-      }
-      tabs?.reload(shift);
-      return true;
-    }
-    if (key === "f5") {
-      tabs?.reload(shift);
-      return true;
-    }
-    if (ctrl && key === "h") {
-      void openInternalPage("history");
-      return true;
-    }
-    if (ctrl && key === "b") {
-      prefs = { ...prefs, bookmarksBar: !prefs.bookmarksBar };
-      savePrefs(prefs);
-      emit();
-      return true;
-    }
-    if (ctrl && (key === "+" || key === "=")) {
-      tabs?.adjustZoom(0.1);
-      return true;
-    }
-    if (ctrl && key === "-") {
-      tabs?.adjustZoom(-0.1);
-      return true;
-    }
-    if (ctrl && key === "0") {
-      tabs?.resetZoom();
-      return true;
-    }
-    if (ctrl && key === ",") {
-      void openInternalPage("settings");
-      return true;
-    }
-    if ((ctrl && shift && key === "i") || key === "f12") {
-      if (contents === mainWindow?.webContents) {
-        mainWindow.webContents.openDevTools({ mode: "detach" });
-      } else {
-        tabs?.openDevTools();
-      }
-      return true;
-    }
-    if (input.alt && key === "arrowleft") {
-      tabs?.back();
-      return true;
-    }
-    if (input.alt && key === "arrowright") {
-      tabs?.forward();
-      return true;
-    }
-    if (key === "escape") {
-      mainWindow?.webContents.send("lurkwire:escape");
-      panels.close();
-    }
-    return false;
-  };
-
-  window.webContents.on("before-input-event", (event, input) => {
-    if (handle(input, window.webContents)) {
+function hookShortcuts(win: ChromeWin): void {
+  win.window.webContents.on("before-input-event", (event, input) => {
+    if (handleShortcut(input, win, win.window.webContents)) {
       event.preventDefault();
     }
   });
-  window.on("focus", () => {
-    // tab views also need shortcuts
-  });
 }
 
-function hookTabShortcuts(): void {
-  // Tab webContents are created later; intercept via app-level event.
-  app.on("web-contents-created", (_event, contents) => {
-    contents.on("before-input-event", (event, input) => {
-      if (contents === mainWindow?.webContents) {
-        return;
-      }
-      if (handleAppShortcut(input, contents)) {
-        event.preventDefault();
-      }
-    });
-  });
-}
-
-function handleAppShortcut(input: Electron.Input, contents: Electron.WebContents): boolean {
-  // Reuse the same bindings when a page view has focus.
+function handleShortcut(input: Electron.Input, win: ChromeWin, contents: Electron.WebContents): boolean {
   if (input.type !== "keyDown") {
     return false;
   }
   const ctrl = input.control || input.meta;
   const shift = input.shift;
+  const alt = input.alt;
   const key = input.key.toLowerCase();
-  if (ctrl && ["t", "w", "l", "f", "r", "h", "b", "+", "=", "-", "0", ",", "i"].includes(key)) {
-    if (ctrl && key === "t") {
-      void openNewTab();
-    } else if (ctrl && shift && key === "t") {
-      if (currentProjectId) {
-        void tabs?.reopen(currentProjectId);
-      }
-    } else if (ctrl && key === "w") {
-      const id = tabs?.activeInfo()?.id;
-      if (id && currentProjectId) {
-        tabs?.close(id, currentProjectId);
-      }
-    } else if (ctrl && key === "l") {
-      mainWindow?.webContents.send("lurkwire:focus-url");
-      mainWindow?.webContents.focus();
-    } else if (ctrl && key === "f") {
-      mainWindow?.webContents.send("lurkwire:open-find");
-      mainWindow?.webContents.focus();
-    } else if (ctrl && key === "r") {
-      tabs?.reload(shift);
-    } else if (ctrl && key === "h") {
-      void openInternalPage("history");
-    } else if (ctrl && key === "b") {
-      prefs = { ...prefs, bookmarksBar: !prefs.bookmarksBar };
-      savePrefs(prefs);
-      emit();
-    } else if (ctrl && (key === "+" || key === "=")) {
-      tabs?.adjustZoom(0.1);
-    } else if (ctrl && key === "-") {
-      tabs?.adjustZoom(-0.1);
-    } else if (ctrl && key === "0") {
-      tabs?.resetZoom();
-    } else if (ctrl && key === ",") {
-      void openInternalPage("settings");
-    } else if (ctrl && shift && key === "i") {
-      tabs?.openDevTools();
+  const digit = key.length === 1 && key >= "1" && key <= "9" ? Number(key) : 0;
+
+  if (ctrl && shift && key === "n") {
+    openNewWindow({ privateMode: true });
+    return true;
+  }
+  if (ctrl && key === "n") {
+    openNewWindow();
+    return true;
+  }
+  if (ctrl && shift && key === "t") {
+    if (currentProjectId) {
+      void win.tabs.reopen(currentProjectId);
     }
     return true;
   }
-  if (key === "f12") {
-    tabs?.openDevTools();
+  if (ctrl && key === "t") {
+    void openNewTab(undefined, win);
+    return true;
+  }
+  if (ctrl && key === "w") {
+    const id = win.tabs.activeInfo()?.id;
+    if (id && currentProjectId) {
+      win.tabs.close(id, currentProjectId);
+      emit(win);
+    }
+    return true;
+  }
+  if (ctrl && key === "tab") {
+    if (currentProjectId) {
+      win.tabs.cycle(currentProjectId, shift ? -1 : 1);
+    }
+    return true;
+  }
+  if (ctrl && digit >= 1) {
+    if (currentProjectId) {
+      win.tabs.selectByNumber(currentProjectId, digit);
+    }
+    return true;
+  }
+  if ((ctrl && key === "l") || key === "f6") {
+    win.window.webContents.send("lurkwire:focus-url");
+    win.window.webContents.focus();
+    return true;
+  }
+  if ((ctrl && key === "f") || key === "f3") {
+    win.window.webContents.send("lurkwire:open-find");
+    win.window.webContents.focus();
+    return true;
+  }
+  if (ctrl && key === "r") {
+    if (!killed) {
+      win.tabs.reload(shift);
+    }
     return true;
   }
   if (key === "f5") {
-    tabs?.reload(shift);
+    win.tabs.reload(shift);
     return true;
   }
-  if (input.alt && (key === "arrowleft" || key === "arrowright")) {
-    if (key === "arrowleft") {
-      tabs?.back();
-    } else {
-      tabs?.forward();
+  if (ctrl && key === "d") {
+    const active = win.tabs.activeInfo();
+    if (active?.url && !isInternalUrl(active.url)) {
+      bookmarks = addBookmark({ title: active.title || active.url, url: active.url }, bookmarks);
+      emitBookmarks();
     }
     return true;
+  }
+  if (ctrl && key === "h") {
+    void openInternalPage("history", win);
+    return true;
+  }
+  if (ctrl && key === "j") {
+    void openInternalPage("downloads", win);
+    return true;
+  }
+  if (ctrl && shift && key === "b") {
+    prefs = { ...prefs, bookmarksBar: !prefs.bookmarksBar };
+    savePrefs(prefs);
+    emit();
+    return true;
+  }
+  if (ctrl && key === "b" && !shift) {
+    // Chrome uses Ctrl+Shift+B for the bar; leave Ctrl+B unused so we do not
+    // clash with page bold in editable fields beyond this return.
+    return false;
+  }
+  if (ctrl && shift && key === "o") {
+    void openInternalPage("bookmarks", win);
+    return true;
+  }
+  if (ctrl && key === "p") {
+    win.tabs.active()?.view.webContents.print({});
+    return true;
+  }
+  if (ctrl && key === "s") {
+    void saveActivePage(win);
+    return true;
+  }
+  if (ctrl && key === "u") {
+    const url = win.tabs.activeInfo()?.url;
+    if (url && (url.startsWith("http://") || url.startsWith("https://"))) {
+      void win.tabs.navigate(win.tabs.activeInfo()!.id, `view-source:${url}`);
+    }
+    return true;
+  }
+  if (ctrl && (key === "+" || key === "=")) {
+    win.tabs.adjustZoom(0.1);
+    return true;
+  }
+  if (ctrl && key === "-") {
+    win.tabs.adjustZoom(-0.1);
+    return true;
+  }
+  if (ctrl && key === "0") {
+    win.tabs.resetZoom();
+    return true;
+  }
+  if (key === "f11") {
+    win.window.setFullScreen(!win.window.isFullScreen());
+    return true;
+  }
+  if ((ctrl && shift && key === "i") || key === "f12") {
+    if (contents === win.window.webContents) {
+      win.window.webContents.openDevTools({ mode: "detach" });
+    } else {
+      win.tabs.openDevTools("detach");
+    }
+    return true;
+  }
+  if (ctrl && shift && key === "j") {
+    win.tabs.openDevTools("detach");
+    return true;
+  }
+  if (ctrl && shift && key === "c") {
+    const wc = win.tabs.active()?.view.webContents;
+    if (wc && !wc.isDestroyed()) {
+      wc.openDevTools({ mode: "right" });
+    }
+    return true;
+  }
+  if (ctrl && shift && key === "delete") {
+    void clearBrowsingData(win);
+    return true;
+  }
+  if (ctrl && key === ",") {
+    void openInternalPage("settings", win);
+    return true;
+  }
+  if (ctrl && key === "q") {
+    app.quit();
+    return true;
+  }
+  if (alt && key === "arrowleft") {
+    if (!killed) {
+      win.tabs.back();
+    }
+    return true;
+  }
+  if (alt && key === "arrowright") {
+    if (!killed) {
+      win.tabs.forward();
+    }
+    return true;
+  }
+  if (key === "escape") {
+    win.window.webContents.send("lurkwire:escape");
+    win.panels.close();
+    if (win.window.isFullScreen()) {
+      win.window.setFullScreen(false);
+    }
+    return false;
   }
   void contents;
   return false;
 }
 
-async function openInternalPage(page: InternalPage): Promise<void> {
-  if (!currentProjectId || !tabs) {
+async function saveActivePage(win: ChromeWin): Promise<void> {
+  const tab = win.tabs.active();
+  if (!tab || tab.view.webContents.isDestroyed()) {
     return;
   }
-  const url = `lurkwire://${page}`;
-  const active = tabs.activeInfo();
-  if (active) {
-    await tabs.navigate(active.id, url);
-  } else {
-    await tabs.create(currentProjectId, url);
+  const suggested = `${(tab.title || "page").replace(/[^\w.-]+/g, " ").trim() || "page"}.html`;
+  const choice = await dialog.showSaveDialog(win.window, {
+    title: "Save page",
+    defaultPath: suggested,
+    filters: [
+      { name: "Web page, complete", extensions: ["html"] },
+      { name: "HTML only", extensions: ["html"] },
+    ],
+  });
+  if (choice.canceled || !choice.filePath) {
+    return;
   }
-  tool = page === "settings" ? "settings" : "browser";
-  chromePage = page === "settings" ? "settings" : "content";
-  syncViewVisibility();
+  await tab.view.webContents.savePage(choice.filePath, "HTMLComplete");
+}
+
+async function clearBrowsingData(win: ChromeWin): Promise<void> {
+  const result = await dialog.showMessageBox(win.window, {
+    type: "warning",
+    buttons: ["Clear", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+    title: "Clear browsing data",
+    message: "Clear browsing history, cache, and site data for this profile?",
+    detail: "Captured proxy flows are not deleted. Private windows already use a temporary session.",
+  });
+  if (result.response !== 0) {
+    return;
+  }
+  clearVisits();
+  const ses = currentProjectId
+    ? electronSession.fromPartition(win.privateMode ? `temp:incognito-${win.id}` : `persist:proj-${currentProjectId}`)
+    : electronSession.defaultSession;
+  await ses.clearCache();
+  await ses.clearStorageData();
   emit();
 }
 
-async function openNewTab(url?: string): Promise<void> {
-  if (!currentProjectId || !tabs) {
+async function openInternalPage(page: InternalPage, win = focusedChrome()): Promise<void> {
+  if (!currentProjectId || !win) {
+    return;
+  }
+  const url = `lurkwire://${page}`;
+  const active = win.tabs.activeInfo();
+  if (active) {
+    await win.tabs.navigate(active.id, url);
+  } else {
+    await win.tabs.create(currentProjectId, url);
+  }
+  win.tool = page === "settings" ? "settings" : "browser";
+  win.chromePage = page === "settings" ? "settings" : "content";
+  syncViewVisibility(win);
+  emit(win);
+}
+
+async function openNewTab(url?: string, win = focusedChrome()): Promise<void> {
+  if (!currentProjectId || !win) {
     throw new Error("No project is selected");
   }
   const target = url ? (canonicalizeInternalUrl(url) ?? url) : "lurkwire://newtab";
@@ -511,93 +667,123 @@ async function openNewTab(url?: string): Promise<void> {
     emit();
     return;
   }
-  await tabs.create(currentProjectId, target);
-  tool = "browser";
-  chromePage = "content";
-  syncViewVisibility();
-  emit();
+  await win.tabs.create(currentProjectId, target);
+  win.tool = "browser";
+  win.chromePage = "content";
+  syncViewVisibility(win);
+  emit(win);
+}
+
+function openNewWindow(options?: { privateMode?: boolean }): ChromeWin {
+  return createWindow(options);
 }
 
 function registerIpc(): void {
-  ipcMain.handle("lurkwire:getState", () => snapshot());
-  ipcMain.handle("lurkwire:newTab", (_event, url?: string) => openNewTab(url));
-  ipcMain.handle("lurkwire:closeTab", (_event, id: string) => {
-    if (!currentProjectId || !tabs) {
+  ipcMain.handle("lurkwire:getState", (event) => {
+    const win = ctx(event);
+    return win ? snapshot(win) : null;
+  });
+  ipcMain.handle("lurkwire:newTab", (event, url?: string) => openNewTab(url, ctx(event)));
+  ipcMain.handle("lurkwire:newWindow", (_event, opts?: { privateMode?: boolean }) => {
+    openNewWindow(opts);
+  });
+  ipcMain.handle("lurkwire:moveTab", (event, id: string, beforeId: string | null) => {
+    const win = ctx(event);
+    win?.tabs.move(id, beforeId);
+    if (win) {
+      emit(win);
+    }
+  });
+  ipcMain.handle("lurkwire:closeTab", (event, id: string) => {
+    const win = ctx(event);
+    if (!currentProjectId || !win) {
       return;
     }
-    tabs.close(id, currentProjectId);
-    emit();
+    win.tabs.close(id, currentProjectId);
+    emit(win);
   });
-  ipcMain.handle("lurkwire:switchTab", (_event, id: string) => {
-    tabs?.show(id);
-    const info = tabs?.activeInfo();
-    chromePage = info && isSettingsUrl(info.url) ? "settings" : "content";
-    tool = chromePage === "settings" ? "settings" : "browser";
-    syncViewVisibility();
-    emit();
+  ipcMain.handle("lurkwire:switchTab", (event, id: string) => {
+    const win = ctx(event);
+    if (!win) {
+      return;
+    }
+    win.tabs.show(id);
+    const info = win.tabs.activeInfo();
+    win.chromePage = info && isSettingsUrl(info.url) ? "settings" : "content";
+    win.tool = win.chromePage === "settings" ? "settings" : "browser";
+    syncViewVisibility(win);
+    emit(win);
   });
-  ipcMain.handle("lurkwire:navigate", async (_event, url: string) => {
+  ipcMain.handle("lurkwire:navigate", async (event, url: string) => {
+    const win = ctx(event);
     const target = canonicalizeInternalUrl(url) ?? url;
     if (killed && !isInternalUrl(target)) {
       lastError = "Kill switch is on. Traffic is blocked.";
       emit();
       return;
     }
-    const id = tabs?.activeInfo()?.id;
-    if (!id) {
+    const id = win?.tabs.activeInfo()?.id;
+    if (!id || !win) {
       return;
     }
-    const kind = await tabs?.navigate(id, url);
-    tool = kind === "internal" && isSettingsUrl(target) ? "settings" : "browser";
-    chromePage = tool === "settings" ? "settings" : "content";
-    syncViewVisibility();
-    emit();
+    const kind = await win.tabs.navigate(id, url);
+    win.tool = kind === "internal" && isSettingsUrl(target) ? "settings" : "browser";
+    win.chromePage = win.tool === "settings" ? "settings" : "content";
+    syncViewVisibility(win);
+    emit(win);
   });
-  ipcMain.handle("lurkwire:back", () => {
+  ipcMain.handle("lurkwire:back", (event) => {
     if (!killed) {
-      tabs?.back();
+      ctx(event)?.tabs.back();
     }
   });
-  ipcMain.handle("lurkwire:forward", () => {
+  ipcMain.handle("lurkwire:forward", (event) => {
     if (!killed) {
-      tabs?.forward();
+      ctx(event)?.tabs.forward();
     }
   });
-  ipcMain.handle("lurkwire:reload", () => {
+  ipcMain.handle("lurkwire:reload", (event) => {
     if (!killed) {
-      tabs?.reload();
+      ctx(event)?.tabs.reload();
     }
   });
-  ipcMain.handle("lurkwire:stop", () => tabs?.stop());
-  ipcMain.handle("lurkwire:openDevTools", () => tabs?.openDevTools());
-  ipcMain.handle("lurkwire:setTool", (_event, next: ToolId) => {
-    selectTool(next);
+  ipcMain.handle("lurkwire:stop", (event) => ctx(event)?.tabs.stop());
+  ipcMain.handle("lurkwire:openDevTools", (event) => ctx(event)?.tabs.openDevTools());
+  ipcMain.handle("lurkwire:setTool", (event, next: ToolId) => {
+    selectTool(next, ctx(event));
   });
-  ipcMain.handle("lurkwire:setProject", async (_event, id: string) => {
-    if (!tabs) {
+  ipcMain.handle("lurkwire:setProject", async (event, id: string) => {
+    const win = ctx(event);
+    if (!win) {
       return;
     }
     if (currentProjectId) {
-      tabs.hideProject(currentProjectId);
+      for (const item of liveWindows()) {
+        item.tabs.hideProject(currentProjectId);
+      }
     }
     currentProjectId = id;
-    await tabs.ensureTab(id);
+    await win.tabs.ensureTab(id);
     syncViewVisibility();
     emit();
   });
-  ipcMain.handle("lurkwire:createProject", async (_event, name: string) => {
+  ipcMain.handle("lurkwire:createProject", async (event, name: string) => {
     const project = await control.createProject(name);
     await refreshProjects();
     currentProjectId = project.id;
-    if (tabs) {
-      await tabs.ensureTab(project.id);
+    const win = ctx(event);
+    if (win) {
+      await win.tabs.ensureTab(project.id);
     }
     emit();
     return project;
   });
-  ipcMain.handle("lurkwire:reportBounds", (_event, bounds: Bounds) => {
-    tabs?.setBounds(bounds);
-    syncViewVisibility();
+  ipcMain.handle("lurkwire:reportBounds", (event, bounds: Bounds) => {
+    const win = ctx(event);
+    win?.tabs.setBounds(bounds);
+    if (win) {
+      syncViewVisibility(win);
+    }
   });
   ipcMain.handle("lurkwire:listFlows", (_event, query: FlowQuery) => {
     return control.listFlows({
@@ -688,18 +874,19 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:clearShodanKey", () => {
     clearShodanKey();
   });
-  ipcMain.handle("lurkwire:windowMinimize", () => mainWindow?.minimize());
-  ipcMain.handle("lurkwire:windowToggleMaximize", () => {
-    if (!mainWindow) {
+  ipcMain.handle("lurkwire:windowMinimize", (event) => ctx(event)?.window.minimize());
+  ipcMain.handle("lurkwire:windowToggleMaximize", (event) => {
+    const window = ctx(event)?.window;
+    if (!window) {
       return;
     }
-    if (mainWindow.isMaximized()) {
-      mainWindow.unmaximize();
+    if (window.isMaximized()) {
+      window.unmaximize();
     } else {
-      mainWindow.maximize();
+      window.maximize();
     }
   });
-  ipcMain.handle("lurkwire:windowClose", () => mainWindow?.close());
+  ipcMain.handle("lurkwire:windowClose", (event) => ctx(event)?.window.close());
   ipcMain.handle("lurkwire:getBookmarks", () => bookmarks);
   ipcMain.handle("lurkwire:addBookmark", (_event, input: { title: string; url: string }) => {
     bookmarks = addBookmark(input, bookmarks);
@@ -715,50 +902,72 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:cancelDownload", (_event, id: string) => downloads.cancel(id));
   ipcMain.handle("lurkwire:showDownload", (_event, id: string) => downloads.show(id));
   ipcMain.handle("lurkwire:openDownload", (_event, id: string) => downloads.open(id));
-  ipcMain.handle("lurkwire:findInPage", (_event, text: string, options?: Electron.FindInPageOptions) => {
-    tabs?.find(text, options);
+  ipcMain.handle("lurkwire:findInPage", (event, text: string, options?: Electron.FindInPageOptions) => {
+    ctx(event)?.tabs.find(text, options);
   });
-  ipcMain.handle("lurkwire:stopFindInPage", () => tabs?.stopFind());
-  ipcMain.handle("lurkwire:setZoom", (_event, factor: number) => tabs?.setZoom(factor));
-  ipcMain.handle("lurkwire:adjustZoom", (_event, delta: number) => tabs?.adjustZoom(delta));
-  ipcMain.handle("lurkwire:resetZoom", () => tabs?.resetZoom());
-  ipcMain.handle("lurkwire:pinTab", (_event, id: string, pinned: boolean) => tabs?.pin(id, pinned));
-  ipcMain.handle("lurkwire:duplicateTab", (_event, id: string) => tabs?.duplicate(id));
-  ipcMain.handle("lurkwire:closeOtherTabs", (_event, id: string) => {
-    if (currentProjectId) {
-      tabs?.closeOthers(id, currentProjectId);
+  ipcMain.handle("lurkwire:stopFindInPage", (event) => ctx(event)?.tabs.stopFind());
+  ipcMain.handle("lurkwire:setZoom", (event, factor: number) => ctx(event)?.tabs.setZoom(factor));
+  ipcMain.handle("lurkwire:adjustZoom", (event, delta: number) => ctx(event)?.tabs.adjustZoom(delta));
+  ipcMain.handle("lurkwire:resetZoom", (event) => ctx(event)?.tabs.resetZoom());
+  ipcMain.handle("lurkwire:pinTab", (event, id: string, pinned: boolean) => ctx(event)?.tabs.pin(id, pinned));
+  ipcMain.handle("lurkwire:duplicateTab", (event, id: string) => ctx(event)?.tabs.duplicate(id));
+  ipcMain.handle("lurkwire:closeOtherTabs", (event, id: string) => {
+    const win = ctx(event);
+    if (currentProjectId && win) {
+      win.tabs.closeOthers(id, currentProjectId);
+      emit(win);
     }
   });
-  ipcMain.handle("lurkwire:closeTabsToRight", (_event, id: string) => {
-    if (currentProjectId) {
-      tabs?.closeToRight(id, currentProjectId);
+  ipcMain.handle("lurkwire:closeTabsToRight", (event, id: string) => {
+    const win = ctx(event);
+    if (currentProjectId && win) {
+      win.tabs.closeToRight(id, currentProjectId);
+      emit(win);
     }
   });
-  ipcMain.handle("lurkwire:reopenTab", () => {
-    if (currentProjectId) {
-      return tabs?.reopen(currentProjectId);
+  ipcMain.handle("lurkwire:reopenTab", (event) => {
+    const win = ctx(event);
+    if (currentProjectId && win) {
+      return win.tabs.reopen(currentProjectId);
     }
     return undefined;
   });
-  ipcMain.handle("lurkwire:pageAction", (_event, action: string, url?: string) => {
-    tabs?.execPageAction(action, url);
+  ipcMain.handle("lurkwire:pageAction", (event, action: string, url?: string) => {
+    ctx(event)?.tabs.execPageAction(action, url);
   });
   ipcMain.handle("lurkwire:copyText", (_event, text: string) => clipboard.writeText(text));
   ipcMain.handle("lurkwire:openExternal", (_event, url: string) => shell.openExternal(url));
-  ipcMain.handle("lurkwire:openPanel", (_event, request: PanelOpenRequest) => panels.open(request));
-  ipcMain.handle("lurkwire:closePanel", () => panels.close());
-  ipcMain.handle("lurkwire:resizePanel", (_event, width: number, height: number) => {
-    panels.resize(width, height);
+  ipcMain.handle("lurkwire:openPanel", (event, request: PanelOpenRequest) => ctx(event)?.panels.open(request));
+  ipcMain.handle("lurkwire:closePanel", (event) => ctx(event)?.panels.close());
+  ipcMain.handle("lurkwire:resizePanel", (event, width: number, height: number) => {
+    ctx(event)?.panels.resize(width, height);
   });
-  ipcMain.handle("lurkwire:getPanelContext", () => panels.current());
-  ipcMain.handle("lurkwire:requestFind", () => {
-    mainWindow?.webContents.send("lurkwire:open-find");
-    mainWindow?.focus();
-    mainWindow?.webContents.focus();
+  ipcMain.handle("lurkwire:getPanelContext", (event) => ctx(event)?.panels.current() ?? null);
+  ipcMain.handle("lurkwire:requestFind", (event) => {
+    const win = ctx(event);
+    if (!win) {
+      return;
+    }
+    win.window.webContents.send("lurkwire:open-find");
+    win.window.focus();
+    win.window.webContents.focus();
   });
   ipcMain.handle("lurkwire:revealPath", (_event, filePath: string) => shell.showItemInFolder(filePath));
 }
 
+function hookTabShortcuts(): void {
+  app.on("web-contents-created", (_event, contents) => {
+    contents.on("before-input-event", (event, input) => {
+      const win = chromeOfContents(contents);
+      if (!win || contents === win.window.webContents) {
+        return;
+      }
+      if (handleShortcut(input, win, contents)) {
+        event.preventDefault();
+      }
+    });
+  });
+}
 
 hookTabShortcuts();
 
