@@ -1,8 +1,10 @@
 pub mod ca;
 pub mod config;
 pub mod control;
+pub mod guardrails;
 pub mod intercept;
 pub mod proxy;
+pub mod scope;
 pub mod store;
 pub mod types;
 
@@ -17,6 +19,7 @@ use tokio::sync::{broadcast, watch};
 
 use crate::ca::CertificateAuthority;
 use crate::config::Config;
+use crate::guardrails::{KillSwitch, RateLimiter};
 use crate::intercept::InterceptEngine;
 use crate::proxy::{build_client, HttpsClient};
 use crate::store::Store;
@@ -28,6 +31,8 @@ pub struct AppState {
     pub client: HttpsClient,
     pub events: broadcast::Sender<serde_json::Value>,
     pub intercept: InterceptEngine,
+    pub kill: std::sync::Arc<KillSwitch>,
+    pub rate: std::sync::Arc<RateLimiter>,
     pub default_project_id: String,
     pub proxy_addr: SocketAddr,
     pub control_addr: SocketAddr,
@@ -83,6 +88,8 @@ impl RunningProxy {
             client,
             events,
             intercept: InterceptEngine::new(),
+            kill: std::sync::Arc::new(KillSwitch::default()),
+            rate: RateLimiter::production(),
             default_project_id: default_project.id.clone(),
             proxy_addr,
             control_addr,

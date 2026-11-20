@@ -8,6 +8,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  NewScopeRule,
   PanelOpenRequest,
   RepeaterSendRequest,
   SidebarPanel,
@@ -174,6 +175,14 @@ async function applyProxyReady(): Promise<void> {
   await refreshProjects();
   if (currentProjectId && tabs) {
     await tabs.ensureTab(currentProjectId);
+  }
+  try {
+    killed = (await control.getKill()).killed;
+    if (killed) {
+      lastError = "Kill switch is on. Traffic is blocked.";
+    }
+  } catch {
+    // keep local value if the control call fails
   }
   syncViewVisibility();
   emit();
@@ -568,12 +577,21 @@ function registerIpc(): void {
     emit();
     return prefs;
   });
-  ipcMain.handle("lurkwire:setKillSwitch", (_event, next: boolean) => {
-    killed = next;
-    lastError = next ? "Kill switch is on. Traffic is blocked." : null;
+  ipcMain.handle("lurkwire:setKillSwitch", async (_event, next: boolean) => {
+    try {
+      const state = next ? await control.engageKill() : await control.resumeKill();
+      killed = state.killed;
+      lastError = killed ? "Kill switch is on. Traffic is blocked." : null;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
     syncViewVisibility();
     emit();
   });
+  ipcMain.handle("lurkwire:listScope", (_event, projectId?: string) => control.listScope(projectId));
+  ipcMain.handle("lurkwire:addScope", (_event, rule: NewScopeRule) => control.addScope(rule));
+  ipcMain.handle("lurkwire:deleteScope", (_event, id: string) => control.deleteScope(id));
+  ipcMain.handle("lurkwire:listAudit", (_event, projectId?: string) => control.listAudit(projectId));
   ipcMain.handle("lurkwire:windowMinimize", () => mainWindow?.minimize());
   ipcMain.handle("lurkwire:windowToggleMaximize", () => {
     if (!mainWindow) {

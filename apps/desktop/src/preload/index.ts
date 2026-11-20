@@ -9,6 +9,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  NewScopeRule,
   PanelContext,
   PanelOpenRequest,
   RepeaterSendRequest,
@@ -54,6 +55,10 @@ const api = {
   setPrefs: (patch: Partial<AppPrefs>): Promise<AppPrefs> =>
     ipcRenderer.invoke("lurkwire:setPrefs", patch),
   setKillSwitch: (next: boolean) => ipcRenderer.invoke("lurkwire:setKillSwitch", next),
+  listScope: (projectId?: string) => ipcRenderer.invoke("lurkwire:listScope", projectId),
+  addScope: (rule: NewScopeRule) => ipcRenderer.invoke("lurkwire:addScope", rule),
+  deleteScope: (id: string) => ipcRenderer.invoke("lurkwire:deleteScope", id),
+  listAudit: (projectId?: string) => ipcRenderer.invoke("lurkwire:listAudit", projectId),
   windowMinimize: () => ipcRenderer.invoke("lurkwire:windowMinimize"),
   windowToggleMaximize: () => ipcRenderer.invoke("lurkwire:windowToggleMaximize"),
   windowClose: () => ipcRenderer.invoke("lurkwire:windowClose"),

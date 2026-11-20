@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
+use crate::scope::{ScopeKind, ScopeRule};
 use crate::types::{
     url_from_parts, FlowDetail, FlowQuery, FlowSummary, HeaderPair, Project, PREVIEW_CHARS,
 };
@@ -68,6 +69,31 @@ CREATE VIRTUAL TABLE IF NOT EXISTS flows_fts USING fts5(
   resp_text,
   tokenize = 'unicode61'
 );
+
+CREATE TABLE IF NOT EXISTS scope_rules (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  kind TEXT NOT NULL,
+  host TEXT NOT NULL,
+  port INTEGER,
+  path_prefix TEXT NOT NULL DEFAULT '/',
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE INDEX IF NOT EXISTS scope_rules_project ON scope_rules(project_id);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY,
+  ts INTEGER NOT NULL,
+  actor TEXT NOT NULL,
+  action TEXT NOT NULL,
+  project_id TEXT,
+  detail TEXT NOT NULL,
+  prev_hash TEXT NOT NULL,
+  hash TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS audit_log_ts ON audit_log(ts DESC);
 "#;
 
 const MAX_INDEX_CHARS: usize = 256 * 1024;
@@ -94,6 +120,7 @@ pub struct NewFlow {
     pub duration_ms: Option<u64>,
     pub source: String,
     pub truncated: bool,
+    pub in_scope: bool,
 }
 
 pub struct Store {
@@ -111,19 +138,7 @@ impl Store {
             Connection::open(&db_path).with_context(|| format!("open {}", db_path.display()))?;
         conn.execute_batch(SCHEMA)
             .context("initialize sqlite schema")?;
-        let version: Option<String> = conn
-            .query_row(
-                "SELECT value FROM meta WHERE key = 'schema_version'",
-                [],
-                |row| row.get(0),
-            )
-            .optional()?;
-        if version.is_none() {
-            conn.execute(
-                "INSERT INTO meta(key, value) VALUES ('schema_version', '1')",
-                [],
-            )?;
-        }
+        migrate(&conn)?;
         Ok(Self {
             conn: Mutex::new(conn),
             blob_dir,
@@ -204,7 +219,7 @@ impl Store {
             ) VALUES (
                 ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
                 ?11, ?12, ?13, ?14, ?15, ?16, ?17,
-                ?18, ?19, ?20, 1, ?21, ?22, ''
+                ?18, ?19, ?20, ?21, ?22, ?23, ''
             )",
             params![
                 flow.id,
@@ -227,6 +242,7 @@ impl Store {
                 flow.duration_ms.map(|d| d as i64),
                 flow.source,
                 mime,
+                if flow.in_scope { 1 } else { 0 },
                 if flow.truncated { 1 } else { 0 },
                 tags,
             ],
@@ -265,7 +281,7 @@ impl Store {
             duration_ms: flow.duration_ms,
             source: flow.source.clone(),
             mime,
-            in_scope: true,
+            in_scope: flow.in_scope,
             truncated: flow.truncated,
             tags: Vec::new(),
             note: String::new(),
@@ -448,6 +464,169 @@ impl Store {
     fn blob_path(&self, hash: &str) -> PathBuf {
         self.blob_dir.join(&hash[..2]).join(format!("{hash}.zst"))
     }
+
+    pub fn list_scope_rules(&self, project_id: &str) -> Result<Vec<ScopeRule>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, enabled, kind, host, port, path_prefix, created_at
+             FROM scope_rules WHERE project_id = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![project_id], row_scope)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    pub fn add_scope_rule(&self, rule: &ScopeRule) -> Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "INSERT INTO scope_rules(id, project_id, enabled, kind, host, port, path_prefix, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                rule.id,
+                rule.project_id,
+                if rule.enabled { 1 } else { 0 },
+                kind_str(&rule.kind),
+                rule.host,
+                rule.port.map(|p| p as i64),
+                rule.path_prefix,
+                rule.created_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_scope_rule(&self, id: &str) -> Result<bool> {
+        let conn = self.conn.lock().expect("store lock");
+        let n = conn.execute("DELETE FROM scope_rules WHERE id = ?1", params![id])?;
+        Ok(n > 0)
+    }
+
+    pub fn replace_scope_rules(&self, project_id: &str, rules: &[ScopeRule]) -> Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM scope_rules WHERE project_id = ?1",
+            params![project_id],
+        )?;
+        for rule in rules {
+            tx.execute(
+                "INSERT INTO scope_rules(id, project_id, enabled, kind, host, port, path_prefix, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    rule.id,
+                    rule.project_id,
+                    if rule.enabled { 1 } else { 0 },
+                    kind_str(&rule.kind),
+                    rule.host,
+                    rule.port.map(|p| p as i64),
+                    rule.path_prefix,
+                    rule.created_at,
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn get_scope_rule(&self, id: &str) -> Result<Option<ScopeRule>> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.query_row(
+            "SELECT id, project_id, enabled, kind, host, port, path_prefix, created_at
+             FROM scope_rules WHERE id = ?1",
+            params![id],
+            row_scope,
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
+    pub fn append_audit(
+        &self,
+        actor: &str,
+        action: &str,
+        project_id: Option<&str>,
+        detail: serde_json::Value,
+    ) -> Result<AuditEntry> {
+        let conn = self.conn.lock().expect("store lock");
+        let prev_hash: String = conn
+            .query_row(
+                "SELECT hash FROM audit_log ORDER BY ts DESC, id DESC LIMIT 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or_else(genesis_hash);
+        let entry = AuditEntry {
+            id: uuid::Uuid::new_v4().to_string(),
+            ts: now_ms(),
+            actor: actor.to_string(),
+            action: action.to_string(),
+            project_id: project_id.map(ToOwned::to_owned),
+            detail,
+            prev_hash: prev_hash.clone(),
+            hash: String::new(),
+        };
+        let hash = audit_hash(&prev_hash, &entry);
+        conn.execute(
+            "INSERT INTO audit_log(id, ts, actor, action, project_id, detail, prev_hash, hash)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                entry.id,
+                entry.ts,
+                entry.actor,
+                entry.action,
+                entry.project_id,
+                entry.detail.to_string(),
+                prev_hash,
+                hash,
+            ],
+        )?;
+        Ok(AuditEntry { hash, ..entry })
+    }
+
+    pub fn list_audit(
+        &self,
+        project_id: Option<&str>,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<AuditEntry>> {
+        let conn = self.conn.lock().expect("store lock");
+        if let Some(pid) = project_id {
+            let mut stmt = conn.prepare(
+                "SELECT id, ts, actor, action, project_id, detail, prev_hash, hash
+                 FROM audit_log
+                 WHERE project_id IS NULL OR project_id = ?1
+                 ORDER BY ts ASC, id ASC
+                 LIMIT ?2 OFFSET ?3",
+            )?;
+            let rows = stmt.query_map(params![pid, limit as i64, offset as i64], row_audit)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        } else {
+            let mut stmt = conn.prepare(
+                "SELECT id, ts, actor, action, project_id, detail, prev_hash, hash
+                 FROM audit_log
+                 ORDER BY ts ASC, id ASC
+                 LIMIT ?1 OFFSET ?2",
+            )?;
+            let rows = stmt.query_map(params![limit as i64, offset as i64], row_audit)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+        }
+    }
+
+    pub fn verify_audit_chain(&self) -> Result<bool> {
+        let entries = self.list_audit(None, 10_000, 0)?;
+        let mut prev = genesis_hash();
+        for entry in entries {
+            if entry.prev_hash != prev {
+                return Ok(false);
+            }
+            let expected = audit_hash(&entry.prev_hash, &entry);
+            if expected != entry.hash {
+                return Ok(false);
+            }
+            prev = entry.hash;
+        }
+        Ok(true)
+    }
 }
 
 struct ParsedSearch {
@@ -613,6 +792,144 @@ fn preview_text(bytes: &[u8]) -> Option<String> {
     Some(String::from_utf8_lossy(slice).into_owned())
 }
 
+pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AuditEntry {
+    pub id: String,
+    pub ts: i64,
+    pub actor: String,
+    pub action: String,
+    pub project_id: Option<String>,
+    pub detail: serde_json::Value,
+    pub prev_hash: String,
+    pub hash: String,
+}
+
+fn migrate(conn: &Connection) -> Result<()> {
+    let version: Option<String> = conn
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()?;
+    match version.as_deref() {
+        None => {
+            conn.execute(
+                "INSERT INTO meta(key, value) VALUES ('schema_version', '2')",
+                [],
+            )?;
+        }
+        Some("1") => {
+            conn.execute(
+                "UPDATE meta SET value = '2' WHERE key = 'schema_version'",
+                [],
+            )?;
+        }
+        Some(_) => {}
+    }
+    Ok(())
+}
+
+pub fn genesis_hash() -> String {
+    GENESIS_HASH.to_string()
+}
+
+/// hash = sha256(prev_hash || canonical entry)
+pub fn audit_hash(prev_hash: &str, entry: &AuditEntry) -> String {
+    let canonical = canonical_audit(entry);
+    let mut hasher = Sha256::new();
+    hasher.update(prev_hash.as_bytes());
+    hasher.update(canonical.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn canonical_audit(entry: &AuditEntry) -> String {
+    let mut obj = serde_json::Map::new();
+    obj.insert(
+        "action".into(),
+        serde_json::Value::String(entry.action.clone()),
+    );
+    obj.insert(
+        "actor".into(),
+        serde_json::Value::String(entry.actor.clone()),
+    );
+    obj.insert("detail".into(), sort_json(entry.detail.clone()));
+    obj.insert(
+        "project_id".into(),
+        entry
+            .project_id
+            .clone()
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
+    );
+    obj.insert("ts".into(), serde_json::Value::Number(entry.ts.into()));
+    serde_json::Value::Object(obj).to_string()
+}
+
+fn sort_json(value: serde_json::Value) -> serde_json::Value {
+    match value {
+        serde_json::Value::Object(map) => {
+            let mut ordered = serde_json::Map::new();
+            let mut keys: Vec<_> = map.keys().cloned().collect();
+            keys.sort();
+            for key in keys {
+                if let Some(v) = map.get(&key) {
+                    ordered.insert(key, sort_json(v.clone()));
+                }
+            }
+            serde_json::Value::Object(ordered)
+        }
+        serde_json::Value::Array(items) => {
+            serde_json::Value::Array(items.into_iter().map(sort_json).collect())
+        }
+        other => other,
+    }
+}
+
+fn kind_str(kind: &ScopeKind) -> &'static str {
+    match kind {
+        ScopeKind::Include => "include",
+        ScopeKind::Exclude => "exclude",
+    }
+}
+
+fn parse_kind(value: &str) -> rusqlite::Result<ScopeKind> {
+    match value {
+        "include" => Ok(ScopeKind::Include),
+        "exclude" => Ok(ScopeKind::Exclude),
+        _ => Err(rusqlite::Error::InvalidQuery),
+    }
+}
+
+fn row_scope(row: &rusqlite::Row<'_>) -> rusqlite::Result<ScopeRule> {
+    Ok(ScopeRule {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        enabled: row.get::<_, i64>(2)? != 0,
+        kind: parse_kind(&row.get::<_, String>(3)?)?,
+        host: row.get(4)?,
+        port: row.get::<_, Option<i64>>(5)?.map(|p| p as u16),
+        path_prefix: row.get(6)?,
+        created_at: row.get(7)?,
+    })
+}
+
+fn row_audit(row: &rusqlite::Row<'_>) -> rusqlite::Result<AuditEntry> {
+    let detail: String = row.get(5)?;
+    Ok(AuditEntry {
+        id: row.get(0)?,
+        ts: row.get(1)?,
+        actor: row.get(2)?,
+        action: row.get(3)?,
+        project_id: row.get(4)?,
+        detail: serde_json::from_str(&detail).unwrap_or(serde_json::Value::Null),
+        prev_hash: row.get(6)?,
+        hash: row.get(7)?,
+    })
+}
+
 pub fn now_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
@@ -660,6 +977,7 @@ mod tests {
             duration_ms: Some(12),
             source: "browser".into(),
             truncated: false,
+            in_scope: true,
         };
         store.insert_flow(&flow).unwrap();
 

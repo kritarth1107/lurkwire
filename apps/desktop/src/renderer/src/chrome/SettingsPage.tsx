@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { AppSnapshot, ThemePref } from "../../../shared/types";
+import { useEffect, useMemo, useState } from "react";
+import type { AppSnapshot, AuditEntry, ScopeKind, ScopeRule, ThemePref } from "../../../shared/types";
 import { projectColor } from "../../../shared/projectColor";
 
 const categories = [
@@ -8,6 +8,8 @@ const categories = [
   { id: "search", label: "Search" },
   { id: "privacy", label: "Privacy & proxy" },
   { id: "projects", label: "Projects" },
+  { id: "scope", label: "Scope" },
+  { id: "audit", label: "Audit log" },
   { id: "about", label: "About" },
 ] as const;
 
@@ -200,6 +202,8 @@ export function SettingsPage({ state }: { state: AppSnapshot }) {
             </div>
           </section>
         ) : null}
+        {cat === "scope" ? <ScopeSection projectId={state.currentProjectId} /> : null}
+        {cat === "audit" ? <AuditSection projectId={state.currentProjectId} /> : null}
         {cat === "about" ? (
           <section>
             <h3>About {state.product}</h3>
@@ -215,5 +219,114 @@ export function SettingsPage({ state }: { state: AppSnapshot }) {
         ) : null}
       </div>
     </div>
+  );
+}
+
+
+function ScopeSection({ projectId }: { projectId: string | null }) {
+  const [rules, setRules] = useState<ScopeRule[]>([]);
+  const [host, setHost] = useState("");
+  const [kind, setKind] = useState<ScopeKind>("include");
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = async () => {
+    try {
+      setRules(await window.lurkwire.listScope(projectId ?? undefined));
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  useEffect(() => {
+    void reload();
+  }, [projectId]);
+
+  return (
+    <section>
+      <h3>Scope</h3>
+      <p>
+        Active tools (Repeater, Intruder, and AI send) are denied until an include rule matches.
+        Browsing is always captured. Exclude rules win over includes.
+      </p>
+      {error ? <p>{error}</p> : null}
+      {rules.map((rule) => (
+        <div key={rule.id} className="settings-row">
+          <div>
+            <strong>{rule.kind}</strong> {rule.host}
+            {rule.port ? `:${rule.port}` : ""} {rule.path_prefix}
+            {rule.enabled ? null : <span className="meta"> disabled</span>}
+          </div>
+          <button type="button" onClick={() => void window.lurkwire.deleteScope(rule.id).then(() => reload())}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="settings-row">
+        <select value={kind} onChange={(event) => setKind(event.target.value as ScopeKind)}>
+          <option value="include">Include</option>
+          <option value="exclude">Exclude</option>
+        </select>
+        <input
+          type="text"
+          value={host}
+          placeholder="example.com or *.example.com"
+          onChange={(event) => setHost(event.target.value)}
+        />
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            if (!host.trim()) {
+              return;
+            }
+            void window.lurkwire
+              .addScope({
+                project_id: projectId ?? undefined,
+                kind,
+                host: host.trim(),
+                path_prefix: "/",
+              })
+              .then(() => {
+                setHost("");
+                return reload();
+              })
+              .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+          }}
+        >
+          Add rule
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function AuditSection({ projectId }: { projectId: string | null }) {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void window.lurkwire
+      .listAudit(projectId ?? undefined)
+      .then(setEntries)
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+  }, [projectId]);
+
+  return (
+    <section>
+      <h3>Audit log</h3>
+      <p>Append-only and hash-chained. The first previous hash is 64 zeros.</p>
+      {error ? <p>{error}</p> : null}
+      {entries.length === 0 ? <p className="meta">No audit entries yet.</p> : null}
+      {entries.map((entry) => (
+        <div key={entry.id} className="settings-row">
+          <div>
+            <strong>{entry.action}</strong> <span className="meta">{entry.actor}</span>
+            <p className="mono">{entry.hash.slice(0, 16)}… prev {entry.prev_hash.slice(0, 16)}…</p>
+          </div>
+          <span className="meta">{new Date(entry.ts).toLocaleString()}</span>
+        </div>
+      ))}
+    </section>
   );
 }

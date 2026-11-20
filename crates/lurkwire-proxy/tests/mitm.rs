@@ -85,6 +85,7 @@ async fn repeater_send_records_source() {
     let dir = tempfile::tempdir().unwrap();
     let config = Config::for_test(dir.path().to_path_buf(), vec![origin_ca.cert_der.clone()]);
     let running = RunningProxy::start(config).await.unwrap();
+    allow_localhost(&running);
 
     let detail = lurkwire_proxy::proxy::send_repeater(
         &running.state,
@@ -310,4 +311,18 @@ fn example_com_reachable() -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
+}
+
+fn allow_localhost(running: &RunningProxy) {
+    let rule = lurkwire_proxy::scope::ScopeRule {
+        id: format!("rule-{}", lurkwire_proxy::store::now_ms()),
+        project_id: running.state.default_project_id.clone(),
+        enabled: true,
+        kind: lurkwire_proxy::scope::ScopeKind::Include,
+        host: "127.0.0.1".into(),
+        port: None,
+        path_prefix: "/".into(),
+        created_at: lurkwire_proxy::store::now_ms(),
+    };
+    running.state.store.add_scope_rule(&rule).unwrap();
 }

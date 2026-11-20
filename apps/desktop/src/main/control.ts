@@ -1,13 +1,17 @@
 import type {
+  AuditEntry,
   FlowDetail,
   FlowList,
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
   InterceptState,
+  KillState,
+  NewScopeRule,
   PausedItem,
   Project,
   RepeaterSendRequest,
+  ScopeRule,
 } from "../shared/types";
 import type { ProxyReady } from "./proxy";
 
@@ -73,6 +77,36 @@ export class ControlClient {
 
   dropIntercept(id: string): Promise<void> {
     return this.json("POST", `/intercept/queue/${encodeURIComponent(id)}/drop`);
+  }
+
+  getKill(): Promise<KillState> {
+    return this.json("GET", "/kill");
+  }
+
+  engageKill(): Promise<KillState> {
+    return this.json("POST", "/kill");
+  }
+
+  resumeKill(): Promise<KillState> {
+    return this.json("POST", "/kill/resume");
+  }
+
+  listScope(projectId?: string): Promise<ScopeRule[]> {
+    const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+    return this.json("GET", `/scope${qs}`);
+  }
+
+  addScope(rule: NewScopeRule): Promise<ScopeRule> {
+    return this.json("POST", "/scope", rule);
+  }
+
+  deleteScope(id: string): Promise<void> {
+    return this.json("DELETE", `/scope/${encodeURIComponent(id)}`);
+  }
+
+  listAudit(projectId?: string): Promise<AuditEntry[]> {
+    const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+    return this.json("GET", `/audit${qs}`);
   }
 
   private url(path: string): string {

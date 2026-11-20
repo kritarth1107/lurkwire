@@ -265,3 +265,40 @@ export type PanelContext = {
   kind: PanelKind;
   payload: Record<string, unknown>;
 };
+
+export type ScopeKind = "include" | "exclude";
+
+export type ScopeRule = {
+  id: string;
+  project_id: string;
+  enabled: boolean;
+  kind: ScopeKind;
+  host: string;
+  port: number | null;
+  path_prefix: string;
+  created_at: number;
+};
+
+export type NewScopeRule = {
+  project_id?: string;
+  enabled?: boolean;
+  kind: ScopeKind;
+  host: string;
+  port?: number | null;
+  path_prefix?: string;
+};
+
+export type AuditEntry = {
+  id: string;
+  ts: number;
+  actor: string;
+  action: string;
+  project_id: string | null;
+  detail: unknown;
+  prev_hash: string;
+  hash: string;
+};
+
+export type KillState = {
+  killed: boolean;
+};

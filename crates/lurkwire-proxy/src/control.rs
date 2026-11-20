@@ -6,7 +6,7 @@ use axum::http::{header, HeaderMap, Request, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use futures_util::StreamExt;
 use serde::Deserialize;
@@ -14,8 +14,11 @@ use subtle::ConstantTimeEq;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::BroadcastStream;
 
+use crate::guardrails::GuardError;
 use crate::intercept::{Decision, ForwardEdit, InterceptConfig, PausedItem};
 use crate::proxy::send_repeater;
+use crate::scope::{NewScopeRule, ScopeKind, ScopeRule};
+use crate::store::AuditEntry;
 use crate::types::{FlowQuery, Project, RepeaterSendRequest};
 use crate::AppState;
 
@@ -41,6 +44,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/intercept/queue/{id}", get(get_intercept_item))
         .route("/intercept/queue/{id}/forward", post(forward_intercept))
         .route("/intercept/queue/{id}/drop", post(drop_intercept))
+        .route("/kill", get(get_kill).post(post_kill))
+        .route("/kill/resume", post(resume_kill))
+        .route("/scope", get(list_scope).post(add_scope).put(replace_scope))
+        .route("/scope/{id}", delete(delete_scope))
+        .route("/audit", get(list_audit))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state)
 }
@@ -50,14 +58,15 @@ struct Health {
     ok: bool,
     product: &'static str,
     version: &'static str,
+    killed: bool,
 }
 
 async fn health(State(state): State<Arc<AppState>>) -> Json<Health> {
-    let _ = state;
     Json(Health {
-        ok: true,
+        ok: !state.kill.is_on(),
         product: "lurkwire-proxy",
         version: env!("CARGO_PKG_VERSION"),
+        killed: state.kill.is_on(),
     })
 }
 
@@ -298,10 +307,42 @@ impl ApiError {
             message: message.to_string(),
         }
     }
+
+    fn forbidden(message: &str) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            message: message.to_string(),
+        }
+    }
+
+    fn conflict(message: &str, status: StatusCode) -> Self {
+        Self {
+            status,
+            message: message.to_string(),
+        }
+    }
+}
+
+impl From<GuardError> for ApiError {
+    fn from(err: GuardError) -> Self {
+        match err {
+            GuardError::Killed | GuardError::OutOfScope => ApiError::forbidden(&err.to_string()),
+            GuardError::RateLimited => {
+                ApiError::conflict(&err.to_string(), StatusCode::TOO_MANY_REQUESTS)
+            }
+        }
+    }
 }
 
 impl From<anyhow::Error> for ApiError {
     fn from(err: anyhow::Error) -> Self {
+        if let Some(guard) = err.downcast_ref::<GuardError>() {
+            return ApiError::from(match guard {
+                GuardError::Killed => GuardError::Killed,
+                GuardError::OutOfScope => GuardError::OutOfScope,
+                GuardError::RateLimited => GuardError::RateLimited,
+            });
+        }
         tracing::warn!(error = %err, "control API error");
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
@@ -314,5 +355,183 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let body = serde_json::json!({ "error": self.message });
         (self.status, Json(body)).into_response()
+    }
+}
+
+#[derive(serde::Serialize)]
+struct KillState {
+    killed: bool,
+}
+
+async fn get_kill(State(state): State<Arc<AppState>>) -> Json<KillState> {
+    Json(KillState {
+        killed: state.kill.is_on(),
+    })
+}
+
+async fn post_kill(State(state): State<Arc<AppState>>) -> Json<KillState> {
+    state.kill.set(true);
+    let _ = state.store.append_audit(
+        "operator",
+        "kill",
+        None,
+        serde_json::json!({ "killed": true }),
+    );
+    let _ = state
+        .events
+        .send(serde_json::json!({ "kind": "kill", "killed": true }));
+    Json(KillState { killed: true })
+}
+
+async fn resume_kill(State(state): State<Arc<AppState>>) -> Json<KillState> {
+    state.kill.set(false);
+    let _ = state.store.append_audit(
+        "operator",
+        "resume",
+        None,
+        serde_json::json!({ "killed": false }),
+    );
+    let _ = state
+        .events
+        .send(serde_json::json!({ "kind": "kill", "killed": false }));
+    Json(KillState { killed: false })
+}
+
+#[derive(Deserialize)]
+struct ProjectQuery {
+    project_id: Option<String>,
+}
+
+fn project_id_or_default(state: &AppState, project_id: Option<String>) -> String {
+    project_id
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| state.default_project_id.clone())
+}
+
+async fn list_scope(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ProjectQuery>,
+) -> Result<Json<Vec<ScopeRule>>, ApiError> {
+    let project_id = project_id_or_default(&state, query.project_id);
+    Ok(Json(state.store.list_scope_rules(&project_id)?))
+}
+
+async fn add_scope(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<NewScopeRule>,
+) -> Result<Json<ScopeRule>, ApiError> {
+    let host = body.host.trim().to_string();
+    if host.is_empty() {
+        return Err(ApiError::bad_request("host is required"));
+    }
+    let rule = ScopeRule {
+        id: uuid::Uuid::new_v4().to_string(),
+        project_id: project_id_or_default(&state, body.project_id),
+        enabled: body.enabled.unwrap_or(true),
+        kind: body.kind,
+        host,
+        port: body.port,
+        path_prefix: body
+            .path_prefix
+            .unwrap_or_else(|| "/".into())
+            .trim()
+            .to_string(),
+        created_at: crate::store::now_ms(),
+    };
+    state.store.add_scope_rule(&rule)?;
+    let _ = state.store.append_audit(
+        "operator",
+        "scope.rule_add",
+        Some(&rule.project_id),
+        serde_json::json!({ "id": rule.id, "kind": kind_json(&rule.kind), "host": rule.host }),
+    );
+    Ok(Json(rule))
+}
+
+#[derive(Deserialize)]
+struct ReplaceScope {
+    project_id: Option<String>,
+    rules: Vec<NewScopeRule>,
+}
+
+async fn replace_scope(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ReplaceScope>,
+) -> Result<Json<Vec<ScopeRule>>, ApiError> {
+    let project_id = project_id_or_default(&state, body.project_id);
+    let mut rules = Vec::new();
+    for item in body.rules {
+        let host = item.host.trim().to_string();
+        if host.is_empty() {
+            return Err(ApiError::bad_request("host is required"));
+        }
+        rules.push(ScopeRule {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project_id.clone(),
+            enabled: item.enabled.unwrap_or(true),
+            kind: item.kind,
+            host,
+            port: item.port,
+            path_prefix: item
+                .path_prefix
+                .unwrap_or_else(|| "/".into())
+                .trim()
+                .to_string(),
+            created_at: crate::store::now_ms(),
+        });
+    }
+    state.store.replace_scope_rules(&project_id, &rules)?;
+    let _ = state.store.append_audit(
+        "operator",
+        "scope.replace",
+        Some(&project_id),
+        serde_json::json!({ "count": rules.len() }),
+    );
+    Ok(Json(rules))
+}
+
+async fn delete_scope(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let existing = state.store.get_scope_rule(&id)?;
+    if !state.store.delete_scope_rule(&id)? {
+        return Err(ApiError::not_found("scope rule not found"));
+    }
+    if let Some(rule) = existing {
+        let _ = state.store.append_audit(
+            "operator",
+            "scope.rule_delete",
+            Some(&rule.project_id),
+            serde_json::json!({ "id": rule.id, "host": rule.host }),
+        );
+    }
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+struct AuditQuery {
+    project_id: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+async fn list_audit(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<AuditQuery>,
+) -> Result<Json<Vec<AuditEntry>>, ApiError> {
+    let limit = query.limit.unwrap_or(200).min(1000);
+    let offset = query.offset.unwrap_or(0);
+    Ok(Json(state.store.list_audit(
+        query.project_id.as_deref(),
+        limit,
+        offset,
+    )?))
+}
+
+fn kind_json(kind: &ScopeKind) -> &'static str {
+    match kind {
+        ScopeKind::Include => "include",
+        ScopeKind::Exclude => "exclude",
     }
 }

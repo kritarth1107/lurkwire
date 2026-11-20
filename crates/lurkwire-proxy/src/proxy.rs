@@ -100,6 +100,12 @@ async fn dispatch(
     req: Request<Incoming>,
     state: Arc<AppState>,
 ) -> Result<Response<BoxBody<Bytes, std::io::Error>>, Infallible> {
+    if state.kill.is_on() {
+        return Ok(error_response(
+            StatusCode::FORBIDDEN,
+            anyhow::anyhow!("kill switch is on"),
+        ));
+    }
     if req.method() == Method::CONNECT {
         return Ok(handle_connect(req, state));
     }
@@ -348,6 +354,12 @@ async fn intercept(
             Err(_) => return,
         };
         let truncated = req_body_stored.1 || truncated_resp;
+        let rules = state_store
+            .store
+            .list_scope_rules(&project_id)
+            .unwrap_or_default();
+        let in_scope =
+            crate::scope::is_in_scope(&rules, &target_clone.host, target_clone.port, &path_clone);
         let flow = NewFlow {
             id: flow_id,
             project_id,
@@ -369,6 +381,7 @@ async fn intercept(
             duration_ms: Some(started.elapsed().as_millis() as u64),
             source,
             truncated,
+            in_scope,
         };
         match state_store.store.insert_flow(&flow) {
             Ok(summary) => {
@@ -439,6 +452,29 @@ pub async fn send_repeater(
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| state.default_project_id.clone());
 
+    let rules = state.store.list_scope_rules(&project_id)?;
+    let permit = crate::guardrails::preflight_active(
+        state.kill.is_on(),
+        &rules,
+        &state.rate,
+        &host,
+        port,
+        &path,
+    );
+    if let Err(err) = &permit {
+        let _ = state.store.append_audit(
+            "repeater",
+            "tool.denied",
+            Some(&project_id),
+            serde_json::json!({
+                "host": host,
+                "url": req.url,
+                "reason": err.to_string(),
+            }),
+        );
+    }
+    let _permit = permit.map_err(anyhow::Error::from)?;
+
     let upstream_uri = crate::types::url_from_parts(&scheme, &host, port, &path, &query);
     let mut builder = Request::builder().method(method.clone()).uri(&upstream_uri);
     copy_forward_headers(
@@ -478,9 +514,9 @@ pub async fn send_repeater(
         ts,
         method: method.as_str().to_string(),
         scheme,
-        host,
+        host: host.clone(),
         port,
-        path,
+        path: path.clone(),
         query,
         http_version: "HTTP/1.1".into(),
         status: Some(status.as_u16()),
@@ -493,12 +529,19 @@ pub async fn send_repeater(
         duration_ms: Some(started.elapsed().as_millis() as u64),
         source: "repeater".into(),
         truncated: req_stored.1 || resp_stored.1,
+        in_scope: crate::scope::is_in_scope(&rules, &host, port, &path),
     };
     let summary = state.store.insert_flow(&flow)?;
     let _ = state.events.send(serde_json::json!({
         "kind": "flow",
         "flow": summary,
     }));
+    let _ = state.store.append_audit(
+        "repeater",
+        "tool.send",
+        Some(&summary.project_id),
+        serde_json::json!({ "flow_id": summary.id, "host": summary.host, "url": summary.url }),
+    );
     state
         .store
         .get_flow(&summary.id)?
