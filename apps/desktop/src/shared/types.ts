@@ -44,6 +44,9 @@ export type { LlmAction, LlmConnectorConfig, LlmProvider, LlmSettings } from "./
 export { DEFAULT_LLM, LLM_PROVIDERS };
 export type { InteractshInteraction, InteractshState } from "./interactsh";
 export { INTERACTSH_SERVERS } from "./interactsh";
+import type { TabGroup } from "./tabGroups";
+export type { TabGroup, TabGroupColor } from "./tabGroups";
+export { TAB_GROUP_COLORS, TAB_GROUP_COLOR_HEX } from "./tabGroups";
 
 export type LlmRequest = {
   action: LlmAction;
@@ -99,6 +102,7 @@ export type TabInfo = {
   pinned: boolean;
   secure: boolean;
   zoomFactor: number;
+  groupId: string | null;
 };
 
 export type HeaderPair = {
@@ -183,6 +187,7 @@ export type AppSnapshot = {
   projects: Project[];
   currentProjectId: string | null;
   tabs: TabInfo[];
+  tabGroups: TabGroup[];
   activeTabId: string | null;
   tool: ToolId;
   error: string | null;
@@ -299,7 +304,8 @@ export type PanelKind =
   | "intercept"
   | "project"
   | "tabmenu"
-  | "pagemenu";
+  | "pagemenu"
+  | "groupmenu";
 
 export type PanelAlign = "start" | "end";
 export type PanelPlacement = "below" | "above";

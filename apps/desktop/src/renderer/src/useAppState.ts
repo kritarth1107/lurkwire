@@ -8,6 +8,7 @@ const empty: AppSnapshot = {
   projects: [],
   currentProjectId: null,
   tabs: [],
+  tabGroups: [],
   activeTabId: null,
   tool: "browser",
   error: null,

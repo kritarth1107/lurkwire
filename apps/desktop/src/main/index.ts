@@ -151,6 +151,7 @@ function snapshot(win: ChromeWin): AppSnapshot {
     projects,
     currentProjectId,
     tabs: currentProjectId ? win.tabs.list(currentProjectId) : [],
+    tabGroups: currentProjectId ? win.tabs.listGroups(currentProjectId) : [],
     activeTabId: active?.id ?? null,
     tool: win.tool,
     error: lastError,
@@ -970,6 +971,30 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:resetZoom", (event) => ctx(event)?.tabs.resetZoom());
   ipcMain.handle("lurkwire:pinTab", (event, id: string, pinned: boolean) => ctx(event)?.tabs.pin(id, pinned));
   ipcMain.handle("lurkwire:duplicateTab", (event, id: string) => ctx(event)?.tabs.duplicate(id));
+  ipcMain.handle("lurkwire:createTabGroup", (event, tabId: string) => ctx(event)?.tabs.createGroup(tabId));
+  ipcMain.handle("lurkwire:addTabToGroup", (event, tabId: string, groupId: string) =>
+    ctx(event)?.tabs.addToGroup(tabId, groupId),
+  );
+  ipcMain.handle("lurkwire:ungroupTab", (event, tabId: string) => ctx(event)?.tabs.ungroupTab(tabId));
+  ipcMain.handle(
+    "lurkwire:updateTabGroup",
+    (event, id: string, patch: { title?: string; color?: import("../shared/types").TabGroupColor; collapsed?: boolean }) =>
+      ctx(event)?.tabs.updateGroup(id, patch),
+  );
+  ipcMain.handle("lurkwire:ungroupTabGroup", (event, id: string) => ctx(event)?.tabs.ungroup(id));
+  ipcMain.handle("lurkwire:closeTabGroup", (event, id: string) => {
+    const win = ctx(event);
+    if (win && currentProjectId) {
+      win.tabs.closeGroup(id, currentProjectId);
+    }
+  });
+  ipcMain.handle("lurkwire:newTabInGroup", async (event, groupId: string, url?: string) => {
+    const win = ctx(event);
+    if (!win || !currentProjectId) {
+      return;
+    }
+    return win.tabs.create(currentProjectId, url ?? "", { groupId });
+  });
   ipcMain.handle("lurkwire:closeOtherTabs", (event, id: string) => {
     const win = ctx(event);
     if (currentProjectId && win) {

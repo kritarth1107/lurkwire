@@ -1,11 +1,13 @@
 import { ChevronDown, Plus } from "lucide-react";
 import { useState } from "react";
-import type { AppSnapshot, TabInfo } from "../../../shared/types";
+import type { AppSnapshot, TabGroup, TabInfo } from "../../../shared/types";
+import { TAB_GROUP_COLOR_HEX, groupLabel, tabStripSegments } from "../../../shared/tabGroups";
 import { projectColor } from "../../../shared/projectColor";
 import { openAnchoredPanel, openAtCursor } from "./openPanel";
 import { WindowControls } from "./WindowControls";
 
 export function TabStrip({ state }: { state: AppSnapshot }) {
+  const segments = tabStripSegments(state.tabs, state.tabGroups ?? []);
   return (
     <div className={`tabstrip${state.privateMode ? " private" : ""}`}>
       <div
@@ -16,14 +18,27 @@ export function TabStrip({ state }: { state: AppSnapshot }) {
           }
         }}
       >
-        {state.tabs.map((tab) => (
-          <TabButton
-            key={tab.id}
-            tab={tab}
-            selected={tab.id === state.activeTabId}
-            color={projectColor(tab.projectId)}
-          />
-        ))}
+        {segments.map((segment, index) =>
+          segment.kind === "group" ? (
+            <TabGroupBlock
+              key={segment.group.id}
+              group={segment.group}
+              tabs={segment.tabs}
+              state={state}
+            />
+          ) : (
+            <div key={`tabs-${index}`} className="tab-cluster">
+              {segment.tabs.map((tab) => (
+                <TabButton
+                  key={tab.id}
+                  tab={tab}
+                  selected={tab.id === state.activeTabId}
+                  color={projectColor(tab.projectId)}
+                />
+              ))}
+            </div>
+          ),
+        )}
       </div>
       <button
         type="button"
@@ -50,14 +65,78 @@ export function TabStrip({ state }: { state: AppSnapshot }) {
   );
 }
 
+function TabGroupBlock({
+  group,
+  tabs,
+  state,
+}: {
+  group: TabGroup;
+  tabs: TabInfo[];
+  state: AppSnapshot;
+}) {
+  const accent = TAB_GROUP_COLOR_HEX[group.color];
+  const hasActive = tabs.some((tab) => tab.id === state.activeTabId);
+  return (
+    <div
+      className={`tab-group${group.collapsed ? " collapsed" : ""}${hasActive ? " has-active" : ""}`}
+      style={{ "--group": accent } as React.CSSProperties}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes("text/lurkwire-tab")) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const id = event.dataTransfer.getData("text/lurkwire-tab");
+        const anchor = tabs[0];
+        if (id && anchor) {
+          void window.lurkwire.moveTab(id, anchor.id);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className="tab-group-chip"
+        title={group.collapsed ? "Expand group" : "Collapse group"}
+        onClick={() => void window.lurkwire.updateTabGroup(group.id, { collapsed: !group.collapsed })}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          openAtCursor("groupmenu", event, {
+            width: 260,
+            height: 280,
+            payload: { groupId: group.id },
+          });
+        }}
+      >
+        {groupLabel(group)}
+        <span className="tab-group-count">{tabs.length}</span>
+      </button>
+      {group.collapsed
+        ? null
+        : tabs.map((tab) => (
+            <TabButton
+              key={tab.id}
+              tab={tab}
+              selected={tab.id === state.activeTabId}
+              color={projectColor(tab.projectId)}
+              groupColor={accent}
+            />
+          ))}
+    </div>
+  );
+}
+
 function TabButton({
   tab,
   selected,
   color,
+  groupColor,
 }: {
   tab: TabInfo;
   selected: boolean;
   color: string;
+  groupColor?: string;
 }) {
   const [dragging, setDragging] = useState(false);
   const letter = (tab.title || "New Tab").slice(0, 1).toUpperCase();
@@ -65,8 +144,8 @@ function TabButton({
     <button
       type="button"
       draggable
-      className={`tab${selected ? " selected" : ""}${tab.pinned ? " pinned" : ""}${dragging ? " dragging" : ""}`}
-      style={{ "--project": color } as React.CSSProperties}
+      className={`tab${selected ? " selected" : ""}${tab.pinned ? " pinned" : ""}${dragging ? " dragging" : ""}${tab.groupId ? " grouped" : ""}`}
+      style={{ "--project": color, "--group": groupColor ?? "transparent" } as React.CSSProperties}
       onClick={() => void window.lurkwire.switchTab(tab.id)}
       onAuxClick={(event) => {
         if (event.button === 1 && !tab.pinned) {
@@ -97,8 +176,8 @@ function TabButton({
         event.preventDefault();
         openAtCursor("tabmenu", event, {
           width: 230,
-          height: 300,
-          payload: { tabId: tab.id, pinned: tab.pinned },
+          height: 420,
+          payload: { tabId: tab.id, pinned: tab.pinned, groupId: tab.groupId },
         });
       }}
       title={tab.title}

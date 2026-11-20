@@ -7,6 +7,7 @@ import type {
   PanelContext,
   PanelKind,
 } from "../../../shared/types";
+import { TAB_GROUP_COLORS, TAB_GROUP_COLOR_HEX, groupLabel } from "../../../shared/tabGroups";
 import { projectColor } from "../../../shared/projectColor";
 import { useAppState } from "../useAppState";
 import type { SiteInfo } from "../../../shared/siteInfo";
@@ -51,8 +52,9 @@ export function PanelApp() {
       {kind === "lurkwire" ? <LurkwireMenu /> : null}
       {kind === "intercept" ? <InterceptMenu /> : null}
       {kind === "project" ? <ProjectMenu state={state} /> : null}
-      {kind === "tabmenu" ? <TabMenu payload={ctx?.payload ?? {}} /> : null}
+      {kind === "tabmenu" ? <TabMenu payload={ctx?.payload ?? {}} state={state} /> : null}
       {kind === "pagemenu" ? <PageMenu payload={ctx?.payload ?? {}} /> : null}
+      {kind === "groupmenu" ? <GroupMenu payload={ctx?.payload ?? {}} state={state} /> : null}
       {!kind ? <div className="placeholder">Loading…</div> : null}
     </div>
   );
@@ -105,9 +107,32 @@ function AppMenu({ state }: { state: AppSnapshot }) {
     );
   }
   if (sub === "tabgroups") {
+    const active = state.tabs.find((item) => item.id === state.activeTabId);
     return (
       <SubMenu title="Tab groups" onBack={() => setSub(null)}>
-        <p className="menu-note">Tab groups are not in this version yet. You can still pin tabs from the tab menu.</p>
+        <MenuItem
+          label="Add current tab to a new group"
+          disabled={!active || active.pinned}
+          onClick={() => {
+            if (active) {
+              void window.lurkwire.createTabGroup(active.id);
+            }
+            close();
+          }}
+        />
+        {state.tabGroups.length === 0 ? (
+          <p className="menu-note">No groups yet. Right-click a tab to add it to a group.</p>
+        ) : null}
+        {state.tabGroups.map((group) => (
+          <MenuItem
+            key={group.id}
+            label={`${groupLabel(group)} (${group.collapsed ? "collapsed" : "open"})`}
+            onClick={() => {
+              void window.lurkwire.updateTabGroup(group.id, { collapsed: !group.collapsed });
+              close();
+            }}
+          />
+        ))}
       </SubMenu>
     );
   }
@@ -317,15 +342,17 @@ function MenuItem({
   label,
   shortcut,
   submenu,
+  disabled,
   onClick,
 }: {
   label: string;
   shortcut?: string;
   submenu?: boolean;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="menu-item" onClick={onClick}>
+    <button type="button" className="menu-item" disabled={disabled} onClick={onClick}>
       <span className="menu-label-text">{label}</span>
       {shortcut ? <kbd>{shortcut}</kbd> : null}
       {submenu ? <span className="menu-caret">›</span> : null}
@@ -693,9 +720,11 @@ function ProjectMenu({ state }: { state: AppSnapshot }) {
   );
 }
 
-function TabMenu({ payload }: { payload: Record<string, unknown> }) {
+function TabMenu({ payload, state }: { payload: Record<string, unknown>; state: AppSnapshot }) {
   const id = String(payload.tabId ?? "");
   const pinned = Boolean(payload.pinned);
+  const groupId = typeof payload.groupId === "string" ? payload.groupId : null;
+  const groups = state.tabGroups ?? [];
   return (
     <>
       <button type="button" className="menu-item" onClick={() => { void window.lurkwire.newTab(); close(); }}>
@@ -711,6 +740,29 @@ function TabMenu({ payload }: { payload: Record<string, unknown> }) {
         {pinned ? "Unpin tab" : "Pin tab"}
       </button>
       <div className="menu-sep" />
+      {pinned ? null : (
+        <>
+          <button type="button" className="menu-item" onClick={() => { void window.lurkwire.createTabGroup(id); close(); }}>
+            Add tab to new group
+          </button>
+          {groups.filter((group) => group.id !== groupId).map((group) => (
+            <button
+              key={group.id}
+              type="button"
+              className="menu-item"
+              onClick={() => { void window.lurkwire.addTabToGroup(id, group.id); close(); }}
+            >
+              Add to {groupLabel(group)}
+            </button>
+          ))}
+          {groupId ? (
+            <button type="button" className="menu-item" onClick={() => { void window.lurkwire.ungroupTab(id); close(); }}>
+              Remove from group
+            </button>
+          ) : null}
+          <div className="menu-sep" />
+        </>
+      )}
       <button type="button" className="menu-item" onClick={() => { void window.lurkwire.closeTab(id); close(); }}>
         Close tab
       </button>
@@ -724,6 +776,58 @@ function TabMenu({ payload }: { payload: Record<string, unknown> }) {
         Reopen closed tab
       </button>
     </>
+  );
+}
+
+function GroupMenu({ payload, state }: { payload: Record<string, unknown>; state: AppSnapshot }) {
+  const id = String(payload.groupId ?? "");
+  const group = (state.tabGroups ?? []).find((item) => item.id === id);
+  const [title, setTitle] = useState(group?.title ?? "");
+  if (!group) {
+    return <div className="placeholder">This group is gone.</div>;
+  }
+  return (
+    <div className="group-menu">
+      <input
+        className="menu-input"
+        value={title}
+        placeholder="Name this group"
+        autoFocus
+        onChange={(event) => setTitle(event.target.value)}
+        onBlur={() => void window.lurkwire.updateTabGroup(id, { title })}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            void window.lurkwire.updateTabGroup(id, { title });
+            close();
+          }
+        }}
+      />
+      <div className="group-colors">
+        {TAB_GROUP_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className={`group-color${group.color === color ? " selected" : ""}`}
+            style={{ background: TAB_GROUP_COLOR_HEX[color] }}
+            title={color}
+            aria-label={color}
+            onClick={() => void window.lurkwire.updateTabGroup(id, { color })}
+          />
+        ))}
+      </div>
+      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.updateTabGroup(id, { collapsed: !group.collapsed }); close(); }}>
+        {group.collapsed ? "Expand group" : "Collapse group"}
+      </button>
+      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.newTabInGroup(id); close(); }}>
+        New tab in group
+      </button>
+      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.ungroupTabGroup(id); close(); }}>
+        Ungroup
+      </button>
+      <button type="button" className="menu-item" onClick={() => { void window.lurkwire.closeTabGroup(id); close(); }}>
+        Close group
+      </button>
+    </div>
   );
 }
 

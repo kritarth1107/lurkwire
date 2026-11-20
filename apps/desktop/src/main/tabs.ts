@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { BrowserWindow, clipboard, WebContentsView, session } from "electron";
-import type { Bounds, ContextMenuPayload, FindResult, TabInfo } from "../shared/types";
+import type { Bounds, ContextMenuPayload, FindResult, TabGroup, TabGroupColor, TabInfo } from "../shared/types";
+import { nextTabGroupColor, packTabOrder } from "../shared/tabGroups";
 import {
   canonicalizeInternalUrl,
   isInternalUrl,
@@ -20,11 +21,13 @@ type Tab = {
   canGoForward: boolean;
   favicon: string | null;
   pinned: boolean;
+  groupId: string | null;
   view: WebContentsView;
 };
 
 export class TabManager {
   private tabs = new Map<string, Tab>();
+  private groups = new Map<string, TabGroup>();
   private order: string[] = [];
   private closed: { projectId: string; url: string; title: string }[] = [];
   private activeId: string | null = null;
@@ -107,6 +110,15 @@ export class TabManager {
       const to = this.order.indexOf(beforeId);
       this.order.splice(to < 0 ? this.order.length : to, 0, id);
     }
+    if (tab.pinned) {
+      tab.groupId = null;
+    } else if (!beforeId) {
+      tab.groupId = null;
+    } else if (target) {
+      tab.groupId = target.groupId;
+    }
+    this.packOrder();
+    this.pruneGroups();
     this.onChange();
   }
 
@@ -115,6 +127,15 @@ export class TabManager {
       .map((id) => this.tabs.get(id))
       .filter((tab): tab is Tab => Boolean(tab && tab.projectId === projectId))
       .map((tab) => toInfo(tab));
+  }
+
+  listGroups(projectId: string): TabGroup[] {
+    const used = new Set(
+      this.list(projectId)
+        .map((tab) => tab.groupId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    return [...this.groups.values()].filter((group) => used.has(group.id));
   }
 
   active(): Tab | null {
@@ -135,7 +156,7 @@ export class TabManager {
     return this.create(projectId);
   }
 
-  async create(projectId: string, url = "", opts?: { pinned?: boolean }): Promise<string> {
+  async create(projectId: string, url = "", opts?: { pinned?: boolean; groupId?: string }): Promise<string> {
     await this.prepareSession(projectId);
     const id = randomUUID();
     const view = new WebContentsView({
@@ -157,6 +178,7 @@ export class TabManager {
       canGoForward: false,
       favicon: null,
       pinned: opts?.pinned ?? false,
+      groupId: opts?.pinned ? null : (opts?.groupId ?? null),
       view,
     };
     this.bind(tab);
@@ -164,6 +186,14 @@ export class TabManager {
     if (tab.pinned) {
       const firstUnpinned = this.order.findIndex((item) => !this.tabs.get(item)?.pinned);
       this.order.splice(firstUnpinned === -1 ? this.order.length : firstUnpinned, 0, id);
+    } else if (tab.groupId) {
+      const lastInGroup = [...this.order].reverse().find((item) => this.tabs.get(item)?.groupId === tab.groupId);
+      if (lastInGroup) {
+        const at = this.order.indexOf(lastInGroup);
+        this.order.splice(at + 1, 0, id);
+      } else {
+        this.order.push(id);
+      }
     } else {
       this.order.push(id);
     }
@@ -194,6 +224,7 @@ export class TabManager {
     }
     this.tabs.delete(id);
     this.order = this.order.filter((item) => item !== id);
+    this.pruneGroups();
     if (this.activeId === id) {
       const next = this.list(projectId).at(-1);
       this.activeId = next?.id ?? null;
@@ -242,7 +273,7 @@ export class TabManager {
     if (!tab) {
       return;
     }
-    await this.create(tab.projectId, tab.url);
+    await this.create(tab.projectId, tab.url, { groupId: tab.groupId ?? undefined });
   }
 
   pin(id: string, pinned: boolean): void {
@@ -251,6 +282,9 @@ export class TabManager {
       return;
     }
     tab.pinned = pinned;
+    if (pinned) {
+      tab.groupId = null;
+    }
     this.order = this.order.filter((item) => item !== id);
     if (pinned) {
       const firstUnpinned = this.order.findIndex((item) => !this.tabs.get(item)?.pinned);
@@ -267,6 +301,12 @@ export class TabManager {
       return;
     }
     this.activeId = id;
+    if (tab.groupId) {
+      const group = this.groups.get(tab.groupId);
+      if (group?.collapsed) {
+        group.collapsed = false;
+      }
+    }
     for (const item of this.tabs.values()) {
       const isActive = item.id === id && this.visible;
       item.view.setVisible(isActive);
@@ -311,6 +351,98 @@ export class TabManager {
     this.onChange();
     await tab.view.webContents.loadURL(url);
     return internal ? "internal" : "external";
+  }
+
+
+  createGroup(tabId: string): TabGroup | null {
+    const tab = this.tabs.get(tabId);
+    if (!tab || tab.pinned) {
+      return null;
+    }
+    const id = randomUUID();
+    const group: TabGroup = {
+      id,
+      title: "",
+      color: nextTabGroupColor([...this.groups.values()].map((item) => item.color)),
+      collapsed: false,
+    };
+    this.groups.set(id, group);
+    tab.groupId = id;
+    this.packOrder();
+    this.onChange();
+    return group;
+  }
+
+  addToGroup(tabId: string, groupId: string): void {
+    const tab = this.tabs.get(tabId);
+    const group = this.groups.get(groupId);
+    if (!tab || !group || tab.pinned) {
+      return;
+    }
+    tab.groupId = groupId;
+    this.packOrder();
+    this.onChange();
+  }
+
+  ungroupTab(tabId: string): void {
+    const tab = this.tabs.get(tabId);
+    if (!tab) {
+      return;
+    }
+    tab.groupId = null;
+    this.pruneGroups();
+    this.onChange();
+  }
+
+  updateGroup(id: string, patch: { title?: string; color?: TabGroupColor; collapsed?: boolean }): void {
+    const group = this.groups.get(id);
+    if (!group) {
+      return;
+    }
+    if (patch.title !== undefined) {
+      group.title = patch.title;
+    }
+    if (patch.color) {
+      group.color = patch.color;
+    }
+    if (patch.collapsed !== undefined) {
+      group.collapsed = patch.collapsed;
+    }
+    this.onChange();
+  }
+
+  ungroup(id: string): void {
+    for (const tab of this.tabs.values()) {
+      if (tab.groupId === id) {
+        tab.groupId = null;
+      }
+    }
+    this.groups.delete(id);
+    this.onChange();
+  }
+
+  closeGroup(id: string, projectId: string): void {
+    const members = this.list(projectId).filter((tab) => tab.groupId === id && !tab.pinned);
+    for (const tab of members) {
+      this.close(tab.id, projectId);
+    }
+    this.groups.delete(id);
+    this.onChange();
+  }
+
+  private packOrder(): void {
+    this.order = packTabOrder(this.order, (id) => this.tabs.get(id)?.groupId ?? null);
+  }
+
+  private pruneGroups(): void {
+    const used = new Set(
+      [...this.tabs.values()].map((tab) => tab.groupId).filter((id): id is string => Boolean(id)),
+    );
+    for (const id of [...this.groups.keys()]) {
+      if (!used.has(id)) {
+        this.groups.delete(id);
+      }
+    }
   }
 
   back(): void {
@@ -585,6 +717,7 @@ function toInfo(tab: Tab): TabInfo {
     canGoForward: tab.canGoForward,
     favicon: tab.favicon,
     pinned: tab.pinned,
+    groupId: tab.groupId,
     secure: isSecure(tab.url),
     zoomFactor: tab.view.webContents.isDestroyed() ? 1 : tab.view.webContents.getZoomFactor(),
   };
