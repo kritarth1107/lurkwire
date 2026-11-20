@@ -55,8 +55,13 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 ## Overnight tools (22 Nov)
 
 - [x] Firefox-style tab throbber, globe fallback, mute/crash states
-- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar, import/export, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, and proxy-backed send with guardrails). Still open: mock server, in-app OAuth PKCE browser flow, gRPC/WebSocket/SSE clients, standalone binary body picker
+- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar, import/export including OpenAPI YAML, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, proxy-backed send with guardrails, collection mock server, WebSocket/SSE clients, binary body picker, and OAuth 2.0 authorization-code + PKCE). Still open: gRPC client
 - [x] Command palette (Ctrl+K), CSRF PoC generator, and security-header reports from History
 - [x] Passive scanner hints for CL.TE request smuggling and unkeyed-header cache poisoning
 - [x] Workbench match-and-replace rules (applied after interpolation, before the proxy send)
-- [ ] Additional pentester tools
+- [x] Autorize-style session replay and response diff
+- [x] Notes/findings tracker with a CVSS 3.1 calculator and Markdown export
+- [x] In-scope directory/content discovery and JS endpoint/secret extraction
+- [x] GraphQL introspection explorer (voyager-lite)
+- [x] Logger++ filters and highlight rules; Decoder recipe chains
+- [ ] Remaining pentester ideas (gRPC, JS secret auto-filing into Notes, full GraphQL graph layout)

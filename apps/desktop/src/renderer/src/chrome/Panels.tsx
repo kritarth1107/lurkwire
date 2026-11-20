@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, FolderTree, GitCompare, ScrollText, Shuffle, Radio } from "lucide-react";
+import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, FolderTree, GitCompare, ScrollText, Shuffle, Radio, ShieldAlert, Search, Share2, StickyNote } from "lucide-react";
 import type {
   AppSnapshot,
   DownloadInfo,
@@ -234,6 +234,10 @@ function AppMenu({ state }: { state: AppSnapshot }) {
         <MenuItem label="Sequencer" onClick={() => { void window.lurkwire.setTool("sequencer"); close(); }} />
         <MenuItem label="Logger" onClick={() => { void window.lurkwire.setTool("logger"); close(); }} />
         <MenuItem label="OOB collaborator" onClick={() => { void window.lurkwire.setTool("oob"); close(); }} />
+        <MenuItem label="Autorize" onClick={() => { void window.lurkwire.setTool("autorize"); close(); }} />
+        <MenuItem label="Discover" onClick={() => { void window.lurkwire.setTool("discover"); close(); }} />
+        <MenuItem label="GraphQL explorer" onClick={() => { void window.lurkwire.setTool("graphql"); close(); }} />
+        <MenuItem label="Notes and CVSS" onClick={() => { void window.lurkwire.setTool("notes"); close(); }} />
         <MenuItem
           label="View source"
           shortcut="Ctrl+U"
@@ -633,6 +637,10 @@ function LurkwireMenu() {
     { id: "scanner", label: "Scanner", icon: Radar },
     { id: "recon", label: "Recon", icon: Globe },
     { id: "oob", label: "OOB", icon: Radio },
+    { id: "autorize", label: "Autorize", icon: ShieldAlert },
+    { id: "discover", label: "Discover", icon: Search },
+    { id: "graphql", label: "GraphQL", icon: Share2 },
+    { id: "notes", label: "Notes", icon: StickyNote },
     { id: "ai", label: "AI", icon: MessageSquare },
   ] as const;
   return (

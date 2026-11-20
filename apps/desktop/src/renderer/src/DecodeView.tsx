@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CODEC_LABELS, type CodecId, decodeCodec, hashCodec } from "../../shared/codec";
+import { runRecipe, type RecipeStep } from "../../shared/codecRecipe";
 import {
   type JwtAlg,
   decodeJwt,
@@ -9,7 +10,7 @@ import {
   verifyJwt,
 } from "../../shared/jwt";
 
-type Tab = "jwt" | "encode";
+type Tab = "jwt" | "encode" | "recipe";
 
 export function DecodeView() {
   const [tab, setTab] = useState<Tab>("jwt");
@@ -22,8 +23,11 @@ export function DecodeView() {
         <button type="button" className={tab === "encode" ? "chip active" : "chip"} onClick={() => setTab("encode")}>
           Encode
         </button>
+        <button type="button" className={tab === "recipe" ? "chip active" : "chip"} onClick={() => setTab("recipe")}>
+          Recipe
+        </button>
       </div>
-      {tab === "jwt" ? <JwtPane /> : <EncodePane />}
+      {tab === "jwt" ? <JwtPane /> : tab === "encode" ? <EncodePane /> : <RecipePane />}
     </div>
   );
 }
@@ -234,6 +238,47 @@ function EncodePane() {
         <textarea className="mono" rows={6} value={output} onChange={(event) => setOutput(event.target.value)} spellCheck={false} />
       </label>
       {error ? <p className="error">{error}</p> : null}
+    </div>
+  );
+}
+
+
+function RecipePane() {
+  const [input, setInput] = useState("");
+  const [steps, setSteps] = useState<RecipeStep[]>([{ id: "1", codec: "url", direction: "decode" }]);
+  const result = runRecipe(input, steps.filter((step) => !CODEC_LABELS.find((item) => item.id === step.codec)?.hash));
+  return (
+    <div className="decode-pane">
+      <p className="muted">Chain encode/decode steps, Chef-style. Hash steps stay on the Encode tab because they are one-way.</p>
+      <label className="intruder-label">
+        Input
+        <textarea className="mono" rows={6} value={input} onChange={(event) => setInput(event.target.value)} spellCheck={false} />
+      </label>
+      <div className="recipe-steps">
+        {steps.map((step, index) => (
+          <div key={step.id} className="codec-row">
+            <span>{index + 1}</span>
+            <select value={step.codec} onChange={(event) => setSteps((current) => current.map((item) => item.id === step.id ? { ...item, codec: event.target.value as CodecId } : item))}>
+              {CODEC_LABELS.filter((item) => !item.hash).map((codec) => (
+                <option key={codec.id} value={codec.id}>{codec.label}</option>
+              ))}
+            </select>
+            <select value={step.direction} onChange={(event) => setSteps((current) => current.map((item) => item.id === step.id ? { ...item, direction: event.target.value as RecipeStep["direction"] } : item))}>
+              <option value="decode">Decode</option>
+              <option value="encode">Encode</option>
+            </select>
+            <button type="button" onClick={() => setSteps((current) => current.filter((item) => item.id !== step.id))}>Remove</button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setSteps((current) => [...current, { id: crypto.randomUUID(), codec: "base64", direction: "decode" }])}>
+          Add step
+        </button>
+      </div>
+      {result.error ? <p className="error">Step {((result.step ?? 0) + 1)}: {result.error}</p> : null}
+      <label className="intruder-label">
+        Output
+        <textarea className="mono" rows={6} value={result.output} readOnly spellCheck={false} />
+      </label>
     </div>
   );
 }

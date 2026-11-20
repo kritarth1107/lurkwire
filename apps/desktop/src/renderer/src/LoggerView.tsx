@@ -1,13 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatTime, statusClass } from "../../shared/http";
-import { highlightOf } from "../../shared/flowMeta";
+import { HIGHLIGHT_COLORS } from "../../shared/flowMeta";
+import { EMPTY_FILTER, flowMatchesFilter, highlightForFlow, type HighlightRule, type LoggerFilter } from "../../shared/loggerFilters";
 import { AnnotationBar, FlowContextMenu, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
 import { HttpViewer } from "./HttpViewer";
 
 export function LoggerView({ projectId, handlers }: { projectId: string | null; handlers: FlowSendHandlers }) {
   const [items, setItems] = useState<FlowSummary[]>([]);
   const [source, setSource] = useState("");
+  const [filter, setFilter] = useState<LoggerFilter>(EMPTY_FILTER);
+  const [rules, setRules] = useState<HighlightRule[]>(() => {
+    try {
+      const raw = localStorage.getItem("lurkwire.logger.rules");
+      return raw ? (JSON.parse(raw) as HighlightRule[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FlowDetail | null>(null);
   const [stick, setStick] = useState(true);
@@ -23,7 +33,11 @@ export function LoggerView({ projectId, handlers }: { projectId: string | null; 
         limit: 400,
       });
       if (!cancelled) {
-        const next = source ? list.items.filter((item: FlowSummary) => item.source === source) : list.items;
+        let next = list.items as FlowSummary[];
+        if (source) {
+          next = next.filter((item) => item.source === source);
+        }
+        next = next.filter((item) => flowMatchesFilter(item, { ...filter, source: "" }));
         setItems(next);
       }
     };
@@ -33,7 +47,7 @@ export function LoggerView({ projectId, handlers }: { projectId: string | null; 
       cancelled = true;
       clearInterval(timer);
     };
-  }, [projectId, source]);
+  }, [projectId, source, filter]);
 
   useEffect(() => {
     if (stick && scroller.current) {
@@ -51,6 +65,11 @@ export function LoggerView({ projectId, handlers }: { projectId: string | null; 
 
   const sources = [...new Set(items.map((item) => item.source).filter(Boolean))];
 
+  const persistRules = (next: HighlightRule[]) => {
+    setRules(next);
+    localStorage.setItem("lurkwire.logger.rules", JSON.stringify(next));
+  };
+
   return (
     <div className="workbench logger-workbench">
       <div className="workbench-toolbar">
@@ -62,12 +81,61 @@ export function LoggerView({ projectId, handlers }: { projectId: string | null; 
             </option>
           ))}
         </select>
+        <input
+          value={filter.query}
+          onChange={(event) => setFilter((current) => ({ ...current, query: event.target.value }))}
+          placeholder="Filter or /regex/"
+          aria-label="Logger filter"
+        />
+        <select value={filter.method} onChange={(event) => setFilter((current) => ({ ...current, method: event.target.value }))} aria-label="Method">
+          <option value="">All methods</option>
+          {["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"].map((method) => (
+            <option key={method} value={method}>{method}</option>
+          ))}
+        </select>
+        <select value={filter.status} onChange={(event) => setFilter((current) => ({ ...current, status: event.target.value }))} aria-label="Status">
+          <option value="">All status</option>
+          {["2xx", "3xx", "4xx", "5xx", "200", "301", "302", "401", "403", "404", "500"].map((status) => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </select>
+        <label className="check">
+          <input type="checkbox" checked={filter.interestingOnly} onChange={(event) => setFilter((current) => ({ ...current, interestingOnly: event.target.checked }))} />
+          Interesting
+        </label>
         <label className="check">
           <input type="checkbox" checked={stick} onChange={(event) => setStick(event.target.checked)} />
           Follow
         </label>
         <span className="muted">{items.length} events</span>
+        <button
+          type="button"
+          onClick={() =>
+            persistRules([
+              ...rules,
+              { id: crypto.randomUUID(), pattern: filter.query || "admin|token|error", color: "red", enabled: true },
+            ])
+          }
+        >
+          Highlight
+        </button>
       </div>
+      {rules.length ? (
+        <div className="logger-rules">
+          {rules.map((rule) => (
+            <label key={rule.id} className={`check hl-${rule.color}`}>
+              <input type="checkbox" checked={rule.enabled} onChange={(event) => persistRules(rules.map((item) => item.id === rule.id ? { ...item, enabled: event.target.checked } : item))} />
+              /{rule.pattern}/
+              <select value={rule.color} onChange={(event) => persistRules(rules.map((item) => item.id === rule.id ? { ...item, color: event.target.value as HighlightRule["color"] } : item))}>
+                {HIGHLIGHT_COLORS.map((color) => (
+                  <option key={color} value={color}>{color}</option>
+                ))}
+              </select>
+              <button type="button" onClick={() => persistRules(rules.filter((item) => item.id !== rule.id))}>×</button>
+            </label>
+          ))}
+        </div>
+      ) : null}
       <div
         className="logger-stream"
         ref={scroller}
@@ -78,7 +146,7 @@ export function LoggerView({ projectId, handlers }: { projectId: string | null; 
         }}
       >
         {items.map((item) => {
-          const hl = highlightOf(item.tags);
+          const hl = highlightForFlow(item, rules);
           return (
             <button
               type="button"

@@ -17,6 +17,10 @@ const SIDEBAR_PANELS = new Set<SidebarPanel>([
   "logger",
   "sequencer",
   "oob",
+  "autorize",
+  "notes",
+  "discover",
+  "graphql",
 ]);
 
 export function prefsPath(): string {

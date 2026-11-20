@@ -12,8 +12,12 @@ import {
   Repeat,
   Radio,
   ScrollText,
+  Search,
+  Share2,
+  ShieldAlert,
   ShieldOff,
   Shuffle,
+  StickyNote,
   X,
 } from "lucide-react";
 import type { AppSnapshot, FlowDetail, SidebarPanel } from "../../../shared/types";
@@ -30,6 +34,10 @@ import { ComparerView } from "../ComparerView";
 import { LoggerView } from "../LoggerView";
 import { SequencerView } from "../SequencerView";
 import { OobView } from "../OobView";
+import { AutorizeView } from "../AutorizeView";
+import { NotesView } from "../NotesView";
+import { DiscoverView } from "../DiscoverView";
+import { GraphqlView } from "../GraphqlView";
 import type { FlowSendHandlers } from "../FlowActions";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
@@ -45,6 +53,10 @@ const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "scanner", label: "Scanner", icon: Radar },
   { id: "recon", label: "Recon", icon: Globe },
   { id: "oob", label: "OOB", icon: Radio },
+  { id: "autorize", label: "Autorize", icon: ShieldAlert },
+  { id: "discover", label: "Discover", icon: Search },
+  { id: "graphql", label: "GraphQL", icon: Share2 },
+  { id: "notes", label: "Notes", icon: StickyNote },
   { id: "ai", label: "AI", icon: MessageSquare },
 ];
 
@@ -170,6 +182,14 @@ export function Sidebar({
                 />
               ) : panel === "oob" ? (
                 <OobView />
+              ) : panel === "autorize" ? (
+                <AutorizeView projectId={state.currentProjectId} />
+              ) : panel === "discover" ? (
+                <DiscoverView projectId={state.currentProjectId} />
+              ) : panel === "graphql" ? (
+                <GraphqlView projectId={state.currentProjectId} />
+              ) : panel === "notes" ? (
+                <NotesView projectId={state.currentProjectId} />
               ) : panel === "recon" ? (
                 <ReconView
                   initialHost={(() => {

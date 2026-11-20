@@ -29,6 +29,10 @@ function tools(): PaletteCommand[] {
     ["logger", "Logger"],
     ["sequencer", "Sequencer"],
     ["oob", "OOB collaborator"],
+    ["autorize", "Autorize"],
+    ["discover", "Discover"],
+    ["graphql", "GraphQL explorer"],
+    ["notes", "Notes and CVSS"],
     ["ai", "AI assistant"],
   ];
   const pages: PaletteCommand[] = [
