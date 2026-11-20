@@ -4,6 +4,8 @@ import type {
   AppSnapshot,
   Bounds,
   FlowQuery,
+  ForwardEdit,
+  InterceptConfig,
   RepeaterSendRequest,
   ToolId,
 } from "../shared/types";
@@ -205,6 +207,14 @@ function registerIpc(): void {
       project_id: req.project_id ?? currentProjectId ?? undefined,
     }),
   );
+  ipcMain.handle("lurkwire:getIntercept", () => control.getIntercept());
+  ipcMain.handle("lurkwire:setIntercept", (_event, config: InterceptConfig) =>
+    control.setIntercept(config),
+  );
+  ipcMain.handle("lurkwire:forwardIntercept", (_event, id: string, edit: ForwardEdit) =>
+    control.forwardIntercept(id, edit),
+  );
+  ipcMain.handle("lurkwire:dropIntercept", (_event, id: string) => control.dropIntercept(id));
 }
 
 app.whenReady().then(async () => {

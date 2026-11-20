@@ -1,6 +1,7 @@
 pub mod ca;
 pub mod config;
 pub mod control;
+pub mod intercept;
 pub mod proxy;
 pub mod store;
 pub mod types;
@@ -16,6 +17,7 @@ use tokio::sync::{broadcast, watch};
 
 use crate::ca::CertificateAuthority;
 use crate::config::Config;
+use crate::intercept::InterceptEngine;
 use crate::proxy::{build_client, HttpsClient};
 use crate::store::Store;
 
@@ -24,7 +26,8 @@ pub struct AppState {
     pub ca: Arc<CertificateAuthority>,
     pub store: Arc<Store>,
     pub client: HttpsClient,
-    pub events: broadcast::Sender<types::FlowEvent>,
+    pub events: broadcast::Sender<serde_json::Value>,
+    pub intercept: InterceptEngine,
     pub default_project_id: String,
     pub proxy_addr: SocketAddr,
     pub control_addr: SocketAddr,
@@ -79,6 +82,7 @@ impl RunningProxy {
             store,
             client,
             events,
+            intercept: InterceptEngine::new(),
             default_project_id: default_project.id.clone(),
             proxy_addr,
             control_addr,

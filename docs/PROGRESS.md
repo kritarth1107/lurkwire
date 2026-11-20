@@ -7,7 +7,7 @@ Build order for v0.1. Checked items are on `main`.
 - [x] 3. Electron browser shell (tabs, address bar, projects) wired through the proxy
 - [x] 4. HTTP history UI with search and filters
 - [x] 5. Repeater
-- [ ] 6. Intercept (pause / edit / forward)
+- [x] 6. Intercept (pause / edit / forward)
 - [ ] 7. Guardrails core: scope allowlist, rate limiter, global kill switch, append-only hash-chained audit log
 - [ ] 8. LLM layer + AI side panel (explain / suggest / draft into Repeater; human sends)
 - [ ] 9. Intruder-lite

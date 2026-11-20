@@ -15,6 +15,7 @@ Lurkwire is an AI-native security browser for developers, pentesters, and bug bo
 - Electron/Chromium daily-driver browser
 - Rust intercepting TLS MITM proxy with a per-install CA trusted only inside the app
 - Per-project traffic store (HTTP history)
+- Intercept (pause, edit, forward, or drop)
 - Repeater
 - Intruder-lite
 - JWT/session tooling

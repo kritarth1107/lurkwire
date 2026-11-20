@@ -19,6 +19,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
+use crate::intercept::{decode_edit_body, Decision};
 use crate::store::{now_ms, NewFlow};
 use crate::types::{HeaderPair, RepeaterSendRequest};
 use crate::AppState;
@@ -190,7 +191,7 @@ async fn intercept(
         Some(t) => t,
         None => target_from_request(&req)?,
     };
-    let method = req.method().clone();
+    let mut method = req.method().clone();
     let version = req.version();
     let path_and_query = req
         .uri()
@@ -198,9 +199,9 @@ async fn intercept(
         .map(|pq| pq.as_str().to_string())
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| "/".to_string());
-    let (path, query) = split_path_query(&path_and_query);
-    let req_headers = headers_from(req.headers());
-    let req_body = req
+    let (mut path, mut query) = split_path_query(&path_and_query);
+    let mut req_headers = headers_from(req.headers());
+    let mut req_body = req
         .into_body()
         .collect()
         .await
@@ -208,6 +209,45 @@ async fn intercept(
         .to_bytes();
     if req_body.len() > MAX_STORED_BODY * 2 {
         anyhow::bail!("request body too large");
+    }
+    let mut target = target;
+
+    if state.intercept.should_pause_request() {
+        let url =
+            crate::types::url_from_parts(&target.scheme, &target.host, target.port, &path, &query);
+        match state
+            .intercept
+            .pause_request(
+                method.as_str(),
+                &url,
+                &req_headers,
+                &req_body,
+                &state.events,
+            )
+            .await
+        {
+            Decision::Drop => {
+                return Ok(error_response(
+                    StatusCode::FORBIDDEN,
+                    anyhow::anyhow!("dropped by intercept"),
+                ));
+            }
+            Decision::Forward(edit) => {
+                if let Some(next_method) = edit.method.as_ref() {
+                    method = next_method.parse().context("invalid intercepted method")?;
+                }
+                if let Some(next_url) = edit.url.as_ref() {
+                    let parsed = apply_url_override(&target, &path, &query, next_url)?;
+                    target = parsed.0;
+                    path = parsed.1;
+                    query = parsed.2;
+                }
+                if let Some(headers) = edit.headers.clone() {
+                    req_headers = headers;
+                }
+                req_body = Bytes::from(decode_edit_body(&edit, &req_body)?);
+            }
+        }
     }
 
     let upstream_uri =
@@ -236,11 +276,56 @@ async fn intercept(
         .await
         .with_context(|| format!("upstream {upstream_uri}"))?;
 
-    let status = upstream.status();
+    let mut status = upstream.status();
     let resp_version = upstream.version();
-    let resp_headers = headers_from(upstream.headers());
-    let (tx, rx) = oneshot::channel();
-    let teed = tee_body(upstream.into_body(), MAX_STORED_BODY, tx);
+    let mut resp_headers = headers_from(upstream.headers());
+
+    let (store_tx, store_rx) = oneshot::channel();
+    let client_body: BoxBody<Bytes, std::io::Error>;
+
+    if state.intercept.should_pause_response() {
+        let resp_bytes = upstream
+            .into_body()
+            .collect()
+            .await
+            .context("read intercepted response")?
+            .to_bytes();
+        let mut resp_body = resp_bytes.to_vec();
+        match state
+            .intercept
+            .pause_response(
+                method.as_str(),
+                &upstream_uri,
+                &resp_headers,
+                &resp_body,
+                status.as_u16(),
+                &state.events,
+            )
+            .await
+        {
+            Decision::Drop => {
+                return Ok(error_response(
+                    StatusCode::FORBIDDEN,
+                    anyhow::anyhow!("response dropped by intercept"),
+                ));
+            }
+            Decision::Forward(edit) => {
+                if let Some(code) = edit.status {
+                    status = StatusCode::from_u16(code).unwrap_or(status);
+                }
+                if let Some(headers) = edit.headers.clone() {
+                    resp_headers = headers;
+                }
+                resp_body = decode_edit_body(&edit, &resp_body)?;
+            }
+        }
+        set_content_length(&mut resp_headers, resp_body.len());
+        let len = resp_body.len() as u64;
+        let _ = store_tx.send((resp_body.clone(), len, false));
+        client_body = full_body(Bytes::from(resp_body));
+    } else {
+        client_body = tee_body(upstream.into_body(), MAX_STORED_BODY, store_tx);
+    }
 
     let flow_id = uuid::Uuid::new_v4().to_string();
     let project_id = state.default_project_id.clone();
@@ -255,9 +340,10 @@ async fn intercept(
     let resp_headers_clone = resp_headers.clone();
     let req_len = req_body.len() as u64;
     let req_body_stored = truncate_body(&req_body);
+    let status_code = status.as_u16();
 
     tokio::spawn(async move {
-        let (resp_stored, resp_len, truncated_resp) = match rx.await {
+        let (resp_stored, resp_len, truncated_resp) = match store_rx.await {
             Ok(body) => body,
             Err(_) => return,
         };
@@ -273,7 +359,7 @@ async fn intercept(
             path: path_clone,
             query: query_clone,
             http_version,
-            status: Some(status.as_u16()),
+            status: Some(status_code),
             req_headers: req_headers_clone,
             resp_headers: resp_headers_clone,
             req_body: req_body_stored.0,
@@ -286,10 +372,10 @@ async fn intercept(
         };
         match state_store.store.insert_flow(&flow) {
             Ok(summary) => {
-                let _ = state_store.events.send(crate::types::FlowEvent {
-                    kind: "flow".into(),
-                    flow: summary,
-                });
+                let _ = state_store.events.send(serde_json::json!({
+                    "kind": "flow",
+                    "flow": summary,
+                }));
             }
             Err(err) => tracing::warn!(error = %err, "failed to store flow"),
         }
@@ -297,7 +383,32 @@ async fn intercept(
 
     let mut response = Response::builder().status(status).version(resp_version);
     copy_response_headers(response.headers_mut().expect("headers"), &resp_headers);
-    response.body(teed).context("build client response")
+    response.body(client_body).context("build client response")
+}
+
+fn apply_url_override(
+    current: &Target,
+    path: &str,
+    query: &str,
+    raw: &str,
+) -> Result<(Target, String, String)> {
+    let parsed = url::Url::parse(raw).context("invalid intercepted URL")?;
+    let scheme = parsed.scheme().to_string();
+    if scheme != "http" && scheme != "https" {
+        anyhow::bail!("only http and https are supported");
+    }
+    let host = parsed.host_str().context("URL missing host")?.to_string();
+    let port = parsed
+        .port_or_known_default()
+        .unwrap_or(if scheme == "https" { 443 } else { 80 });
+    let next_path = if parsed.path().is_empty() {
+        path.to_string()
+    } else {
+        parsed.path().to_string()
+    };
+    let next_query = parsed.query().unwrap_or(query).to_string();
+    let _ = current;
+    Ok((Target { scheme, host, port }, next_path, next_query))
 }
 
 /// Send a request on behalf of Repeater and wait until the flow is stored.
@@ -384,10 +495,10 @@ pub async fn send_repeater(
         truncated: req_stored.1 || resp_stored.1,
     };
     let summary = state.store.insert_flow(&flow)?;
-    let _ = state.events.send(crate::types::FlowEvent {
-        kind: "flow".into(),
-        flow: summary.clone(),
-    });
+    let _ = state.events.send(serde_json::json!({
+        "kind": "flow",
+        "flow": summary,
+    }));
     state
         .store
         .get_flow(&summary.id)?
@@ -509,6 +620,17 @@ fn copy_forward_headers(dest: &mut hyper::HeaderMap, headers: &[HeaderPair], tar
     if let Ok(value) = hyper::header::HeaderValue::try_from(host) {
         dest.insert(hyper::header::HOST, value);
     }
+}
+
+fn set_content_length(headers: &mut Vec<HeaderPair>, len: usize) {
+    headers.retain(|header| {
+        !header.name.eq_ignore_ascii_case("content-length")
+            && !header.name.eq_ignore_ascii_case("transfer-encoding")
+    });
+    headers.push(HeaderPair {
+        name: "Content-Length".into(),
+        value: len.to_string(),
+    });
 }
 
 fn copy_response_headers(dest: &mut hyper::HeaderMap, headers: &[HeaderPair]) {

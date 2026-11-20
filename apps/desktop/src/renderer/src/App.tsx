@@ -1,11 +1,13 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { FlowDetail, ToolId } from "../../shared/types";
 import { HistoryView } from "./HistoryView";
+import { InterceptView } from "./InterceptView";
 import { RepeaterView } from "./RepeaterView";
 import { useAppState } from "./useAppState";
 
 const tools: { id: ToolId; label: string }[] = [
   { id: "browser", label: "Browser" },
+  { id: "intercept", label: "Intercept" },
   { id: "history", label: "History" },
   { id: "repeater", label: "Repeater" },
 ];
@@ -166,6 +168,8 @@ export function App() {
             void window.lurkwire.setTool("repeater");
           }}
         />
+      ) : state.tool === "intercept" ? (
+        <InterceptView />
       ) : (
         <RepeaterView
           draft={repeaterDraft}

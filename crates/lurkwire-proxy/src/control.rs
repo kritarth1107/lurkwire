@@ -14,6 +14,7 @@ use subtle::ConstantTimeEq;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::BroadcastStream;
 
+use crate::intercept::{Decision, ForwardEdit, InterceptConfig, PausedItem};
 use crate::proxy::send_repeater;
 use crate::types::{FlowQuery, Project, RepeaterSendRequest};
 use crate::AppState;
@@ -35,6 +36,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/flows/{id}/body/{which}", get(get_flow_body))
         .route("/events", get(events))
         .route("/repeater/send", post(repeater_send))
+        .route("/intercept", get(get_intercept).put(put_intercept))
+        .route("/intercept/queue", get(list_intercept_queue))
+        .route("/intercept/queue/{id}", get(get_intercept_item))
+        .route("/intercept/queue/{id}/forward", post(forward_intercept))
+        .route("/intercept/queue/{id}/drop", post(drop_intercept))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
         .with_state(state)
 }
@@ -157,7 +163,13 @@ async fn events(
     let stream = BroadcastStream::new(rx).filter_map(|item| async move {
         match item {
             Ok(event) => match serde_json::to_string(&event) {
-                Ok(json) => Some(Ok(Event::default().event("flow").data(json))),
+                Ok(json) => {
+                    let name = event
+                        .get("kind")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("event");
+                    Some(Ok(Event::default().event(name).data(json)))
+                }
                 Err(_) => None,
             },
             Err(_) => None,
@@ -172,6 +184,62 @@ async fn repeater_send(
 ) -> Result<Json<crate::types::FlowDetail>, ApiError> {
     let detail = send_repeater(&state, body).await?;
     Ok(Json(detail))
+}
+
+#[derive(serde::Serialize)]
+struct InterceptState {
+    config: InterceptConfig,
+    queue: Vec<PausedItem>,
+}
+
+async fn get_intercept(State(state): State<Arc<AppState>>) -> Json<InterceptState> {
+    Json(InterceptState {
+        config: state.intercept.config(),
+        queue: state.intercept.queue(),
+    })
+}
+
+async fn put_intercept(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<InterceptConfig>,
+) -> Json<InterceptState> {
+    let config = state.intercept.set_config(body);
+    Json(InterceptState {
+        config,
+        queue: state.intercept.queue(),
+    })
+}
+
+async fn list_intercept_queue(State(state): State<Arc<AppState>>) -> Json<Vec<PausedItem>> {
+    Json(state.intercept.queue())
+}
+
+async fn get_intercept_item(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<PausedItem>, ApiError> {
+    state
+        .intercept
+        .get(&id)
+        .map(Json)
+        .ok_or_else(|| ApiError::not_found("paused item not found"))
+}
+
+async fn forward_intercept(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(body): Json<ForwardEdit>,
+) -> Result<StatusCode, ApiError> {
+    state.intercept.decide(&id, Decision::Forward(body))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn drop_intercept(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state.intercept.decide(&id, Decision::Drop)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 fn content_type(headers: &[crate::types::HeaderPair]) -> Option<String> {

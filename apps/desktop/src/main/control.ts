@@ -2,6 +2,10 @@ import type {
   FlowDetail,
   FlowList,
   FlowQuery,
+  ForwardEdit,
+  InterceptConfig,
+  InterceptState,
+  PausedItem,
   Project,
   RepeaterSendRequest,
 } from "../shared/types";
@@ -51,6 +55,26 @@ export class ControlClient {
     return this.json("POST", "/repeater/send", req);
   }
 
+  getIntercept(): Promise<InterceptState> {
+    return this.json("GET", "/intercept");
+  }
+
+  setIntercept(config: InterceptConfig): Promise<InterceptState> {
+    return this.json("PUT", "/intercept", config);
+  }
+
+  listInterceptQueue(): Promise<PausedItem[]> {
+    return this.json("GET", "/intercept/queue");
+  }
+
+  forwardIntercept(id: string, edit: ForwardEdit): Promise<void> {
+    return this.json("POST", `/intercept/queue/${encodeURIComponent(id)}/forward`, edit);
+  }
+
+  dropIntercept(id: string): Promise<void> {
+    return this.json("POST", `/intercept/queue/${encodeURIComponent(id)}/drop`);
+  }
+
   private url(path: string): string {
     const ready = this.ready();
     if (!ready) {
@@ -87,7 +111,14 @@ export class ControlClient {
       const text = await res.text();
       throw new Error(`control ${method} ${path} failed: ${res.status} ${text}`);
     }
-    return (await res.json()) as T;
+    if (res.status === 204) {
+      return undefined as T;
+    }
+    const text = await res.text();
+    if (!text) {
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
   }
 
   private async buffer(method: string, path: string): Promise<ArrayBuffer> {

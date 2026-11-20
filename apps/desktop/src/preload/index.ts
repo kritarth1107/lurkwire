@@ -3,6 +3,8 @@ import type {
   AppSnapshot,
   Bounds,
   FlowQuery,
+  ForwardEdit,
+  InterceptConfig,
   RepeaterSendRequest,
   ToolId,
 } from "../shared/types";
@@ -35,6 +37,11 @@ const api = {
   listFlows: (query: FlowQuery) => ipcRenderer.invoke("lurkwire:listFlows", query),
   getFlow: (id: string) => ipcRenderer.invoke("lurkwire:getFlow", id),
   sendRepeater: (req: RepeaterSendRequest) => ipcRenderer.invoke("lurkwire:sendRepeater", req),
+  getIntercept: () => ipcRenderer.invoke("lurkwire:getIntercept"),
+  setIntercept: (config: InterceptConfig) => ipcRenderer.invoke("lurkwire:setIntercept", config),
+  forwardIntercept: (id: string, edit: ForwardEdit) =>
+    ipcRenderer.invoke("lurkwire:forwardIntercept", id, edit),
+  dropIntercept: (id: string) => ipcRenderer.invoke("lurkwire:dropIntercept", id),
 };
 
 contextBridge.exposeInMainWorld("lurkwire", api);

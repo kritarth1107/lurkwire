@@ -609,3 +609,23 @@ h1 {
   font-size: 12px;
   line-height: 1.45;
 }
+
+.timeout {
+  width: 64px;
+  height: 26px;
+  margin: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0a0c10;
+  padding: 0 6px;
+  outline: 0;
+}
+
+.intercept-split {
+  grid-template-rows: minmax(0, 0.4fr) minmax(0, 0.6fr);
+}
+
+.intercept-headers {
+  flex: 0 0 30%;
+  border-bottom: 1px solid var(--line);
+}

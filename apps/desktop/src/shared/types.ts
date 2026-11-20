@@ -1,7 +1,7 @@
 export const PRODUCT_NAME = "Lurkwire";
 export const PRODUCT_VERSION = "0.1.0";
 
-export type ToolId = "browser" | "history" | "repeater";
+export type ToolId = "browser" | "history" | "repeater" | "intercept";
 
 export type ProxyStatus = "starting" | "ready" | "down";
 
@@ -101,6 +101,40 @@ export type AppSnapshot = {
   activeTabId: string | null;
   tool: ToolId;
   error: string | null;
+};
+
+export type InterceptConfig = {
+  enabled: boolean;
+  requests: boolean;
+  responses: boolean;
+  timeout_ms: number;
+};
+
+export type PausedItem = {
+  id: string;
+  direction: "request" | "response";
+  created_at: number;
+  method: string;
+  url: string;
+  headers: HeaderPair[];
+  body: string | null;
+  body_base64: boolean;
+  body_len: number;
+  status: number | null;
+};
+
+export type InterceptState = {
+  config: InterceptConfig;
+  queue: PausedItem[];
+};
+
+export type ForwardEdit = {
+  method?: string;
+  url?: string;
+  headers?: HeaderPair[];
+  body?: string;
+  body_base64?: boolean;
+  status?: number;
 };
 
 export type Bounds = {
