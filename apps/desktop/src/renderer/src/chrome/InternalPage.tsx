@@ -5,6 +5,7 @@ import { SettingsPage } from "./SettingsPage";
 import { ExtensionsPage } from "./ExtensionsPage";
 import { NewTabPage } from "./NewTabPage";
 import { WorkbenchPage } from "../workbench/WorkbenchPage";
+import { BrandMark, BrandWordmark } from "../Brand";
 
 export function InternalPage({ state, url }: { state: AppSnapshot; url: string }) {
   const page = parseInternalPage(url);
@@ -15,7 +16,7 @@ export function InternalPage({ state, url }: { state: AppSnapshot; url: string }
     return <SettingsPage key={url} state={state} url={url} />;
   }
   if (page === "newtab") {
-    return <NewTabPage product={state.product} />;
+    return <NewTabPage product={state.product} theme={state.theme} />;
   }
   if (page === "downloads") {
     return <DownloadsPage />;
@@ -267,6 +268,10 @@ function AboutPage({ state }: { state: AppSnapshot }) {
   );
   return (
     <PageShell page="about">
+      <div className="about-brand">
+        <BrandMark className="mark-lg" />
+        <BrandWordmark className="about-wordmark" theme={state.theme} />
+      </div>
       <p className="lead">
         Version {state.version}. An AI-native security browser with a built-in intercepting proxy.
       </p>

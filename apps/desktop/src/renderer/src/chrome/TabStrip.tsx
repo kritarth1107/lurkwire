@@ -5,11 +5,21 @@ import { TAB_GROUP_COLOR_HEX, groupLabel, tabStripSegments } from "../../../shar
 import { projectColor } from "../../../shared/projectColor";
 import { openAnchoredPanel, openAtCursor } from "./openPanel";
 import { WindowControls } from "./WindowControls";
+import { BrandMark } from "../Brand";
 
 export function TabStrip({ state }: { state: AppSnapshot }) {
   const segments = tabStripSegments(state.tabs, state.tabGroups ?? []);
   return (
     <div className={`tabstrip${state.privateMode ? " private" : ""}`}>
+      <button
+        type="button"
+        className="strip-brand no-drag"
+        title="Lurkwire"
+        aria-label="Open a new Lurkwire tab"
+        onClick={() => void window.lurkwire.newTab("lurkwire://newtab")}
+      >
+        <BrandMark className="strip-logo" />
+      </button>
       <div
         className="tab-scroll"
         onDoubleClick={(event) => {

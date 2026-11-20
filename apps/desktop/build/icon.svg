@@ -1,6 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect width="24" height="24" rx="5.3" fill="#0c0e12"/>
-  <rect x="1.4" y="1.4" width="21.2" height="21.2" rx="4.2" fill="#12151c"/>
-  <path d="M3 16c3-8 6-8 9 0s6 8 9 0" fill="none" stroke="#e8a54b" stroke-width="1.75" stroke-linecap="round"/>
-  <circle cx="12" cy="16" r="1.6" fill="#e8a54b"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" fill="none" role="img" aria-label="Lurkwire">
+  <title>Lurkwire</title>
+  <defs>
+    <linearGradient id="ulGrad" x1="167.637" y1="529.660" x2="666.121" y2="265.567" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#4c0378"/><stop offset="0.5" stop-color="#6a08a0"/><stop offset="1" stop-color="#c428f4"/></linearGradient>
+    <linearGradient id="llGrad" x1="269.581" y1="560.965" x2="542.503" y2="679.767" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#c44ae8"/><stop offset="0.4" stop-color="#8a18c8"/><stop offset="1" stop-color="#2a0148"/></linearGradient>
+    <linearGradient id="lrGrad" x1="427.715" y1="800.174" x2="727.127" y2="584.244" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d030f0"/><stop offset="0.45" stop-color="#8c0dcb"/><stop offset="1" stop-color="#3a015c"/></linearGradient>
+    <linearGradient id="urGrad" x1="476.681" y1="377.144" x2="832.282" y2="556.952" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#d410d8"/><stop offset="0.4" stop-color="#f012f4"/><stop offset="1" stop-color="#ff1aff"/></linearGradient>
+    <clipPath id="appClip"><rect width="1024" height="1024" rx="192"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" rx="192" fill="#0f0a1a"/>
+  <g clip-path="url(#appClip)">
+  <path d="M 757.630,314.533 C 712.293,265.985 681.894,235.233 616.023,215.486 C 558.405,198.220 499.887,201.760 443.818,222.775 C 390.919,242.610 340.653,270.970 296.777,307.782 C 253.912,343.752 211.400,392.757 184.108,441.594 C 153.934,495.601 142.319,547.970 134.725,608.325 C 173.408,552.473 205.613,517.763 258.969,474.923 C 305.109,437.870 355.736,404.180 407.294,375.162 C 460.016,345.502 517.643,319.751 577.309,308.047 C 648.333,294.120 688.051,297.708 757.630,314.533 Z" fill="url(#ulGrad)"/>
+  <path d="M 601.101,651.672 C 554.391,661.617 514.272,668.601 466.358,660.373 C 412.183,651.070 391.208,635.714 349.676,602.658 C 313.554,573.905 281.646,544.317 243.894,518.422 C 248.486,579.564 273.779,618.119 317.455,661.537 C 355.118,698.992 399.749,739.601 457.151,732.256 C 507.128,725.867 563.598,683.363 601.101,651.672 Z" fill="url(#llGrad)"/>
+  <path d="M 361.090,799.371 C 406.500,812.913 424.665,824.985 476.978,816.364 C 519.184,809.413 553.147,796.842 592.183,780.242 C 628.754,764.694 662.565,743.590 693.541,718.779 C 724.807,693.734 759.629,665.784 762.310,622.879 C 765.119,577.967 740.034,547.006 714.283,514.408 C 676.411,580.383 631.371,648.573 571.826,695.717 C 513.333,742.025 429.794,778.260 361.090,799.371 Z" fill="url(#lrGrad)"/>
+  <path d="M 356.274,438.151 C 461.437,394.098 535.271,390.068 638.242,445.632 C 737.048,498.948 801.321,568.744 765.657,682.175 C 799.443,650.388 890.142,559.553 888.464,510.587 C 886.778,461.429 786.736,379.528 744.168,359.380 C 687.898,332.746 600.627,319.189 539.220,331.382 C 469.553,345.221 415.121,400.439 356.274,438.151 Z" fill="url(#urGrad)"/>
+  <path d="M 517.619,423.702 A 205.316 205.316 0 0 1 517.619,632.407 A 205.316 205.316 0 0 1 517.619,423.702 Z" fill="#ffffff"/>
+  </g>
 </svg>

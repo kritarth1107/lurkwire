@@ -644,8 +644,31 @@ input, textarea, select {
     var(--content);
 }
 
-.newtab .mark-lg { width: 72px; height: 72px; color: var(--lw-accent); margin-bottom: 12px; }
-.newtab h1 { margin: 0 0 20px; font-size: 28px; font-weight: 650; letter-spacing: -0.02em; }
+.newtab-brand, .about-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.newtab .mark-lg, .about-brand .mark-lg { width: 88px; height: 88px; margin: 0; display: block; }
+.newtab-wordmark, .about-wordmark { height: 44px; width: auto; display: block; }
+.strip-brand {
+  -webkit-app-region: no-drag;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: auto 6px auto 2px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: transparent;
+  flex: none;
+}
+.strip-brand:hover { background: var(--button-hover); }
+.strip-logo { width: 20px; height: 20px; display: block; }
 
 .newtab-search {
   width: min(640px, 100%);

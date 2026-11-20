@@ -86,7 +86,14 @@
       "priority": "optional",
       "artifactName": "lurkwire_${version}_${arch}.${ext}"
     },
-    "electronVersion": "39.8.10"
+    "electronVersion": "39.8.10",
+    "icon": "build/icon.png",
+    "mac": {
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "icon": "build/icon.ico"
+    }
   },
   "desktopName": "Lurkwire"
 }
