@@ -19,6 +19,9 @@ export default defineConfig({
   },
   renderer: {
     base: "./",
+    worker: {
+      format: "es",
+    },
     resolve: {
       alias: {
         "@": resolve("src/renderer/src"),
