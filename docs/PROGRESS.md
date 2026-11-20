@@ -9,7 +9,7 @@ Build order for v0.1. Checked items are on `main`.
 - [x] 5. Repeater
 - [x] 6. Intercept (pause / edit / forward)
 - [x] 7. Guardrails core: scope allowlist, rate limiter, global kill switch, append-only hash-chained audit log
-- [ ] 8. LLM layer + AI side panel (explain / suggest / draft into Repeater; human sends)
+- [x] 8. LLM layer + AI side panel (explain / suggest / draft into Repeater; human sends)
 - [ ] 9. Intruder-lite
 - [ ] 10. JWT/session tools plus encode/decode
 - [ ] 11. Passive scanner and anomaly flags

@@ -26,6 +26,38 @@ export type ThemePref = "system" | "light" | "dark";
 
 export type ChromePage = "content" | "settings";
 
+export type LlmProvider = "openai" | "anthropic" | "gemini" | "ollama" | "openai-compatible";
+
+export type LlmSettings = {
+  provider: LlmProvider;
+  baseUrl: string;
+  model: string;
+  localOnly: boolean;
+};
+
+export const DEFAULT_LLM: LlmSettings = {
+  provider: "ollama",
+  baseUrl: "http://127.0.0.1:11434/v1",
+  model: "llama3.2",
+  localOnly: true,
+};
+
+export type LlmAction = "explain" | "suggest" | "draft";
+
+export type LlmRequest = {
+  action: LlmAction;
+  flowId?: string;
+  raw?: string;
+};
+
+export type LlmResult = {
+  text: string;
+  redacted: boolean;
+  provider: LlmProvider;
+  model: string;
+  draft?: RepeaterSendRequest;
+};
+
 export type AppPrefs = {
   theme: ThemePref;
   bookmarksBar: boolean;
@@ -34,6 +66,7 @@ export type AppPrefs = {
   sidebarPanel: SidebarPanel;
   sidebarWidth: number;
   sidebarSide: "left" | "right";
+  llm: LlmSettings;
 };
 
 export const DEFAULT_PREFS: AppPrefs = {
@@ -44,6 +77,7 @@ export const DEFAULT_PREFS: AppPrefs = {
   sidebarPanel: "history",
   sidebarWidth: 360,
   sidebarSide: "left",
+  llm: DEFAULT_LLM,
 };
 
 export type ProxyStatus = "starting" | "ready" | "down";

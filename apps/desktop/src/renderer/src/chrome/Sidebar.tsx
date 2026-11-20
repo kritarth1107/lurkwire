@@ -14,6 +14,7 @@ import { projectColor } from "../../../shared/projectColor";
 import { HistoryView } from "../HistoryView";
 import { InterceptView } from "../InterceptView";
 import { RepeaterView } from "../RepeaterView";
+import { AiView } from "./AiView";
 
 const items: { id: SidebarPanel; label: string; icon: typeof History }[] = [
   { id: "tabs", label: "Vertical tabs", icon: Columns2 },
@@ -100,6 +101,14 @@ export function Sidebar({
                 <RepeaterView draft={repeaterDraft} onDraftConsumed={onDraftConsumed} />
               ) : panel === "intercept" ? (
                 <InterceptView />
+              ) : panel === "ai" ? (
+                <AiView
+                  projectId={state.currentProjectId}
+                  onDraft={(flow) => {
+                    onRepeaterDraft(flow);
+                    void window.lurkwire.setTool("repeater");
+                  }}
+                />
               ) : (
                 <ComingSoon panel={panel} />
               )}

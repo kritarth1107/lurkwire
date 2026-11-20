@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AppSnapshot, AuditEntry, ScopeKind, ScopeRule, ThemePref } from "../../../shared/types";
+import type { AppSnapshot, AuditEntry, LlmProvider, ScopeKind, ScopeRule, ThemePref } from "../../../shared/types";
 import { projectColor } from "../../../shared/projectColor";
 
 const categories = [
@@ -10,6 +10,7 @@ const categories = [
   { id: "projects", label: "Projects" },
   { id: "scope", label: "Scope" },
   { id: "audit", label: "Audit log" },
+  { id: "llm", label: "AI models" },
   { id: "about", label: "About" },
 ] as const;
 
@@ -204,6 +205,7 @@ export function SettingsPage({ state }: { state: AppSnapshot }) {
         ) : null}
         {cat === "scope" ? <ScopeSection projectId={state.currentProjectId} /> : null}
         {cat === "audit" ? <AuditSection projectId={state.currentProjectId} /> : null}
+        {cat === "llm" ? <LlmSection state={state} /> : null}
         {cat === "about" ? (
           <section>
             <h3>About {state.product}</h3>
@@ -327,6 +329,119 @@ function AuditSection({ projectId }: { projectId: string | null }) {
           <span className="meta">{new Date(entry.ts).toLocaleString()}</span>
         </div>
       ))}
+    </section>
+  );
+}
+
+
+function LlmSection({ state }: { state: AppSnapshot }) {
+  const llm = state.prefs.llm;
+  const [key, setKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    void window.lurkwire.hasLlmKey().then(setHasKey);
+  }, []);
+
+  return (
+    <section>
+      <h3>AI models</h3>
+      <p>Bring your own OpenAI, Anthropic, Gemini, or OpenAI-compatible key, or run a local Ollama endpoint. Requests are redacted before they leave the machine unless the endpoint is loopback. A human always sends.</p>
+      <div className="settings-row">
+        <div>
+          <strong>Provider</strong>
+        </div>
+        <select
+          value={llm.provider}
+          onChange={(event) =>
+            void window.lurkwire.setPrefs({
+              llm: { ...llm, provider: event.target.value as LlmProvider },
+            })
+          }
+        >
+          <option value="ollama">Ollama (local)</option>
+          <option value="openai">OpenAI</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="gemini">Gemini</option>
+          <option value="openai-compatible">OpenAI-compatible</option>
+        </select>
+      </div>
+      <div className="settings-row">
+        <div>
+          <strong>Model</strong>
+        </div>
+        <input
+          type="text"
+          value={llm.model}
+          onChange={(event) => void window.lurkwire.setPrefs({ llm: { ...llm, model: event.target.value } })}
+        />
+      </div>
+      <div className="settings-row">
+        <div>
+          <strong>Base URL</strong>
+          <p>Leave blank for the provider default.</p>
+        </div>
+        <input
+          type="text"
+          value={llm.baseUrl}
+          placeholder="http://127.0.0.1:11434/v1"
+          onChange={(event) => void window.lurkwire.setPrefs({ llm: { ...llm, baseUrl: event.target.value } })}
+        />
+      </div>
+      <div className="settings-row">
+        <div>
+          <strong>Local-only mode</strong>
+          <p>Refuse any endpoint that is not on loopback.</p>
+        </div>
+        <input
+          type="checkbox"
+          checked={llm.localOnly}
+          onChange={(event) =>
+            void window.lurkwire.setPrefs({ llm: { ...llm, localOnly: event.target.checked } })
+          }
+        />
+      </div>
+      <div className="settings-row">
+        <div>
+          <strong>API key</strong>
+          <p>{hasKey ? "A key is stored in the OS secret store." : "No key saved yet."}</p>
+          {message ? <p>{message}</p> : null}
+        </div>
+        <input
+          type="password"
+          value={key}
+          placeholder="Paste a key, then save"
+          onChange={(event) => setKey(event.target.value)}
+        />
+        <button
+          type="button"
+          className="primary"
+          onClick={() => {
+            void window.lurkwire
+              .setLlmKey(key)
+              .then((saved) => {
+                setHasKey(saved);
+                setKey("");
+                setMessage("Key saved.");
+              })
+              .catch((err: unknown) => setMessage(err instanceof Error ? err.message : String(err)));
+          }}
+        >
+          Save key
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void window.lurkwire.clearLlmKey().then(() => {
+              setHasKey(false);
+              setMessage("Key removed.");
+            });
+          }}
+        >
+          Remove
+        </button>
+      </div>
     </section>
   );
 }

@@ -8,6 +8,7 @@ import type {
   FlowQuery,
   ForwardEdit,
   InterceptConfig,
+  LlmRequest,
   NewScopeRule,
   PanelOpenRequest,
   RepeaterSendRequest,
@@ -21,6 +22,7 @@ import { DownloadManager } from "./downloads";
 import { PanelManager } from "./panels";
 import { loadPrefs, savePrefs } from "./prefs";
 import { ProxySidecar } from "./proxy";
+import { clearLlmKey, completeLlm, hasLlmKey, saveLlmKey } from "./llm";
 import { isNewTabUrl, isSettingsUrl, TabManager } from "./tabs";
 
 app.setName(PRODUCT_NAME);
@@ -592,6 +594,17 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:addScope", (_event, rule: NewScopeRule) => control.addScope(rule));
   ipcMain.handle("lurkwire:deleteScope", (_event, id: string) => control.deleteScope(id));
   ipcMain.handle("lurkwire:listAudit", (_event, projectId?: string) => control.listAudit(projectId));
+  ipcMain.handle("lurkwire:hasLlmKey", () => hasLlmKey());
+  ipcMain.handle("lurkwire:setLlmKey", (_event, key: string) => {
+    saveLlmKey(key);
+    return hasLlmKey();
+  });
+  ipcMain.handle("lurkwire:clearLlmKey", () => {
+    clearLlmKey();
+  });
+  ipcMain.handle("lurkwire:llmComplete", async (_event, request: LlmRequest) => {
+    return completeLlm(prefs.llm, request, (id) => control.getFlow(id));
+  });
   ipcMain.handle("lurkwire:windowMinimize", () => mainWindow?.minimize());
   ipcMain.handle("lurkwire:windowToggleMaximize", () => {
     if (!mainWindow) {

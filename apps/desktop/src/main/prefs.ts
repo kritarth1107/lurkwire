@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { app } from "electron";
-import { DEFAULT_PREFS, type AppPrefs } from "../shared/types";
+import { DEFAULT_LLM, DEFAULT_PREFS, type AppPrefs } from "../shared/types";
 
 export function prefsPath(): string {
   return join(app.getPath("userData"), "prefs.json");
@@ -14,7 +14,11 @@ export function loadPrefs(): AppPrefs {
   }
   try {
     const parsed = JSON.parse(readFileSync(file, "utf8")) as Partial<AppPrefs>;
-    return { ...DEFAULT_PREFS, ...parsed };
+    return {
+      ...DEFAULT_PREFS,
+      ...parsed,
+      llm: { ...DEFAULT_LLM, ...parsed.llm },
+    };
   } catch {
     return { ...DEFAULT_PREFS };
   }
