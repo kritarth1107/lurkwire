@@ -568,6 +568,7 @@ syntax = "proto3";
 package helloworld;
 service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply);
+  rpc RecordHellos (stream HelloRequest) returns (HelloReply);
 }
 message HelloRequest { string name = 1; }
 message HelloReply { string message = 1; }
@@ -580,6 +581,11 @@ message HelloReply { string message = 1; }
   grpcServer.addService(Greeter.service, {
     SayHello: (call: grpc.ServerUnaryCall<{ name: string }, { message: string }>, cb: grpc.sendUnaryData<{ message: string }>) => {
       cb(null, { message: `hello ${call.request.name}` });
+    },
+    RecordHellos: (call: grpc.ServerReadableStream<{ name: string }, { message: string }>, cb: grpc.sendUnaryData<{ message: string }>) => {
+      const names: string[] = [];
+      call.on("data", (message: { name: string }) => names.push(message.name));
+      call.on("end", () => cb(null, { message: `hello ${names.join(",")}` }));
     },
   });
   const grpcTarget = await new Promise<string>((resolve, reject) => {
@@ -604,6 +610,17 @@ message HelloReply { string message = 1; }
   console.log(`SMOKE grpc ${grpcResult.error ?? "ok"} events=${grpcResult.events.length}`);
   if (grpcResult.error || !grpcResult.events.some((item) => item.text.includes("hello smoke"))) {
     throw new Error(`gRPC smoke failed: ${grpcResult.error ?? "missing greeting"}`);
+  }
+  const streamResult = await invokeGrpc({
+    target: grpcTarget,
+    proto,
+    service: "helloworld.Greeter",
+    method: "RecordHellos",
+    body: JSON.stringify([{ name: "a" }, { name: "b" }]),
+  });
+  console.log(`SMOKE grpc-client-stream ${streamResult.error ?? "ok"} events=${streamResult.events.length}`);
+  if (streamResult.error || !streamResult.events.some((item) => item.text.includes("hello a,b"))) {
+    throw new Error(`gRPC client-stream smoke failed: ${streamResult.error ?? "missing greeting"}`);
   }
   await new Promise<void>((resolve) => grpcServer.tryShutdown(() => resolve()));
   rmSync(tmp, { recursive: true, force: true });
@@ -736,6 +753,17 @@ message HelloReply { string message = 1; }
   })()`);
   await sleep(500);
   paths.push(await captureWindow(window, out, "workbench-grpc.png", hooks.tabs()));
+  await window.webContents.executeJavaScript(`(() => {
+    const btn = Array.from(document.querySelectorAll("button")).find((el) => (el.textContent || "").trim() === "Cookies");
+    btn?.click();
+  })()`);
+  await sleep(400);
+  paths.push(await captureWindow(window, out, "workbench-cookies.png", hooks.tabs()));
+  await window.webContents.executeJavaScript(`(() => {
+    const btn = Array.from(document.querySelectorAll(".wb-modal button")).find((el) => (el.textContent || "").trim() === "Close");
+    btn?.click();
+  })()`);
+  await sleep(200);
 
   window.webContents.send("lurkwire:command-palette");
   await sleep(400);

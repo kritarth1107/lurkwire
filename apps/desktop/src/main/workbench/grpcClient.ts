@@ -230,6 +230,21 @@ export async function reflectProto(target: string): Promise<string> {
   }
 }
 
+
+export function payloadsFromBody(body: string, clientStreaming: boolean): unknown[] {
+  if (!body.trim()) {
+    return clientStreaming ? [] : [{}];
+  }
+  const parsed = JSON.parse(body) as unknown;
+  if (clientStreaming) {
+    return Array.isArray(parsed) ? parsed : [parsed];
+  }
+  if (Array.isArray(parsed)) {
+    throw new Error("Unary and server-streaming calls expect a single JSON object, not an array.");
+  }
+  return [parsed];
+}
+
 export async function invokeGrpc(input: GrpcInvokeInput, onEvent?: (event: GrpcEvent) => void): Promise<GrpcInvokeResult> {
   const events: GrpcEvent[] = [];
   const push = (event: GrpcEvent) => {
@@ -239,13 +254,7 @@ export async function invokeGrpc(input: GrpcInvokeInput, onEvent?: (event: GrpcE
   try {
     const doc = parseProto(input.proto);
     const { service, rpc } = findMethod(doc, input.service, input.method);
-    if (rpc.clientStreaming) {
-      throw new Error("Client-streaming and bidirectional RPCs are not supported yet. Use unary or server-streaming.");
-    }
-    let payload: unknown = {};
-    if (input.body.trim()) {
-      payload = JSON.parse(input.body) as unknown;
-    }
+    const messages = payloadsFromBody(input.body, rpc.clientStreaming);
     const parsed = parseGrpcTarget(input.target);
     const root = loadDefinition(input.proto);
     const Ctor = lookupService(root, service.fullName);
@@ -256,22 +265,51 @@ export async function invokeGrpc(input: GrpcInvokeInput, onEvent?: (event: GrpcE
       client.close();
       throw new Error(`The loaded client has no method ${methodName}.`);
     }
-    push({ dir: "out", text: JSON.stringify(payload, null, 2) });
     const deadline = new Date(Date.now() + (input.deadlineMs ?? 15_000));
     const meta = metadataOf(input.metadata);
-    if (!rpc.serverStreaming) {
+    const writeAll = (call: { write: (message: unknown) => void; end: () => void }) => {
+      for (const message of messages) {
+        push({ dir: "out", text: JSON.stringify(message, null, 2) });
+        call.write(message);
+      }
+      call.end();
+    };
+    if (rpc.clientStreaming && rpc.serverStreaming) {
       await new Promise<void>((resolve, reject) => {
-        (fn as Function).call(client, payload, meta, { deadline }, (error: grpc.ServiceError | null, response: unknown) => {
+        const call = (fn as Function).call(client, meta, { deadline }) as grpc.ClientDuplexStream<unknown, unknown>;
+        call.on("data", (message) => push({ dir: "in", text: JSON.stringify(message, null, 2) }));
+        call.on("error", (error) => {
           client.close();
-          if (error) {
-            reject(error);
-            return;
-          }
-          push({ dir: "in", text: JSON.stringify(response, null, 2) });
+          reject(error);
+        });
+        call.on("end", () => {
+          client.close();
+          push({ dir: "sys", text: "Stream ended" });
           resolve();
         });
+        writeAll(call);
       });
-    } else {
+    } else if (rpc.clientStreaming) {
+      await new Promise<void>((resolve, reject) => {
+        const call = (fn as Function).call(
+          client,
+          meta,
+          { deadline },
+          (error: grpc.ServiceError | null, response: unknown) => {
+            client.close();
+            if (error) {
+              reject(error);
+              return;
+            }
+            push({ dir: "in", text: JSON.stringify(response, null, 2) });
+            resolve();
+          },
+        ) as grpc.ClientWritableStream<unknown>;
+        writeAll(call);
+      });
+    } else if (rpc.serverStreaming) {
+      const payload = messages[0] ?? {};
+      push({ dir: "out", text: JSON.stringify(payload, null, 2) });
       await new Promise<void>((resolve, reject) => {
         const call = (fn as Function).call(client, payload, meta, { deadline }) as grpc.ClientReadableStream<unknown>;
         call.on("data", (message) => push({ dir: "in", text: JSON.stringify(message, null, 2) }));
@@ -282,6 +320,20 @@ export async function invokeGrpc(input: GrpcInvokeInput, onEvent?: (event: GrpcE
         call.on("end", () => {
           client.close();
           push({ dir: "sys", text: "Stream ended" });
+          resolve();
+        });
+      });
+    } else {
+      const payload = messages[0] ?? {};
+      push({ dir: "out", text: JSON.stringify(payload, null, 2) });
+      await new Promise<void>((resolve, reject) => {
+        (fn as Function).call(client, payload, meta, { deadline }, (error: grpc.ServiceError | null, response: unknown) => {
+          client.close();
+          if (error) {
+            reject(error);
+            return;
+          }
+          push({ dir: "in", text: JSON.stringify(response, null, 2) });
           resolve();
         });
       });

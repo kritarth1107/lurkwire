@@ -36,7 +36,15 @@ export function GrpcPane({ request, onChange }: { request: WbRequest; onChange: 
   const services = doc?.services ?? [];
   const methods = services.find((item) => item.name === service || item.fullName === service)?.methods ?? [];
   const rpc = methods.find((item) => item.name === method);
-  const mode = rpc ? (rpc.clientStreaming ? "unsupported" : rpc.serverStreaming ? "server-streaming" : "unary") : "";
+  const mode = rpc
+    ? rpc.clientStreaming && rpc.serverStreaming
+      ? "bidirectional"
+      : rpc.clientStreaming
+        ? "client-streaming"
+        : rpc.serverStreaming
+          ? "server-streaming"
+          : "unary"
+    : "";
 
   const patchGrpc = (patch: NonNullable<WbRequest["grpc"]>) => {
     onChange({ grpc: { service, method, proto, metadata: request.grpc?.metadata ?? [], ...request.grpc, ...patch } });
@@ -79,8 +87,9 @@ export function GrpcPane({ request, onChange }: { request: WbRequest; onChange: 
   return (
     <div className="wb-grpc">
       <p className="wb-muted">
-        Unary and server-streaming calls run from the desktop process after the same scope and kill-switch checks as other
-        active tools. Frames are saved to Workbench stream history.
+        Unary, server-streaming, client-streaming, and bidirectional calls run from the desktop process after the same scope
+        and kill-switch checks as other active tools. For client-streaming or bidirectional methods, send a JSON array of
+        messages. Frames are saved to Workbench stream history.
       </p>
       <div className="wb-stream-actions">
         <button
@@ -111,7 +120,7 @@ export function GrpcPane({ request, onChange }: { request: WbRequest; onChange: 
           Use reflection
         </button>
         <button type="button" className="primary" disabled={busy || !proto || !service || !method} onClick={() => void invoke()}>
-          {busy ? "Calling…" : mode === "server-streaming" ? "Stream" : "Invoke"}
+          {busy ? "Calling…" : mode && mode !== "unary" ? "Stream" : "Invoke"}
         </button>
         {mode ? <span className="wb-muted">{mode}</span> : null}
       </div>
@@ -142,8 +151,9 @@ export function GrpcPane({ request, onChange }: { request: WbRequest; onChange: 
               patchGrpc({ method: next });
               if (found && doc) {
                 const stub = stubJson(doc, found.requestType);
-                setPayload(stub);
-                onChange({ body: { ...request.body, mode: "json", json: stub } });
+                const payloadText = found.clientStreaming ? `[${stub}]` : stub;
+                setPayload(payloadText);
+                onChange({ body: { ...request.body, mode: "json", json: payloadText } });
               }
             }}
           >

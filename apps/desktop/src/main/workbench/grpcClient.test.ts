@@ -13,6 +13,8 @@ package helloworld;
 service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply);
   rpc ListHellos (HelloRequest) returns (stream HelloReply);
+  rpc RecordHellos (stream HelloRequest) returns (HelloReply);
+  rpc Chat (stream HelloRequest) returns (stream HelloReply);
 }
 message HelloRequest { string name = 1; }
 message HelloReply { string message = 1; }
@@ -54,6 +56,15 @@ async function start(): Promise<string> {
       call.write({ message: "again" });
       call.end();
     },
+    RecordHellos: (call: grpc.ServerReadableStream<{ name: string }, { message: string }>, cb: grpc.sendUnaryData<{ message: string }>) => {
+      const names: string[] = [];
+      call.on("data", (message: { name: string }) => names.push(message.name));
+      call.on("end", () => cb(null, { message: `hello ${names.join(",")}` }));
+    },
+    Chat: (call: grpc.ServerDuplexStream<{ name: string }, { message: string }>) => {
+      call.on("data", (message: { name: string }) => call.write({ message: `hello ${message.name}` }));
+      call.on("end", () => call.end());
+    },
   });
   target = await new Promise<string>((resolve, reject) => {
     server!.bindAsync(`127.0.0.1:${port}`, grpc.ServerCredentials.createInsecure(), (error, bound) => {
@@ -74,7 +85,7 @@ afterAll(async () => {
 
 test("parses the sample proto", () => {
   const doc = describeProto(PROTO);
-  expect(doc.services[0]?.methods.map((item) => item.name)).toEqual(["SayHello", "ListHellos"]);
+  expect(doc.services[0]?.methods.map((item) => item.name)).toEqual(["SayHello", "ListHellos", "RecordHellos", "Chat"]);
 });
 
 test("invokes a unary RPC on a local server", async () => {
@@ -102,4 +113,32 @@ test("invokes a server-streaming RPC on a local server", async () => {
   expect(result.error).toBeUndefined();
   const incoming = result.events.filter((item) => item.dir === "in");
   expect(incoming.length).toBe(2);
+});
+
+test("invokes a client-streaming RPC on a local server", async () => {
+  const address = await start();
+  const result = await invokeGrpc({
+    target: address,
+    proto: PROTO,
+    service: "helloworld.Greeter",
+    method: "RecordHellos",
+    body: JSON.stringify([{ name: "a" }, { name: "b" }]),
+  });
+  expect(result.error).toBeUndefined();
+  expect(result.events.some((item) => item.dir === "in" && item.text.includes("hello a,b"))).toBe(true);
+});
+
+test("invokes a bidirectional RPC on a local server", async () => {
+  const address = await start();
+  const result = await invokeGrpc({
+    target: address,
+    proto: PROTO,
+    service: "Greeter",
+    method: "Chat",
+    body: JSON.stringify([{ name: "one" }, { name: "two" }]),
+  });
+  expect(result.error).toBeUndefined();
+  const incoming = result.events.filter((item) => item.dir === "in").map((item) => item.text);
+  expect(incoming.some((text) => text.includes("hello one"))).toBe(true);
+  expect(incoming.some((text) => text.includes("hello two"))).toBe(true);
 });

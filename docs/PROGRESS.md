@@ -55,7 +55,7 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 ## Overnight tools (22 Nov)
 
 - [x] Firefox-style tab throbber, globe fallback, mute/crash states
-- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar editor, import/export including OpenAPI YAML, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, proxy-backed send with guardrails, collection mock server, WebSocket/SSE/gRPC clients with persisted stream history, binary body picker, match-replace template packs, and OAuth 2.0 authorization-code + PKCE)
+- [x] lurkwire://workbench API client (collections, environments and secrets, auth helpers, pre-request/test scripts, cookie jar editor, import/export including OpenAPI YAML, code snippets, collection runner with CSV/JSON data files, AI helpers, Send to Repeater/Intruder, proxy-backed send with guardrails, collection mock server, WebSocket/SSE/gRPC clients (unary, server-streaming, client-streaming, and bidirectional) with persisted stream history, binary body picker, match-replace template packs, and OAuth 2.0 authorization-code + PKCE)
 - [x] Command palette (Ctrl+K), CSRF PoC generator, and security-header reports from History
 - [x] Passive scanner hints for CL.TE request smuggling and unkeyed-header cache poisoning
 - [x] Workbench match-and-replace rules (applied after interpolation, before the proxy send)
@@ -70,4 +70,5 @@ Packaged AppImage smoke (`npm run smoke:appimage`) browses example.com, httpbin.
 - [x] Cookie jar Netscape import/export, Cookie header copy, and import from the project browser session
 - [x] History copy-as-cURL, add-host-to-scope, and Intruder payload lists from a file
 - [x] Site info cookie manager (show/copy/delete/clear, Netscape export) and tab localStorage/sessionStorage inspector
-- [ ] Remaining ideas (client-streaming/bidi gRPC, routing gRPC/WS through the MITM proxy)
+- [x] Client-streaming and bidirectional gRPC via a JSON array of messages
+- [ ] Remaining ideas (routing gRPC/WS through the MITM proxy)
