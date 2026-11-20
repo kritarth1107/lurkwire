@@ -153,33 +153,93 @@ function VisitHistoryPage() {
 
 function BookmarksPage() {
   const [items, setItems] = useState<Bookmark[]>([]);
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState({ title: "", url: "", folder: "" });
   useEffect(() => {
     void window.lurkwire.getBookmarks().then(setItems);
     return window.lurkwire.onBookmarks(setItems);
   }, []);
+  const filtered = items.filter((item) => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return true;
+    }
+    return `${item.title} ${item.url} ${item.folder ?? ""}`.toLowerCase().includes(q);
+  });
+  const groups = new Map<string, Bookmark[]>();
+  for (const item of filtered) {
+    const key = item.folder?.trim() || "Saved";
+    const list = groups.get(key) ?? [];
+    list.push(item);
+    groups.set(key, list);
+  }
   return (
     <PageShell page="bookmarks">
-      <p className="lead">Saved pages, also shown on the bookmarks toolbar.</p>
+      <p className="lead">Saved pages, also shown on the bookmarks toolbar. Import Chrome or Firefox bookmarks from Settings.</p>
+      <div className="internal-toolbar">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bookmarks" />
+        <button type="button" onClick={() => void window.lurkwire.navigate("lurkwire://settings#privacy")}>
+          Import…
+        </button>
+      </div>
       {items.length === 0 ? (
-        <p className="internal-empty">No bookmarks yet. Use the star in the address bar to save a page.</p>
+        <p className="internal-empty">No bookmarks yet. Use the star in the address bar, or import from Settings.</p>
+      ) : filtered.length === 0 ? (
+        <p className="internal-empty">No bookmarks match that search.</p>
       ) : (
         <div className="internal-list">
-          {items.map((item) => (
-            <div key={item.id} className="internal-row">
-              <button
-                type="button"
-                className="internal-row grow"
-                style={{ padding: 0 }}
-                onClick={() => void window.lurkwire.navigate(item.url)}
-              >
-                <div className="grow">
-                  <div className="title">{item.title || item.url}</div>
-                  <div className="meta">{item.url}</div>
+          {[...groups.entries()].map(([folder, list]) => (
+            <div key={folder} className="bookmark-folder">
+              <h4 className="bookmark-folder-title">{folder}</h4>
+              {list.map((item) => (
+                <div key={item.id} className="internal-row">
+                  {editing === item.id ? (
+                    <form
+                      className="bookmark-edit"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void window.lurkwire.updateBookmark(item.id, draft).then((next) => {
+                          setItems(next);
+                          setEditing(null);
+                        });
+                      }}
+                    >
+                      <input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} placeholder="Title" />
+                      <input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value })} placeholder="URL" />
+                      <input value={draft.folder} onChange={(event) => setDraft({ ...draft, folder: event.target.value })} placeholder="Folder" />
+                      <button type="submit">Save</button>
+                      <button type="button" onClick={() => setEditing(null)}>Cancel</button>
+                    </form>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="internal-row grow"
+                        style={{ padding: 0 }}
+                        onClick={() => void window.lurkwire.navigate(item.url)}
+                      >
+                        <div className="grow">
+                          <div className="title">{item.title || item.url}</div>
+                          <div className="meta">{item.url}</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditing(item.id);
+                          setDraft({ title: item.title, url: item.url, folder: item.folder ?? "" });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => void window.lurkwire.removeBookmark(item.id)}>
+                        Remove
+                      </button>
+                    </>
+                  )}
                 </div>
-              </button>
-              <button type="button" onClick={() => void window.lurkwire.removeBookmark(item.id)}>
-                Remove
-              </button>
+              ))}
             </div>
           ))}
         </div>

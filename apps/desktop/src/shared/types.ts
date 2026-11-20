@@ -246,6 +246,7 @@ export type Bookmark = {
   title: string;
   url: string;
   createdAt: number;
+  folder?: string;
 };
 
 export type Visit = {

@@ -124,6 +124,11 @@ const api = {
   getBookmarks: (): Promise<Bookmark[]> => ipcRenderer.invoke("lurkwire:getBookmarks"),
   addBookmark: (input: { title: string; url: string }): Promise<Bookmark[]> =>
     ipcRenderer.invoke("lurkwire:addBookmark", input),
+  updateBookmark: (id: string, patch: { title?: string; url?: string; folder?: string }) =>
+    ipcRenderer.invoke("lurkwire:updateBookmark", id, patch),
+  listImportSources: () => ipcRenderer.invoke("lurkwire:listImportSources"),
+  importBrowserData: (sourceId: string, request: { bookmarks: boolean; history: boolean }) =>
+    ipcRenderer.invoke("lurkwire:importBrowserData", sourceId, request),
   removeBookmark: (id: string): Promise<Bookmark[]> =>
     ipcRenderer.invoke("lurkwire:removeBookmark", id),
   onBookmarks: (callback: (items: Bookmark[]) => void) => listen("lurkwire:bookmarks", callback),

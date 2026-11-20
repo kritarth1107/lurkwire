@@ -75,3 +75,35 @@ export function deleteVisit(id: string): Visit[] {
 export function clearVisits(): void {
   save([]);
 }
+
+export function importVisits(incoming: { url: string; title: string; visitedAt: number; count: number }[]): { items: Visit[]; added: number } {
+  const items = load();
+  const byUrl = new Map(items.map((item) => [item.url, item]));
+  let added = 0;
+  for (const visit of incoming) {
+    const url = visit.url.trim();
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      continue;
+    }
+    const current = byUrl.get(url);
+    if (current) {
+      current.title = visit.title || current.title;
+      current.visitedAt = Math.max(current.visitedAt, visit.visitedAt || current.visitedAt);
+      current.count = Math.max(current.count, visit.count || 1);
+    } else {
+      const created: Visit = {
+        id: randomUUID(),
+        url,
+        title: visit.title.trim() || url,
+        visitedAt: visit.visitedAt || Date.now(),
+        count: Math.max(1, visit.count || 1),
+      };
+      items.push(created);
+      byUrl.set(url, created);
+      added += 1;
+    }
+  }
+  items.sort((a, b) => b.visitedAt - a.visitedAt);
+  save(items);
+  return { items: listVisits(), added };
+}

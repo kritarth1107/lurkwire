@@ -145,6 +145,7 @@ export function SettingsPage({ state, url }: { state: AppSnapshot; url?: string 
                 <p className="mono">{state.proxy.caPath ?? ""}</p>
               </div>
             </div>
+            <ImportSection />
           </section>
         ) : null}
         {cat === "projects" ? (
@@ -391,6 +392,81 @@ function initialCategory(url?: string): Cat {
   if (hash === "ai" || hash === "llm" || hash === "connectors") {
     return "llm";
   }
+  if (hash === "import" || hash === "bookmarks") {
+    return "privacy";
+  }
   const allowed = categories.map((item) => item.id) as Cat[];
   return allowed.includes(hash as Cat) ? (hash as Cat) : "general";
+}
+
+
+function ImportSection() {
+  const [sources, setSources] = useState<Array<{
+    id: string;
+    kind: string;
+    name: string;
+    profileDir: string;
+    bookmarksPath: string | null;
+    historyPath: string | null;
+  }>>([]);
+  const [status, setStatus] = useState<string>("");
+  useEffect(() => {
+    void window.lurkwire.listImportSources().then(setSources);
+  }, []);
+  const importFrom = (id: string, request: { bookmarks: boolean; history: boolean }) => {
+    setStatus("Importing…");
+    void window.lurkwire
+      .importBrowserData(id, request)
+      .then((result) => {
+        const bits = [];
+        if (request.bookmarks) {
+          bits.push(`${result.bookmarks} bookmark${result.bookmarks === 1 ? "" : "s"}`);
+        }
+        if (request.history) {
+          bits.push(`${result.visits} histor${result.visits === 1 ? "y item" : "y items"}`);
+        }
+        setStatus(`Imported ${bits.join(" and ") || "nothing new"} from ${result.name}. Existing URLs were skipped.`);
+      })
+      .catch((err: unknown) => {
+        setStatus(err instanceof Error ? err.message : String(err));
+      });
+  };
+  return (
+    <>
+      <h3 style={{ marginTop: 28 }}>Import from Chrome or Firefox</h3>
+      <p>
+        Read-only import of bookmarks and history from a local browser profile on this computer. Lurkwire never writes to
+        those profiles. Nothing is imported until you choose a source.
+      </p>
+      {sources.length === 0 ? (
+        <p className="meta">No local Chrome, Chromium, Brave, Edge, or Firefox profiles were found in this account.</p>
+      ) : (
+        sources.map((source) => (
+          <div key={source.id} className="settings-row import-source">
+            <div>
+              <strong>{source.name}</strong>
+              <p className="mono">{source.profileDir}</p>
+            </div>
+            <div className="import-actions">
+              <button
+                type="button"
+                disabled={!source.bookmarksPath}
+                onClick={() => importFrom(source.id, { bookmarks: true, history: false })}
+              >
+                Import bookmarks
+              </button>
+              <button
+                type="button"
+                disabled={!source.historyPath}
+                onClick={() => importFrom(source.id, { bookmarks: false, history: true })}
+              >
+                Import history
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+      {status ? <p className="meta">{status}</p> : null}
+    </>
+  );
 }

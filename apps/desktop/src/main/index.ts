@@ -21,7 +21,8 @@ import type {
   ToolId,
 } from "../shared/types";
 import { DEFAULT_PREFS, PRODUCT_NAME, PRODUCT_VERSION } from "../shared/types";
-import { addBookmark, loadBookmarks, removeBookmark } from "./bookmarks";
+import { addBookmark, importBookmarks, loadBookmarks, removeBookmark, updateBookmark } from "./bookmarks";
+import { importFromSource, listImportSources } from "./browserImport";
 import { ControlClient } from "./control";
 import { DownloadManager } from "./downloads";
 import { PanelManager } from "./panels";
@@ -41,7 +42,7 @@ import { collectSiteInfo } from "./siteInfo";
 import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpackedExtension } from "./extensions";
 import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
-import { clearVisits, deleteVisit, listVisits } from "./visits";
+import { clearVisits, deleteVisit, importVisits, listVisits } from "./visits";
 
 app.setName(PRODUCT_NAME);
 registerLurkwireScheme();
@@ -957,6 +958,31 @@ function registerIpc(): void {
     bookmarks = removeBookmark(id, bookmarks);
     emitBookmarks();
     return bookmarks;
+  });
+  ipcMain.handle("lurkwire:updateBookmark", (_event, id: string, patch: { title?: string; url?: string; folder?: string }) => {
+    bookmarks = updateBookmark(id, patch, bookmarks);
+    emitBookmarks();
+    return bookmarks;
+  });
+  ipcMain.handle("lurkwire:listImportSources", () => listImportSources());
+  ipcMain.handle("lurkwire:importBrowserData", (_event, sourceId: string, request: { bookmarks: boolean; history: boolean }) => {
+    const source = listImportSources().find((item) => item.id === sourceId);
+    if (!source) {
+      throw new Error("That browser profile is no longer available.");
+    }
+    const imported = importFromSource(source, request);
+    let addedBookmarks = 0;
+    let addedVisits = 0;
+    if (request.bookmarks) {
+      const result = importBookmarks(imported.bookmarks, bookmarks);
+      bookmarks = result.items;
+      addedBookmarks = result.added;
+      emitBookmarks();
+    }
+    if (request.history) {
+      addedVisits = importVisits(imported.visits).added;
+    }
+    return { ...imported.result, bookmarks: addedBookmarks, visits: addedVisits };
   });
   ipcMain.handle("lurkwire:listDownloads", () => downloads.list());
   ipcMain.handle("lurkwire:cancelDownload", (_event, id: string) => downloads.cancel(id));

@@ -1288,3 +1288,18 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
   background: var(--field, #fff);
   color: var(--text);
 }
+
+.bookmark-folder-title {
+  margin: 16px 0 6px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.bookmark-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+}
+.bookmark-edit input { flex: 1; min-width: 140px; }
+.import-source { align-items: flex-start; }
+.import-actions { display: flex; gap: 8px; flex-wrap: wrap; }
