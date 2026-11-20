@@ -339,6 +339,21 @@ async function captureDevtools(
   return outPath;
 }
 
+
+async function assertDecodedBody(hooks: SmokeHooks, id: string, needle: string): Promise<void> {
+  const detail = await hooks.control.getFlow(id);
+  const preview = `${detail.resp_preview ?? ""} ${detail.req_preview ?? ""}`;
+  const body = new Uint8Array(await hooks.control.getFlowBody(id, "resp"));
+  if (body.length >= 2 && body[0] === 0x1f && body[1] === 0x8b) {
+    throw new Error(`response body for ${id} is still gzip-compressed`);
+  }
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(body);
+  if (!text.includes(needle) && !preview.includes(needle)) {
+    throw new Error(`decoded body for ${id} did not contain ${JSON.stringify(needle)} (preview=${preview.slice(0, 180)} text=${text.slice(0, 180)})`);
+  }
+  console.log(`SMOKE decoded body ok (${needle})`);
+}
+
 export function isSmokeRun(): boolean {
   return process.env.LURKWIRE_SMOKE === "1";
 }
@@ -412,6 +427,68 @@ export async function runSmoke(hooks: SmokeHooks): Promise<string[]> {
     return list.items.find((item) => item.host === "example.com" || item.url.includes("example.com")) ?? null;
   });
   console.log(`SMOKE history hit ${flow.method} ${flow.url} status=${flow.status} id=${flow.id}`);
+  await assertDecodedBody(hooks, flow.id, "Example Domain");
+
+  const sites = [
+    { url: "https://httpbin.org/html", host: "httpbin.org", needle: "Herman Melville" },
+    { url: "https://www.iana.org/domains/reserved", host: "www.iana.org", needle: "IANA" },
+  ];
+  for (const site of sites) {
+    await tabs.navigate(id, site.url);
+    await waitFor(`${site.host} tab`, () => {
+      const url = tabs.activeInfo()?.url ?? "";
+      return url.includes(site.host) ? url : null;
+    }, 45_000);
+    const hit = await waitFor(`${site.host} history flow`, async () => {
+      const list = await hooks.control.listFlows({ project_id: projectId, host: site.host, limit: 20 });
+      return list.items.find((item) => item.host.includes(site.host) || item.url.includes(site.host)) ?? null;
+    }, 45_000);
+    console.log(`SMOKE history hit ${hit.method} ${hit.url} status=${hit.status} id=${hit.id}`);
+    await assertDecodedBody(hooks, hit.id, site.needle);
+  }
+
+  if (projectId) {
+    await hooks.control.addScope({ project_id: projectId, kind: "include", host: "httpbin.org", enabled: true });
+  }
+  const repeated = await hooks.control.sendRepeater({
+    project_id: projectId,
+    method: "GET",
+    url: "https://httpbin.org/get?source=lurkwire-repeater",
+    headers: [{ name: "Accept", value: "application/json" }],
+  });
+  console.log(`SMOKE repeater ${repeated.status} ${repeated.url}`);
+  if (repeated.status !== 200) {
+    throw new Error(`repeater expected 200, got ${repeated.status}`);
+  }
+  if (!repeated.resp_preview?.includes("lurkwire-repeater") && !repeated.resp_preview?.includes("httpbin")) {
+    // Body may still be on the blob; check decoded bytes.
+    await assertDecodedBody(hooks, repeated.id, "lurkwire-repeater");
+  } else {
+    console.log("SMOKE repeater preview ok");
+  }
+
+  const job = await hooks.control.startIntruder({
+    project_id: projectId,
+    method: "GET",
+    url: "https://httpbin.org/get?q=§probe§",
+    headers: [{ name: "Accept", value: "application/json" }],
+    attack: "sniper",
+    payloads: [["alpha", "beta"]],
+    grep: "alpha",
+    max_requests: 2,
+  });
+  const finished = await waitFor("intruder job", async () => {
+    const current = await hooks.control.getIntruder(job.id);
+    if (current.status === "error") {
+      throw new Error(current.error || "intruder failed");
+    }
+    return current.status === "done" || current.status === "stopped" ? current : null;
+  }, 60_000);
+  console.log(`SMOKE intruder ${finished.status} finished=${finished.finished} results=${finished.results.length}`);
+  if (finished.results.length < 2 || finished.results.some((row) => row.status !== 200 && !row.error)) {
+    const detail = finished.results.map((row) => `${row.payload}:${row.status}:${row.error ?? ""}`).join(", ");
+    throw new Error(`intruder results unexpected: ${detail || finished.error || finished.status}`);
+  }
 
   const paths: string[] = [];
   hooks.setPrefs({ theme: "light", sidebarOpen: false });

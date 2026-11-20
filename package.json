@@ -20,7 +20,8 @@
     "test": "npm run test:proxy && npm run test -w @lurkwire/desktop",
     "test:proxy": "cargo test -p lurkwire-proxy",
     "dist:linux": "npm run build:proxy && npm run build -w @lurkwire/desktop && npm run dist:linux -w @lurkwire/desktop",
-    "smoke": "npm run build:proxy:debug && npm run build -w @lurkwire/desktop && npm run smoke -w @lurkwire/desktop"
+    "smoke": "npm run build:proxy:debug && npm run build -w @lurkwire/desktop && npm run smoke -w @lurkwire/desktop",
+    "smoke:appimage": "LURKWIRE_SMOKE=1 LURKWIRE_SMOKE_OUT=\"$PWD/docs/screenshots\" ./dist/Lurkwire-0.1.0.AppImage"
   },
   "engines": {
     "node": ">=20"
