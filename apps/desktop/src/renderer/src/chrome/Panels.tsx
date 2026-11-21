@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { History, Repeat, ShieldOff, Crosshair, KeyRound, Radar, Globe, MessageSquare, FolderTree, GitCompare, ScrollText, Shuffle, Radio, ShieldAlert, Search, Share2, StickyNote } from "lucide-react";
 import type {
   AppSnapshot,
   DownloadInfo,
   InterceptState,
   PanelContext,
-  PanelKind,
 } from "../../../shared/types";
 import { TAB_GROUP_COLORS, TAB_GROUP_COLOR_HEX, groupLabel } from "../../../shared/tabGroups";
 import { projectColor } from "../../../shared/projectColor";
@@ -16,10 +15,27 @@ import type { WbCookie } from "../../../shared/workbench";
 import { isJwtLike } from "../../../shared/jwt";
 import { queueJwt } from "../pendingJwt";
 
+export function PanelView({ ctx, state }: { ctx: PanelContext; state: AppSnapshot }) {
+  const kind = ctx.kind;
+  return (
+    <div className="panel-root" data-theme={state.theme}>
+      {kind === "appmenu" ? <AppMenu state={state} /> : null}
+      {kind === "downloads" ? <DownloadsMenu /> : null}
+      {kind === "alltabs" ? <AllTabs state={state} /> : null}
+      {kind === "identity" ? <Identity payload={ctx.payload ?? {}} state={state} /> : null}
+      {kind === "lurkwire" ? <LurkwireMenu /> : null}
+      {kind === "intercept" ? <InterceptMenu /> : null}
+      {kind === "project" ? <ProjectMenu state={state} /> : null}
+      {kind === "tabmenu" ? <TabMenu payload={ctx.payload ?? {}} state={state} /> : null}
+      {kind === "pagemenu" ? <PageMenu payload={ctx.payload ?? {}} /> : null}
+      {kind === "groupmenu" ? <GroupMenu payload={ctx.payload ?? {}} state={state} /> : null}
+    </div>
+  );
+}
+
 export function PanelApp() {
   const state = useAppState();
   const [ctx, setCtx] = useState<PanelContext | null>(null);
-  const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = state.theme;
@@ -30,38 +46,10 @@ export function PanelApp() {
     void window.lurkwire.getPanelContext().then(setCtx);
   }, []);
 
-  useEffect(() => {
-    if (!root.current || !ctx) {
-      return;
-    }
-    const report = () => {
-      const rect = root.current?.getBoundingClientRect();
-      if (rect) {
-        void window.lurkwire.resizePanel(Math.ceil(rect.width), Math.ceil(rect.height));
-      }
-    };
-    report();
-    const observer = new ResizeObserver(report);
-    observer.observe(root.current);
-    return () => observer.disconnect();
-  }, [ctx]);
-
-  const kind: PanelKind | undefined = ctx?.kind;
-  return (
-    <div className="panel-root" ref={root} data-theme={state.theme}>
-      {kind === "appmenu" ? <AppMenu state={state} /> : null}
-      {kind === "downloads" ? <DownloadsMenu /> : null}
-      {kind === "alltabs" ? <AllTabs state={state} /> : null}
-      {kind === "identity" ? <Identity payload={ctx?.payload ?? {}} state={state} /> : null}
-      {kind === "lurkwire" ? <LurkwireMenu /> : null}
-      {kind === "intercept" ? <InterceptMenu /> : null}
-      {kind === "project" ? <ProjectMenu state={state} /> : null}
-      {kind === "tabmenu" ? <TabMenu payload={ctx?.payload ?? {}} state={state} /> : null}
-      {kind === "pagemenu" ? <PageMenu payload={ctx?.payload ?? {}} /> : null}
-      {kind === "groupmenu" ? <GroupMenu payload={ctx?.payload ?? {}} state={state} /> : null}
-      {!kind ? <div className="placeholder">Loading…</div> : null}
-    </div>
-  );
+  if (!ctx) {
+    return <div className="placeholder">Loading…</div>;
+  }
+  return <PanelView ctx={ctx} state={state} />;
 }
 
 function close(): void {

@@ -8,6 +8,7 @@ import { InternalPage } from "./chrome/InternalPage";
 import { Sidebar } from "./chrome/Sidebar";
 import { TabStrip } from "./chrome/TabStrip";
 import { CommandPalette } from "./chrome/CommandPalette";
+import { PanelHost } from "./chrome/PanelHost";
 import { useAppState } from "./useAppState";
 
 export function App() {
@@ -37,6 +38,7 @@ export function App() {
     const offEsc = window.lurkwire.onEscape(() => {
       setPaletteOpen(false);
       setFindOpen(false);
+      void window.lurkwire.closePanel();
     });
     return () => {
       offFocus();
@@ -104,6 +106,7 @@ export function App() {
           <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} state={state} />
         </div>
       </div>
+      <PanelHost state={state} />
     </div>
   );
 }

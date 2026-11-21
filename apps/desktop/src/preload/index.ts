@@ -176,6 +176,8 @@ const api = {
   resizePanel: (width: number, height: number) =>
     ipcRenderer.invoke("lurkwire:resizePanel", width, height),
   getPanelContext: (): Promise<PanelContext | null> => ipcRenderer.invoke("lurkwire:getPanelContext"),
+  onShowPanel: (callback: (request: PanelOpenRequest) => void) => listen("lurkwire:showPanel", callback),
+  onHidePanel: (callback: () => void) => listen("lurkwire:hidePanel", callback),
   requestFind: () => ipcRenderer.invoke("lurkwire:requestFind"),
   onFocusUrl: (callback: () => void) => listen("lurkwire:focus-url", callback),
   onOpenFind: (callback: () => void) => listen("lurkwire:open-find", callback),
