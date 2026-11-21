@@ -33,7 +33,7 @@
     "electron-builder": "^26.18.0",
     "electron-vite": "^5.0.0",
     "typescript": "^5.9.3",
-    "vite": "^7.2.2",
+    "vite": "^8.3.8",
     "vitest": "^4.0.8"
   },
   "author": "Kritarth Agrawal <44940694+kritarth1107@users.noreply.github.com>",
