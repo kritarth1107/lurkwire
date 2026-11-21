@@ -27,7 +27,7 @@
     "node": ">=20"
   },
   "allowScripts": {
-    "electron@39.8.10": true,
+    "electron@42.11.16": true,
     "esbuild@0.25.12": true,
     "esbuild@0.28.2": true
   }
