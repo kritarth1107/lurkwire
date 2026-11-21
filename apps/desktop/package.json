@@ -34,7 +34,7 @@
     "electron-vite": "^5.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.2",
-    "vitest": "^4.0.8"
+    "vitest": "^5.1.1"
   },
   "author": "Kritarth Agrawal <44940694+kritarth1107@users.noreply.github.com>",
   "homepage": "https://lurkwire.com",
