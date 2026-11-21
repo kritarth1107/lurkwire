@@ -1,0 +1,58 @@
+Lurkwire Proprietary License
+Copyright © 2026 Kritarth Agrawal / Lurkwire
+
+All rights reserved, except for the limited grants below.
+
+1. Permission
+
+If you have been invited as a collaborator or tester on the private
+GitHub repository at https://github.com/kritarth1107/lurkwire, you may
+clone, build, run, and modify this software solely to evaluate it, test
+it, and contribute improvements back to that repository.
+
+2. Restrictions
+
+You may not, without prior written permission from the copyright holder:
+
+  - redistribute the software, in source or binary form;
+  - sublicense it, or grant rights in it to anyone else;
+  - publish a fork or a copy of the source (including on a public
+    GitHub repository or any other public site);
+  - use the software for commercial purposes, including selling it,
+    bundling it with a paid product or service, or offering a hosted
+    version; or
+  - use the software, or any part of it, to offer a competing product
+    or service.
+
+The copyright holder retains all rights not expressly granted here.
+
+3. Contributions
+
+By submitting a contribution (including a pull request, patch, issue
+with code, or other submission) to this repository, you grant the
+copyright holder a perpetual, irrevocable, worldwide, royalty-free
+license to use, reproduce, modify, sublicense, and distribute that
+contribution as part of Lurkwire, under this license or any later
+license the copyright holder chooses for the project. You represent
+that you have the right to grant this license, and that your
+contribution is your original work or that you have permission to
+submit it.
+
+4. No warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND
+NONINFRINGEMENT. YOU ARE SOLELY RESPONSIBLE FOR HOW YOU USE IT AND FOR
+COMPLYING WITH APPLICABLE LAW AND THE TERMS OF ANY SERVICE OR PROGRAM
+YOU INTERACT WITH. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+INCLUDING MISUSE, DAMAGE, DATA LOSS, OR LEGAL CONSEQUENCES, ARISING
+FROM THE USE OF THE SOFTWARE OR ANY DEALINGS IN THE SOFTWARE.
+
+5. Termination
+
+These grants end automatically if you breach this license. On
+termination you must delete your copies of the software, except that
+contributions already merged into the repository remain licensed as
+described in section 3.

@@ -6,6 +6,98 @@ Burp Suite + an LLM, built into a browser you live in.
 
 Pre-alpha, under active development. Ubuntu/Linux first, then macOS and Windows.
 
+
+## For collaborators and testers
+
+This repository is private. You cannot clone it until the owner invites you and you accept the invite.
+
+### Get invited
+
+The owner invites you from the GitHub repo: **Settings → Collaborators and teams → Add people**, then enters your GitHub username or email. GitHub sends an email and an in-app notification. Open the invite and accept it. Until you do, clone and `git fetch` will fail.
+
+### Clone the repo
+
+SSH (preferred if you have a GitHub SSH key):
+
+```bash
+git clone git@github.com:kritarth1107/lurkwire.git
+cd lurkwire
+```
+
+HTTPS:
+
+```bash
+git clone https://github.com/kritarth1107/lurkwire.git
+cd lurkwire
+```
+
+### Prerequisites
+
+- Node.js 20 or newer
+- Rust (`cargo` / `rustc`)
+- curl (used by some proxy tests)
+- The usual Linux desktop libraries Electron needs (GTK, NSS)
+
+### First-time setup
+
+From the repo root:
+
+```bash
+npm install
+npm run build:proxy:debug
+npm run dev
+```
+
+`npm run dev` builds the debug proxy sidecar and starts the desktop app.
+
+### Tests
+
+```bash
+npm test
+```
+
+This runs the Rust proxy tests and the desktop unit tests.
+
+### Packaged Linux build
+
+```bash
+npm run dist:linux
+```
+
+Artifacts land in `dist/` at the repo root. Install the deb (this also adds Lurkwire to the Ubuntu app menu):
+
+```bash
+sudo apt install ./dist/lurkwire_*.deb
+```
+
+Or run the AppImage in place after `chmod +x dist/Lurkwire-*.AppImage`. You do not need to install the deb if you only want to try the AppImage.
+
+### Smoke tests
+
+```bash
+npm run smoke
+```
+
+After a packaged build, you can also smoke the AppImage (it writes screenshots to `docs/screenshots/`):
+
+```bash
+npm run smoke:appimage
+```
+
+### Open Workbench
+
+In the running app, open `lurkwire://workbench` or press Ctrl+Shift+M (also under the app menu as API Workbench). Active tools honor the project's scope allowlist and the global kill switch — only test systems you are authorized to test.
+
+### Pull requests
+
+Branch off `main`, push your branch, and open a pull request. Do not push straight to `main` unless the owner asks you to.
+
+### Where to look
+
+- [docs/PROGRESS.md](docs/PROGRESS.md) — module checklist and what is already on `main`
+- [docs/screenshots/](docs/screenshots/) — current UI screenshots from the packaged smoke
+- The Development and Install on Linux sections below, if you need proxy-only or packaging detail
+
 ## What it is
 
 Lurkwire is an AI-native security browser for developers, pentesters, and bug bounty hunters. It is a daily-driver Chromium browser with a built-in intercepting proxy, Repeater, fuzzer, and scanner, plus your own or local LLMs. Capture works with zero setup because the proxy is built into the browser — and the AI drafts while a human always sends.
@@ -118,4 +210,4 @@ Chrome icons are from [Lucide](https://lucide.dev) (ISC). See [THIRD_PARTY_NOTIC
 
 ## License
 
-TBD
+Lurkwire is licensed under the Lurkwire Proprietary License. See [LICENSE](LICENSE).
