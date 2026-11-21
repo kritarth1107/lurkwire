@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/version-0.1.0-9b30ff?style=flat" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/platform-Linux_|_macOS/Windows_soon-9b30ff?style=flat" alt="Platform: Linux first, macOS and Windows soon">
   <img src="https://img.shields.io/badge/license-Proprietary-ff1aff?style=flat" alt="License: Proprietary">
-  <img src="https://img.shields.io/badge/Electron-39.8.10-9b30ff?style=flat&logo=electron&logoColor=white" alt="Electron 39.8.10">
+  <img src="https://img.shields.io/badge/Electron-42.11.16-9b30ff?style=flat&logo=electron&logoColor=white" alt="Electron 42.11.16">
   <img src="https://img.shields.io/badge/Rust-sidecar-9b30ff?style=flat&logo=rust&logoColor=white" alt="Rust sidecar">
   <img src="https://img.shields.io/badge/TypeScript-5.9-9b30ff?style=flat&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/React-19-9b30ff?style=flat&logo=react&logoColor=white" alt="React 19">
