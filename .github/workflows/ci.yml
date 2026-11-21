@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  FORCE_COLOR: "1"
+
+jobs:
+  test:
+    name: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            libasound2t64 \
+            libatk-bridge2.0-0t64 \
+            libatk1.0-0t64 \
+            libcairo2 \
+            libcups2t64 \
+            libdbus-1-3 \
+            libdrm2 \
+            libgbm1 \
+            libgtk-3-0t64 \
+            libnss3 \
+            libpango-1.0-0 \
+            libx11-xcb1 \
+            libxcb-dri3-0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxkbcommon0 \
+            libxrandr2 \
+            libxshmfence1 \
+            libxss1 \
+            libxtst6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck -w @lurkwire/desktop
+
+      - name: Desktop tests
+        run: npm exec -w @lurkwire/desktop -- vitest run
+
+      - name: Proxy tests
+        run: cargo test -p lurkwire-proxy
+
+  package:
+    name: package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ca-certificates \
+            curl \
+            fakeroot \
+            libasound2t64 \
+            libatk-bridge2.0-0t64 \
+            libatk1.0-0t64 \
+            libcairo2 \
+            libcups2t64 \
+            libdbus-1-3 \
+            libdrm2 \
+            libgbm1 \
+            libgtk-3-0t64 \
+            libnss3 \
+            libpango-1.0-0 \
+            libx11-xcb1 \
+            libxcb-dri3-0 \
+            libxcomposite1 \
+            libxdamage1 \
+            libxext6 \
+            libxfixes3 \
+            libxkbcommon0 \
+            libxrandr2 \
+            libxshmfence1 \
+            libxss1 \
+            libxtst6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Linux packages
+        run: npm run dist:linux
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-packages
+          path: |
+            dist/Lurkwire-*.AppImage
+            dist/lurkwire_*.deb
+          if-no-files-found: error
+          retention-days: 7
+
+# Packaged AppImage smoke is not run here: it launches a real Electron window
+# and hits live third-party HTTPS sites (example.com, httpbin.org, iana.org),
+# which is too flaky and network-dependent for CI.

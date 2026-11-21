@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <img src="https://github.com/kritarth1107/lurkwire/actions/workflows/ci.yml/badge.svg" alt="CI">
   <img src="https://img.shields.io/badge/status-pre--alpha-9b30ff?style=flat" alt="Status: pre-alpha">
   <img src="https://img.shields.io/badge/version-0.1.0-9b30ff?style=flat" alt="Version 0.1.0">
   <img src="https://img.shields.io/badge/platform-Linux_|_macOS/Windows_soon-9b30ff?style=flat" alt="Platform: Linux first, macOS and Windows soon">
