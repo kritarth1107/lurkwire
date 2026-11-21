@@ -815,6 +815,29 @@ input, textarea, select {
   padding: 6px 0;
 }
 
+.anchored-popover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: transparent;
+}
+
+.anchored-popover {
+  position: fixed;
+  z-index: 71;
+  background: var(--panel);
+  color: var(--text);
+  border-radius: var(--radius-m);
+  box-shadow: var(--panel-shadow);
+  overflow: auto;
+  min-width: 200px;
+}
+
+.anchored-popover .panel-root {
+  min-height: 0;
+  padding: 6px 0;
+}
+
 .menu-item, .menu-check {
   display: flex;
   align-items: center;

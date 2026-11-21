@@ -305,6 +305,60 @@ async function clickSelector(window: BrowserWindow, selector: string): Promise<b
   )) as boolean;
 }
 
+type AnchorProbe = {
+  ok: boolean;
+  reason?: string;
+  button?: { left: number; right: number; top: number; bottom: number };
+  popover?: { left: number; right: number; top: number; bottom: number };
+};
+
+async function waitForPopover(window: BrowserWindow, timeout = 5_000): Promise<boolean> {
+  return Boolean(
+    await waitFor(
+      "anchored popover",
+      async () => {
+        const present = (await window.webContents.executeJavaScript(
+          `Boolean(document.querySelector('[data-testid="anchored-popover"]'))`,
+        )) as boolean;
+        return present ? true : null;
+      },
+      timeout,
+    ),
+  );
+}
+
+async function assertPopoverAnchored(
+  window: BrowserWindow,
+  buttonSelector: string,
+  align: "start" | "end",
+): Promise<AnchorProbe> {
+  const result = (await window.webContents.executeJavaScript(`(() => {
+    const btn = document.querySelector(${JSON.stringify(buttonSelector)});
+    const pop = document.querySelector('[data-testid="anchored-popover"]');
+    if (!btn) return { ok: false, reason: "no button" };
+    if (!pop) return { ok: false, reason: "no popover" };
+    const b = btn.getBoundingClientRect();
+    const p = pop.getBoundingClientRect();
+    const button = { left: b.left, right: b.right, top: b.top, bottom: b.bottom };
+    const popover = { left: p.left, right: p.right, top: p.top, bottom: p.bottom };
+    const overlapsX = p.left < b.right && p.right > b.left;
+    const endAligned = Math.abs(p.right - b.right) <= 12;
+    const startAligned = Math.abs(p.left - b.left) <= 12;
+    const below = p.top >= b.bottom - 8;
+    const ok = below && (${JSON.stringify(align)} === "end" ? endAligned || overlapsX : startAligned || overlapsX);
+    // The reported bug placed the menu near x=105 under the sidebar.
+    if (${JSON.stringify(align)} === "end" && p.left < 400 && b.left > 800) {
+      return { ok: false, reason: "popover on far left while button is on the right", button, popover };
+    }
+    return { ok, button, popover, reason: ok ? undefined : "not under trigger" };
+  })()`)) as AnchorProbe;
+  console.log(`SMOKE anchor ${buttonSelector} ${align} ${JSON.stringify(result)}`);
+  if (!result.ok) {
+    throw new Error(`popover not anchored under ${buttonSelector}: ${JSON.stringify(result)}`);
+  }
+  return result;
+}
+
 
 async function captureDevtools(
   window: BrowserWindow,
@@ -697,9 +751,9 @@ message HelloReply { string message = 1; }
       align: "start",
       placement: "below",
     });
-    const panel = await waitFor("identity panel", () => hooks.panels()?.currentWindow() ?? null, 5_000);
-    console.log(`SMOKE identity panel bounds=${JSON.stringify(panel.getBounds())}`);
-    await sleep(800);
+    await waitForPopover(window);
+    await assertPopoverAnchored(window, 'button[title="Site identity"]', "start");
+    await sleep(400);
   } else {
     console.log("SMOKE identity button not found");
   }
@@ -708,13 +762,33 @@ message HelloReply { string message = 1; }
   await sleep(200);
 
   await clickSelector(window, 'button[aria-label="Downloads"]');
-  await sleep(500);
+  await waitForPopover(window);
+  await assertPopoverAnchored(window, 'button[aria-label="Downloads"]', "end");
+  await sleep(300);
   paths.push(await captureWithPanel(window, out, "downloads-popover.png", tabs, hooks.panels()));
   hooks.panels()?.close();
   await sleep(200);
 
+  await clickSelector(window, 'button[aria-label="Lurkwire tools"]');
+  await waitForPopover(window);
+  await assertPopoverAnchored(window, 'button[aria-label="Lurkwire tools"]', "end");
+  await sleep(300);
+  paths.push(await captureWithPanel(window, out, "lurkwire-tools.png", tabs, hooks.panels()));
+  hooks.panels()?.close();
+  await sleep(200);
+
+  await clickSelector(window, 'button[aria-label="Project"]');
+  await waitForPopover(window);
+  await assertPopoverAnchored(window, 'button[aria-label="Project"]', "end");
+  await sleep(300);
+  paths.push(await captureWithPanel(window, out, "project-popover.png", tabs, hooks.panels()));
+  hooks.panels()?.close();
+  await sleep(200);
+
   await clickSelector(window, 'button[aria-label="Application menu"]');
-  await sleep(500);
+  await waitForPopover(window);
+  await assertPopoverAnchored(window, 'button[aria-label="Application menu"]', "end");
+  await sleep(300);
   paths.push(await captureWithPanel(window, out, "app-menu.png", tabs, hooks.panels()));
   hooks.panels()?.close();
   await sleep(200);
