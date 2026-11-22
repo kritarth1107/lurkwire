@@ -9,6 +9,7 @@ export type ToolId =
   | "ai"
   | "intruder"
   | "decode"
+  | "cookies"
   | "recon"
   | "scanner"
   | "sitemap"
@@ -29,6 +30,7 @@ export type SidebarPanel =
   | "ai"
   | "intruder"
   | "decode"
+  | "cookies"
   | "recon"
   | "scanner"
   | "sitemap"
@@ -77,6 +79,9 @@ export type AppPrefs = {
   sidebarPanel: SidebarPanel;
   sidebarWidth: number;
   sidebarSide: "left" | "right";
+  toolsDockHeight: number;
+  llmSidebarOpen: boolean;
+  llmSidebarWidth: number;
   sessionRestore: boolean;
   llm: LlmSettings;
 };
@@ -88,6 +93,9 @@ export const DEFAULT_PREFS: AppPrefs = {
   sidebarPanel: "history",
   sidebarWidth: 360,
   sidebarSide: "left",
+  toolsDockHeight: 380,
+  llmSidebarOpen: false,
+  llmSidebarWidth: 340,
   sessionRestore: false,
   llm: DEFAULT_LLM,
 };

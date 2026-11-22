@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { BrowserWindow, clipboard, WebContentsView, session } from "electron";
+import { app, BrowserWindow, clipboard, WebContentsView, session } from "electron";
 import type { Bounds, ContextMenuPayload, FindResult, TabGroup, TabGroupColor, TabInfo } from "../shared/types";
 import { nextTabGroupColor, packTabOrder } from "../shared/tabGroups";
 import type { SessionWindow } from "../shared/session";
 import {
   canonicalizeInternalUrl,
   isInternalUrl,
-  normalizeUrl,
   titleForInternalPage,
 } from "../shared/url";
+import { resolveOmnibox } from "../shared/omnibox";
 import { recordVisit } from "./visits";
 import { configureProjectSession } from "./sessions";
 
@@ -400,12 +400,28 @@ export class TabManager {
     return this.bounds;
   }
 
+  async memoryFor(id: string): Promise<number> {
+    const tab = this.tabs.get(id);
+    if (!tab || tab.view.webContents.isDestroyed()) {
+      return 0;
+    }
+    try {
+      const contents = tab.view.webContents as Electron.WebContents;
+      const pid = contents.getOSProcessId();
+      const metric = app.getAppMetrics().find((item) => item.pid === pid);
+      return Math.max(0, (metric?.memory?.workingSetSize ?? 0) * 1024);
+    } catch {
+      return 0;
+    }
+  }
+
   async navigate(id: string, input: string): Promise<"internal" | "external"> {
+
     const tab = this.tabs.get(id);
     if (!tab) {
       return "external";
     }
-    const raw = normalizeUrl(input) || "lurkwire://newtab";
+    const raw = resolveOmnibox(input).url || "lurkwire://newtab";
     const url = canonicalizeInternalUrl(raw) ?? raw;
     const internal = isInternalUrl(url);
     await this.prepareSession(tab.projectId);

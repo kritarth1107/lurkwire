@@ -10,6 +10,7 @@ const SIDEBAR_PANELS = new Set<SidebarPanel>([
   "ai",
   "intruder",
   "decode",
+  "cookies",
   "recon",
   "scanner",
   "sitemap",
