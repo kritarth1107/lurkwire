@@ -312,6 +312,28 @@ async function captureOmnibox(
 ): Promise<void> {
   window.focus();
   window.webContents.focus();
+  const measureChrome = `(() => {
+    const box = (el) => {
+      if (!(el instanceof Element)) return null;
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) };
+    };
+    return {
+      navbar: box(document.querySelector(".navbar")),
+      topbar: box(document.querySelector(".tools-topbar")),
+      bookmarks: box(document.querySelector(".bookmarks-bar")),
+      dropdown: box(document.querySelector(".omnibox-dropdown")),
+      slot: Boolean(document.querySelector(".omnibox-slot")),
+    };
+  })()`;
+  const before = (await window.webContents.executeJavaScript(measureChrome)) as {
+    navbar: { top: number } | null;
+    topbar: { top: number } | null;
+    bookmarks: { top: number } | null;
+    dropdown: { top: number } | null;
+    slot: boolean;
+  };
+  console.log(`SMOKE omnibox layout before ${JSON.stringify(before)}`);
   const point = (await window.webContents.executeJavaScript(`(() => {
     const input = document.querySelector(".urlbar input");
     if (!(input instanceof HTMLInputElement)) return null;
@@ -349,7 +371,28 @@ async function captureOmnibox(
       active: document.activeElement === input,
     };
   })()`)) as { open: boolean; expanded: string | null; value: string; items: number; active: boolean };
+  const after = (await window.webContents.executeJavaScript(measureChrome)) as {
+    navbar: { top: number } | null;
+    topbar: { top: number } | null;
+    bookmarks: { top: number } | null;
+    dropdown: { top: number; bottom: number } | null;
+    slot: boolean;
+  };
   console.log(`SMOKE omnibox ${JSON.stringify(info)}`);
+  console.log(`SMOKE omnibox layout after ${JSON.stringify(after)}`);
+  const shifted = [
+    ["navbar", before.navbar?.top, after.navbar?.top],
+    ["topbar", before.topbar?.top, after.topbar?.top],
+    ["bookmarks", before.bookmarks?.top, after.bookmarks?.top],
+  ].filter(([, a, b]) => typeof a === "number" && typeof b === "number" && Math.abs((a as number) - (b as number)) > 1);
+  if (shifted.length > 0) {
+    throw new Error(
+      `omnibox dropdown shifted chrome: ${shifted.map(([name, a, b]) => `${name} ${a} -> ${b}`).join(", ")}`,
+    );
+  }
+  if (after.slot) {
+    throw new Error("omnibox-slot is still in the layout and must not reserve height");
+  }
   if (info.open) {
     paths.push(await captureWindow(window, out, "omnibox.png", tabs));
   } else {

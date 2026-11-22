@@ -3528,10 +3528,14 @@ button.primary:active, .primary:active { transform: translateY(1px); }
   z-index: 32;
   overflow: visible;
 }
-.omnibox-slot {
-  flex: 0 0 auto;
-  background: var(--toolbar);
+.navbar-cluster.suggest-open {
+  z-index: var(--z-dropdown);
 }
-.navbar-cluster.suggest-open .omnibox-dropdown {
-  z-index: 40;
+.omnibox-dropdown.omnibox-fixed {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: auto;
+  z-index: var(--z-dropdown);
+  margin: 0;
 }
