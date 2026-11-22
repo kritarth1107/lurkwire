@@ -1042,7 +1042,7 @@ async function runPracticeTargets(
       const list = await hooks.control.listFlows({
         project_id: projectId ?? undefined,
         host: "127.0.0.1",
-        q: "products/search",
+        q: "search",
         limit: 20,
       });
       return list.items[0] ?? null;
