@@ -729,7 +729,12 @@ message HelloReply { string message = 1; }
   await sleep(700);
   paths.push(await captureWindow(window, out, "sidebar-ai.png", tabs));
 
-  hooks.setPrefs({ sidebarOpen: false });
+  hooks.setPrefs({ sidebarOpen: true, toolsDockHeight: 400, llmSidebarOpen: true, llmSidebarWidth: 340 });
+  hooks.selectTool("history");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "topbar-traffic-llm.png", tabs));
+
+  hooks.setPrefs({ sidebarOpen: false, llmSidebarOpen: false });
   await sleep(300);
   const identity = (await window.webContents.executeJavaScript(`(() => {
     const el = document.querySelector('button[title="Site identity"]');
