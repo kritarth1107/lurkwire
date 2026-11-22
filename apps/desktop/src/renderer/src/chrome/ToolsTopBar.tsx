@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
+import { computeAnchoredPosition, type ClientRect } from "../../../shared/anchorPopover";
 import {
   Cookie,
   Crosshair,
@@ -43,6 +45,7 @@ import {
 } from "../../../shared/toolMenus";
 import { queueToolIntent } from "../workbench/pendingToolIntent";
 import { Tooltip } from "./Tooltip";
+import { notifyOverlaysChanged } from "./overlayLayer";
 
 export const TOOL_ICONS: Record<SidebarPanel, typeof Activity> = {
   history: Activity,
@@ -86,16 +89,20 @@ export function ToolsTopBar({ state }: { state: AppSnapshot }) {
   const panel = state.prefs.sidebarPanel;
   const pinned = sanitizePinnedTools(state.prefs.pinnedTools ?? DEFAULT_PINNED_TOOLS);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [menuOffset, setMenuOffset] = useState(8);
+  const [menuAnchor, setMenuAnchor] = useState<ClientRect | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const assistantOn = state.prefs.llmSidebarOpen;
   const openGroup = TOOL_MENU_GROUPS.find((group) => group.id === openMenu) ?? null;
 
   function openGroupAt(id: string, button: HTMLElement) {
-    const bar = barRef.current?.getBoundingClientRect();
     const rect = button.getBoundingClientRect();
-    setMenuOffset(Math.max(8, Math.round(rect.left - (bar?.left ?? 0))));
+    setMenuAnchor({ left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom });
     setOpenMenu(id);
+  }
+
+  function closeMenu() {
+    setOpenMenu(null);
+    setMenuAnchor(null);
   }
 
   return (
@@ -142,7 +149,7 @@ export function ToolsTopBar({ state }: { state: AppSnapshot }) {
                 open={openMenu === group.id}
                 groupActive={groupActive}
                 onOpen={(button) => openGroupAt(group.id, button)}
-                onClose={() => setOpenMenu(null)}
+                onClose={closeMenu}
                 onOpenAdjacent={(dir) => {
                   const next = TOOL_MENU_GROUPS[index + dir];
                   if (next) {
@@ -191,32 +198,33 @@ export function ToolsTopBar({ state }: { state: AppSnapshot }) {
           </Tooltip>
         </div>
       </div>
-      {openGroup ? (
-        <div className="tools-menu-slot">
-          <ToolMenuPanel
-            group={openGroup}
-            offset={menuOffset}
-            dockOpen={dockOpen}
-            panel={panel}
-            pinned={pinned}
-            onTogglePin={(id) => {
-              void window.lurkwire.setPrefs({ pinnedTools: togglePinned(pinned, id) });
-            }}
-            onClose={() => setOpenMenu(null)}
-            onOpenAdjacent={(dir) => {
-              const index = TOOL_MENU_GROUPS.findIndex((item) => item.id === openGroup.id);
-              const next = TOOL_MENU_GROUPS[index + dir];
-              if (!next) {
-                return;
-              }
-              const node = barRef.current?.querySelector<HTMLButtonElement>(`button[data-menu="${next.id}"]`);
-              if (node) {
-                openGroupAt(next.id, node);
-              }
-            }}
-          />
-        </div>
-      ) : null}
+      {openGroup && menuAnchor
+        ? createPortal(
+            <ToolMenuPanel
+              group={openGroup}
+              anchor={menuAnchor}
+              dockOpen={dockOpen}
+              panel={panel}
+              pinned={pinned}
+              onTogglePin={(id) => {
+                void window.lurkwire.setPrefs({ pinnedTools: togglePinned(pinned, id) });
+              }}
+              onClose={closeMenu}
+              onOpenAdjacent={(dir) => {
+                const index = TOOL_MENU_GROUPS.findIndex((item) => item.id === openGroup.id);
+                const next = TOOL_MENU_GROUPS[index + dir];
+                if (!next) {
+                  return;
+                }
+                const node = barRef.current?.querySelector<HTMLButtonElement>(`button[data-menu="${next.id}"]`);
+                if (node) {
+                  openGroupAt(next.id, node);
+                }
+              }}
+            />,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -278,7 +286,7 @@ function ToolMenuButton({
 
 function ToolMenuPanel({
   group,
-  offset,
+  anchor,
   dockOpen,
   panel,
   pinned,
@@ -287,7 +295,7 @@ function ToolMenuPanel({
   onOpenAdjacent,
 }: {
   group: ToolMenuGroup;
-  offset: number;
+  anchor: ClientRect;
   dockOpen: boolean;
   panel: SidebarPanel;
   pinned: SidebarPanel[];
@@ -298,7 +306,28 @@ function ToolMenuPanel({
   const menuRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [pos, setPos] = useState({ top: Math.round(anchor.bottom + 4), left: Math.round(anchor.left) });
   const items = useMemo(() => filterMenuItems(group.items, query), [group.items, query]);
+
+  useLayoutEffect(() => {
+    const node = menuRef.current;
+    if (!node) {
+      return;
+    }
+    const box = node.getBoundingClientRect();
+    const next = computeAnchoredPosition({
+      trigger: anchor,
+      width: Math.max(box.width, 280),
+      height: Math.max(box.height, 120),
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      align: "start",
+      placement: "below",
+      gap: 4,
+      margin: 8,
+    });
+    setPos({ top: next.top, left: next.left });
+    notifyOverlaysChanged();
+  }, [anchor, group.id, query, items.length]);
 
   useEffect(() => {
     setQuery("");
@@ -382,11 +411,12 @@ function ToolMenuPanel({
   return (
     <div
       ref={menuRef}
-      className="tool-menu in-slot"
+      className="tool-menu"
+      data-lw-overlay=""
       role="menu"
       aria-label={group.label}
       tabIndex={-1}
-      style={{ marginLeft: offset }}
+      style={{ top: pos.top, left: pos.left }}
       onKeyDown={onMenuKey}
     >
       <div className="tool-menu-search">

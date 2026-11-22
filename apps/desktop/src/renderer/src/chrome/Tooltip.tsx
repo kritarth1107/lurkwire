@@ -79,7 +79,7 @@ export function Tooltip({
       </span>
       {open && pos
         ? createPortal(
-            <div className="lw-tooltip" role="tooltip" style={popoverMotionStyle(pos)}>
+            <div className="lw-tooltip" data-lw-overlay="" role="tooltip" style={popoverMotionStyle(pos)}>
               <span className="lw-tooltip-row">
                 <span>{label}</span>
                 {shortcut ? <kbd>{shortcut}</kbd> : null}

@@ -134,7 +134,7 @@ export function CommandPalette({
   };
 
   return (
-    <div className="palette-backdrop" onMouseDown={onClose} role="presentation">
+    <div className="palette-backdrop" data-lw-overlay="" onMouseDown={onClose} role="presentation">
       <div
         className="palette"
         role="dialog"

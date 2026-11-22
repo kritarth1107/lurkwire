@@ -214,7 +214,7 @@ export function FlowContextMenu({
   }
 
   return (
-    <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} role="menu">
+    <div className="ctx-menu" data-lw-overlay="" style={{ left: menu.x, top: menu.y }} role="menu">
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "repeater", handlers)}>
         Send to Repeater <kbd>Ctrl+R</kbd>
       </button>

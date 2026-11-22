@@ -117,15 +117,16 @@
   --radius-sm: var(--radius-s);
   --fw-600: var(--fw-semibold);
 
-  /* Z-index scale */
+  /* Z-index scale: page-chrome < toolbar < dropdowns < popovers < modal < tooltips < toasts */
   --z-base: 0;
   --z-tab: 3;
   --z-dock: 10;
+  --z-toolbar: 20;
   --z-dropdown: 40;
   --z-popover: 50;
-  --z-tooltip: 60;
   --z-modal: 70;
-  --z-toast: 80;
+  --z-tooltip: 80;
+  --z-toast: 90;
 
   /* Type ramp */
   --font: "Inter", system-ui, "Segoe UI", "Ubuntu", "Cantarell", "Helvetica Neue", sans-serif;

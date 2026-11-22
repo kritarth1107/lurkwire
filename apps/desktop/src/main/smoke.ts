@@ -408,6 +408,81 @@ async function captureOmnibox(
   }
 }
 
+type ChromeLayout = {
+  navbar: { top: number } | null;
+  topbar: { top: number } | null;
+  bookmarks: { top: number } | null;
+  slot: boolean;
+};
+
+async function measureChrome(window: BrowserWindow): Promise<ChromeLayout> {
+  return (await window.webContents.executeJavaScript(`(() => {
+    const box = (el) => {
+      if (!(el instanceof Element)) return null;
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), bottom: Math.round(r.bottom), height: Math.round(r.height) };
+    };
+    return {
+      navbar: box(document.querySelector(".navbar")),
+      topbar: box(document.querySelector(".tools-topbar")),
+      bookmarks: box(document.querySelector(".bookmarks-bar")),
+      slot: Boolean(document.querySelector(".tools-menu-slot")),
+    };
+  })()`)) as ChromeLayout;
+}
+
+function assertChromeUnmoved(before: ChromeLayout, after: ChromeLayout, label: string): void {
+  const shifted = [
+    ["navbar", before.navbar?.top, after.navbar?.top],
+    ["topbar", before.topbar?.top, after.topbar?.top],
+    ["bookmarks", before.bookmarks?.top, after.bookmarks?.top],
+  ].filter(([, a, b]) => typeof a === "number" && typeof b === "number" && Math.abs((a as number) - (b as number)) > 1);
+  if (shifted.length > 0) {
+    throw new Error(
+      `${label} shifted chrome: ${shifted.map(([name, a, b]) => `${name} ${a} -> ${b}`).join(", ")}`,
+    );
+  }
+  if (after.slot) {
+    throw new Error(`${label} left a tools-menu-slot in the layout`);
+  }
+}
+
+async function assertOverlayClearsNativePage(
+  window: BrowserWindow,
+  tabs: TabManager | null,
+  selector: string,
+): Promise<void> {
+  await waitFor(
+    `${selector} above the native page`,
+    async () => {
+      const overlay = (await window.webContents.executeJavaScript(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!(el instanceof Element)) return null;
+        const r = el.getBoundingClientRect();
+        return { x: r.x, y: r.y, width: r.width, height: r.height };
+      })()`)) as { x: number; y: number; width: number; height: number } | null;
+      if (!overlay || overlay.width < 2 || overlay.height < 2) {
+        return null;
+      }
+      const bounds = tabs?.contentBounds();
+      if (!bounds || bounds.width <= 8 || bounds.height <= 8) {
+        return overlay;
+      }
+      const overlaps =
+        overlay.x < bounds.x + bounds.width - 1 &&
+        overlay.x + overlay.width > bounds.x + 1 &&
+        overlay.y < bounds.y + bounds.height - 1 &&
+        overlay.y + overlay.height > bounds.y + 1;
+      if (overlaps) {
+        console.log(`SMOKE ${selector} still overlaps page ${JSON.stringify({ overlay, bounds })}`);
+        return null;
+      }
+      return overlay;
+    },
+    3_000,
+  );
+}
+
 async function captureCategorizedMenus(
   window: BrowserWindow,
   out: string,
@@ -415,17 +490,95 @@ async function captureCategorizedMenus(
   tabs: TabManager | null,
 ): Promise<void> {
   paths.push(await captureWindow(window, out, "chrome-tools-bar.png", tabs));
+  const before = await measureChrome(window);
+  console.log(`SMOKE tool menu layout before ${JSON.stringify(before)}`);
   for (const id of ["proxy", "attack", "recon", "decode", "report"]) {
     const opened = await clickSelector(window, `button[data-menu="${id}"]`);
     if (!opened) {
       console.log(`SMOKE tool menu ${id} button missing`);
       continue;
     }
-    await sleep(350);
+    await assertOverlayClearsNativePage(window, tabs, ".tool-menu");
+    const after = await measureChrome(window);
+    console.log(`SMOKE tool menu ${id} layout after ${JSON.stringify(after)}`);
+    assertChromeUnmoved(before, after, `tool menu ${id}`);
     paths.push(await captureWindow(window, out, `menu-${id}.png`, tabs));
+    if (id === "attack") {
+      paths.push(await captureWindow(window, out, "overlay-menu-attack.png", tabs));
+    }
     await clickSelector(window, `button[data-menu="${id}"]`);
     await sleep(150);
   }
+}
+
+async function captureOverlaysOverPage(
+  window: BrowserWindow,
+  out: string,
+  paths: string[],
+  tabs: TabManager | null,
+  hooks: SmokeHooks,
+): Promise<void> {
+  const before = await measureChrome(window);
+
+  await clickSelector(window, 'button[aria-label="Downloads"]');
+  if (await waitForPopover(window, 4_000)) {
+    await assertPopoverAnchored(window, 'button[aria-label="Downloads"]', "end");
+    await assertOverlayClearsNativePage(window, tabs, '[data-testid="anchored-popover"]');
+    const after = await measureChrome(window);
+    assertChromeUnmoved(before, after, "downloads popover");
+    paths.push(await captureWindow(window, out, "overlay-popover.png", tabs));
+    hooks.panels()?.close();
+    await sleep(200);
+  } else {
+    console.log("SMOKE overlay popover missing");
+  }
+
+  window.webContents.send("lurkwire:command-palette");
+  await waitFor("command palette overlay", async () => {
+    const open = (await window.webContents.executeJavaScript(
+      `Boolean(document.querySelector(".palette-backdrop"))`,
+    )) as boolean;
+    return open ? true : null;
+  }, 4_000);
+  await assertOverlayClearsNativePage(window, tabs, ".palette-backdrop");
+  paths.push(await captureWindow(window, out, "overlay-command-palette.png", tabs));
+  await window.webContents.executeJavaScript(
+    `document.querySelector(".palette-backdrop")?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))`,
+  );
+  await sleep(200);
+
+  hooks.setPrefs({ sidebarOpen: true, toolsDockHeight: 180, llmSidebarOpen: false });
+  hooks.selectTool("history");
+  await sleep(500);
+  const openedMenu = (await window.webContents.executeJavaScript(`(() => {
+    const row = document.querySelector(".history-table tbody tr, .traffic-table tbody tr, table tbody tr");
+    if (!row) return false;
+    const rect = row.getBoundingClientRect();
+    row.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left + 80,
+      clientY: rect.top + 10,
+      button: 2,
+    }));
+    return true;
+  })()`)) as boolean;
+  if (openedMenu) {
+    await waitFor("context menu overlay", async () => {
+      const open = (await window.webContents.executeJavaScript(
+        `Boolean(document.querySelector(".ctx-menu"))`,
+      )) as boolean;
+      return open ? true : null;
+    }, 3_000);
+    await assertOverlayClearsNativePage(window, tabs, ".ctx-menu");
+    paths.push(await captureWindow(window, out, "overlay-context-menu.png", tabs));
+    await window.webContents.executeJavaScript(`document.body.click()`);
+    await sleep(200);
+  } else {
+    console.log("SMOKE overlay context menu missing (no traffic row)");
+  }
+  hooks.setPrefs({ sidebarOpen: false, llmSidebarOpen: false });
+  await sleep(300);
 }
 
 async function clickSelector(window: BrowserWindow, selector: string): Promise<boolean> {
@@ -828,6 +981,7 @@ message HelloReply { string message = 1; }
   paths.push(await captureWindow(window, out, "main-light.png", tabs));
   await captureOmnibox(window, out, paths, tabs);
   await captureCategorizedMenus(window, out, paths, tabs);
+  await captureOverlaysOverPage(window, out, paths, tabs, hooks);
 
   hooks.setPrefs({ theme: "dark", sidebarOpen: false });
   await sleep(700);
@@ -893,6 +1047,7 @@ message HelloReply { string message = 1; }
     });
     await waitForPopover(window);
     await assertPopoverAnchored(window, 'button[title="Site identity"]', "start");
+    await assertOverlayClearsNativePage(window, tabs, '[data-testid="anchored-popover"]');
     await sleep(400);
   } else {
     console.log("SMOKE identity button not found");
