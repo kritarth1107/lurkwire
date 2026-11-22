@@ -1155,39 +1155,29 @@ async function runPracticeTargets(
     console.log(`SMOKE DVWA SQLi hashes hasHash=${(dump as { hasHash?: boolean }).hasHash}`);
     paths.push(await captureWindow(window, out, "practice-dvwa-sqli-hashes.png", tabs));
 
-    const xssWc = tabs.active()?.view.webContents;
-    if (xssWc && !xssWc.isDestroyed()) {
-      try {
-        if (!xssWc.debugger.isAttached()) {
-          await xssWc.debugger.attach("1.3");
-        }
-        await xssWc.debugger.sendCommand("Page.addScriptToEvaluateOnNewDocument", {
-          source: `(() => {
-            const show = (m) => {
-              let el = document.getElementById("lurkwire-xss-proof");
-              if (!el) {
-                el = document.createElement("div");
-                el.id = "lurkwire-xss-proof";
-                el.setAttribute("style", "position:fixed;z-index:2147483647;top:0;left:0;right:0;padding:16px;background:#b00020;color:#fff;font:600 18px/1.4 sans-serif");
-                document.documentElement.appendChild(el);
-              }
-              el.textContent = "XSS executed: " + m;
-            };
-            window.alert = (m) => { show(String(m)); };
-          })();`,
-        });
-      } catch (error) {
-        console.log(`SMOKE DVWA XSS hook failed: ${error instanceof Error ? error.message : error}`);
-      }
-    }
-    await showAndGo(DVWA_XSS, "DVWA XSS", "vulnerabilities/xss_r");
+    // Use a script payload that paints a visible banner instead of alert(),
+    // which would block the tab and stall smoke on a native dialog.
+    const xssUrl =
+      "http://127.0.0.1:4280/vulnerabilities/xss_r/?name=" +
+      encodeURIComponent(
+        "<script>document.documentElement.prepend(Object.assign(document.createElement('div'),{id:'lurkwire-xss-proof',textContent:'XSS executed',style:'position:fixed;z-index:2147483647;top:0;left:0;right:0;padding:16px;background:#b00020;color:#fff;font:600 18px/1.4 sans-serif'}))</script>",
+      );
+    void DVWA_XSS;
+    await showAndGo(xssUrl, "DVWA XSS", "vulnerabilities/xss_r");
     await sleep(1000);
-    const xss = await pageJs(`({
-      href: location.href,
-      proof: Boolean(document.getElementById("lurkwire-xss-proof")),
-      reflected: document.documentElement.innerHTML.includes("<script>alert(1)</script>"),
-      text: document.body.innerText.slice(0, 400),
-    })`);
+    let xss: unknown = null;
+    try {
+      xss = await Promise.race([
+        pageJs(`({
+          href: location.href,
+          proof: Boolean(document.getElementById("lurkwire-xss-proof")),
+          text: document.body.innerText.slice(0, 400),
+        })`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("xss pageJs timeout")), 4000)),
+      ]);
+    } catch (error) {
+      console.log(`SMOKE DVWA XSS pageJs: ${error instanceof Error ? error.message : error}`);
+    }
     console.log("SMOKE DVWA XSS", JSON.stringify(xss));
     paths.push(await captureWindow(window, out, "practice-dvwa-xss.png", tabs));
     console.log("SMOKE practice DVWA attempted");
