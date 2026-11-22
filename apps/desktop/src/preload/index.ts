@@ -119,6 +119,9 @@ const api = {
   removeSessionCookie: (cookie: SiteCookie) => ipcRenderer.invoke("lurkwire:removeSessionCookie", cookie),
   clearSessionCookies: (url: string) => ipcRenderer.invoke("lurkwire:clearSessionCookies", url),
   listVisits: (query?: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:listVisits", query),
+  searchSuggest: (query: string): Promise<string[]> => ipcRenderer.invoke("lurkwire:searchSuggest", query),
+  getTabMemory: (tabId: string): Promise<{ bytes: number }> =>
+    ipcRenderer.invoke("lurkwire:getTabMemory", tabId),
   deleteVisit: (id: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:deleteVisit", id),
   clearVisits: () => ipcRenderer.invoke("lurkwire:clearVisits"),
   runRecon: (request: ReconRequest): Promise<ReconResult> =>

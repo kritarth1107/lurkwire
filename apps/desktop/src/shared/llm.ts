@@ -8,7 +8,7 @@ export type LlmProvider =
   | "lmstudio"
   | "openai-compatible";
 
-export type LlmAction = "explain" | "suggest" | "draft";
+export type LlmAction = "explain" | "suggest" | "draft" | "payloads" | "summarize" | "poc" | "chat";
 
 export type LlmConnectorConfig = {
   baseUrl: string;

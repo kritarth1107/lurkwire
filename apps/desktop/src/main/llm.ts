@@ -99,6 +99,18 @@ function systemPrompt(action: LlmRequest["action"]): string {
   if (action === "suggest") {
     return `${common} Suggest concrete tests a human might run next (auth, injection, access control, serialization). Do not include real secrets.`;
   }
+  if (action === "payloads") {
+    return `${common} Generate high-quality payloads for the selected parameter or request. Group by vulnerability class (SQLi, XSS, SSTI, SSRF, path traversal, auth bypass). Include a one-line note on when each is useful. Do not wrap the whole answer in JSON unless asked.`;
+  }
+  if (action === "summarize") {
+    return `${common} Summarize the traffic the human provided: endpoints, auth, interesting parameters, cookies, and the two or three most likely issues worth testing next.`;
+  }
+  if (action === "poc") {
+    return `${common} Draft a clear proof-of-concept a pentester can paste into a report or Repeater. Include preconditions, the exact request, expected vs actual behavior, and impact. If you propose an HTTP request, also include a JSON object in a fenced block with keys method, url, headers (array of {name,value}), and body (string).`;
+  }
+  if (action === "chat") {
+    return `${common} Answer the human's question about the current page, request, or engagement. Prefer actionable pentest guidance over general theory.`;
+  }
   return `${common} Draft a follow-up HTTP request. Respond with a short rationale, then a single JSON object in a fenced block with keys method, url, headers (array of {name,value}), and body (string). The human will review and send it from Repeater.`;
 }
 
@@ -161,7 +173,7 @@ export async function completeLlm(
     redacted: prepared.redacted || memoryRedacted,
     provider: settings.provider,
     model: settings.model,
-    draft: request.action === "draft" ? parseDraft(text) : undefined,
+    draft: request.action === "draft" || request.action === "poc" ? parseDraft(text) : undefined,
   };
 }
 

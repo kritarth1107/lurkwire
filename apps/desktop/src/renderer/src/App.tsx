@@ -5,8 +5,10 @@ import { BookmarksBar } from "./chrome/BookmarksBar";
 import { FindBar } from "./chrome/FindBar";
 import { NavBar } from "./chrome/NavBar";
 import { InternalPage } from "./chrome/InternalPage";
-import { Sidebar } from "./chrome/Sidebar";
 import { TabStrip } from "./chrome/TabStrip";
+import { ToolsTopBar } from "./chrome/ToolsTopBar";
+import { ToolDock } from "./chrome/ToolDock";
+import { LlmSidebar } from "./chrome/LlmSidebar";
 import { CommandPalette } from "./chrome/CommandPalette";
 import { PanelHost } from "./chrome/PanelHost";
 import { useAppState } from "./useAppState";
@@ -76,7 +78,9 @@ export function App() {
     };
   }, [
     state.prefs.sidebarOpen,
-    state.prefs.sidebarWidth,
+    state.prefs.toolsDockHeight,
+    state.prefs.llmSidebarOpen,
+    state.prefs.llmSidebarWidth,
     state.prefs.bookmarksBar,
     findOpen,
     showInternal,
@@ -87,17 +91,18 @@ export function App() {
     <div className="shell" data-theme={state.theme}>
       <TabStrip state={state} />
       <NavBar state={state} omnibox={omnibox} setOmnibox={setOmnibox} urlRef={urlRef} />
+      <ToolsTopBar state={state} />
       {state.prefs.bookmarksBar ? <BookmarksBar /> : null}
-      <div className={`body${state.prefs.sidebarSide === "right" ? " sidebar-right" : ""}`}>
-        <Sidebar
-          state={state}
-          repeaterDraft={repeaterDraft}
-          intruderDraft={intruderDraft}
-          onRepeaterDraft={setRepeaterDraft}
-          onIntruderDraft={setIntruderDraft}
-          onDraftConsumed={() => setRepeaterDraft(null)}
-          onIntruderDraftConsumed={() => setIntruderDraft(null)}
-        />
+      <ToolDock
+        state={state}
+        repeaterDraft={repeaterDraft}
+        intruderDraft={intruderDraft}
+        onRepeaterDraft={setRepeaterDraft}
+        onIntruderDraft={setIntruderDraft}
+        onDraftConsumed={() => setRepeaterDraft(null)}
+        onIntruderDraftConsumed={() => setIntruderDraft(null)}
+      />
+      <div className="body">
         <div className="content-col">
           {state.error ? <div className="banner">{state.error}</div> : null}
           {showInternal ? <InternalPage state={state} url={internalUrl} /> : null}
@@ -105,6 +110,13 @@ export function App() {
           <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
           <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} state={state} />
         </div>
+        <LlmSidebar
+          state={state}
+          onDraft={(flow) => {
+            setRepeaterDraft(flow);
+            void window.lurkwire.setTool("repeater");
+          }}
+        />
       </div>
       <PanelHost state={state} />
     </div>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { ForwardEdit, InterceptConfig, InterceptState, PausedItem } from "../../shared/types";
+import type { FlowDetail, ForwardEdit, InterceptConfig, InterceptState, PausedItem } from "../../shared/types";
 import { formatHeaders, parseHeaderBlock } from "../../shared/http";
+import { pausedToFlowDetail } from "./pausedFlow";
 
 const defaultConfig: InterceptConfig = {
   enabled: false,
@@ -9,7 +10,13 @@ const defaultConfig: InterceptConfig = {
   timeout_ms: 30_000,
 };
 
-export function InterceptView() {
+export function InterceptView({
+  projectId = null,
+  onSendToRepeater,
+}: {
+  projectId?: string | null;
+  onSendToRepeater?: (flow: FlowDetail) => void;
+} = {}) {
   const [state, setState] = useState<InterceptState>({
     config: defaultConfig,
     queue: [],
@@ -110,17 +117,38 @@ export function InterceptView() {
     }
   };
 
+  const forwardAll = async () => {
+    setBusy(true);
+    try {
+      for (const item of state.queue) {
+        await window.lurkwire.forwardIntercept(item.id, {});
+      }
+      const next = await window.lurkwire.getIntercept();
+      setState(next);
+      setSelectedId(next.queue[0]?.id ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <main className="workbench">
+    <main className="workbench intercept-view">
       <div className="workbench-toolbar">
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={state.config.enabled}
-            onChange={(event) => void saveConfig({ enabled: event.target.checked })}
-          />
-          Intercept is {state.config.enabled ? "on" : "off"}
-        </label>
+        <button
+          type="button"
+          className={`primary intercept-toggle${state.config.enabled ? " on" : ""}`}
+          onClick={() =>
+            void saveConfig({
+              enabled: !state.config.enabled,
+              requests: true,
+              responses: true,
+            })
+          }
+        >
+          {state.config.enabled ? "Pause is on" : "Pause traffic"}
+        </button>
         <label className="check">
           <input
             type="checkbox"
@@ -151,6 +179,13 @@ export function InterceptView() {
           s
         </label>
         <span className="meta">{state.queue.length} paused</span>
+        <button
+          type="button"
+          disabled={busy || state.queue.length === 0}
+          onClick={() => void forwardAll()}
+        >
+          Forward all
+        </button>
       </div>
       {error ? <div className="banner">{error}</div> : null}
       <div className="history-split intercept-split">
@@ -194,6 +229,9 @@ export function InterceptView() {
         <section className="repeater-editor">
           {selected ? (
             <>
+              <p className="hint">
+                Editing {selected.direction} · changes apply when you forward.
+              </p>
               <div className="repeater-url">
                 <input
                   value={method}
@@ -225,6 +263,15 @@ export function InterceptView() {
                 <button type="button" disabled={busy} onClick={() => void decide("drop")}>
                   Drop
                 </button>
+                {onSendToRepeater ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onSendToRepeater(pausedToFlowDetail(selected, projectId ?? null))}
+                  >
+                    Send to Repeater
+                  </button>
+                ) : null}
               </div>
               <textarea
                 className="raw-editor intercept-headers"
@@ -240,7 +287,7 @@ export function InterceptView() {
               />
             </>
           ) : (
-            <div className="empty-pane">Select a paused item to edit it.</div>
+            <div className="empty-pane">Select a paused request or response to edit it before it continues.</div>
           )}
         </section>
       </div>

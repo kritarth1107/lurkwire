@@ -46,6 +46,7 @@ import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpacked
 import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, importVisits, listVisits } from "./visits";
+import { searchSuggest } from "./searchSuggest";
 import { getMaskedWorkspace, importFlowToWorkbench, putWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
 import type { RunnerSpec, WbOAuth2, WbRequest, WbWorkspace } from "../shared/workbench";
 import { pickBinary } from "./workbench/binary";
@@ -280,6 +281,12 @@ function selectTool(next: ToolId, win = focusedChrome()): void {
   }
   if (next === "browser") {
     prefs = { ...prefs, sidebarOpen: false };
+    savePrefs(prefs);
+    setChromePage(win, "content");
+    return;
+  }
+  if (next === "ai") {
+    prefs = { ...prefs, llmSidebarOpen: true };
     savePrefs(prefs);
     setChromePage(win, "content");
     return;
@@ -1076,6 +1083,12 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle("lurkwire:listVisits", (_event, query?: string) => listVisits(query));
+  ipcMain.handle("lurkwire:searchSuggest", async (_event, query: string) => searchSuggest(query));
+  ipcMain.handle("lurkwire:getTabMemory", async (event, tabId: string) => {
+    const win = ctx(event);
+    const bytes = win ? await win.tabs.memoryFor(tabId) : 0;
+    return { bytes };
+  });
   ipcMain.handle("lurkwire:deleteVisit", (_event, id: string) => deleteVisit(id));
   ipcMain.handle("lurkwire:clearVisits", () => {
     clearVisits();

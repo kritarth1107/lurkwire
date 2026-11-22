@@ -1,12 +1,14 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { AppSnapshot, PanelOpenRequest } from "../../../shared/types";
 import { computeAnchoredPosition } from "../../../shared/anchorPopover";
+import { POPOVER_EXIT_MS, popoverMotionStyle } from "../../../shared/popoverMotion";
 import { PanelView } from "./Panels";
 
 const MARGIN = 8;
 
 export function PanelHost({ state }: { state: AppSnapshot }) {
   const [request, setRequest] = useState<PanelOpenRequest | null>(null);
+  const [leaving, setLeaving] = useState(false);
   const [measured, setMeasured] = useState<{ width: number; height: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState(() => ({
@@ -16,12 +18,18 @@ export function PanelHost({ state }: { state: AppSnapshot }) {
 
   useEffect(() => {
     const offShow = window.lurkwire.onShowPanel((next) => {
+      setLeaving(false);
       setRequest(next);
       setMeasured(null);
     });
+    let leaveTimer: number | null = null;
     const offHide = window.lurkwire.onHidePanel(() => {
-      setRequest(null);
-      setMeasured(null);
+      setLeaving(true);
+      leaveTimer = window.setTimeout(() => {
+        setRequest(null);
+        setMeasured(null);
+        setLeaving(false);
+      }, POPOVER_EXIT_MS);
     });
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -36,6 +44,9 @@ export function PanelHost({ state }: { state: AppSnapshot }) {
     return () => {
       offShow();
       offHide();
+      if (leaveTimer) {
+        window.clearTimeout(leaveTimer);
+      }
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize);
     };
@@ -91,13 +102,12 @@ export function PanelHost({ state }: { state: AppSnapshot }) {
       />
       <div
         ref={panelRef}
-        className="anchored-popover"
+        className={`anchored-popover${leaving ? " is-leaving" : ""}`}
         data-testid="anchored-popover"
         data-kind={request.kind}
         role="menu"
         style={{
-          left: position.left,
-          top: position.top,
+          ...popoverMotionStyle({ ...position, leaving }),
           width: request.width,
           maxWidth: `calc(100vw - ${MARGIN * 2}px)`,
           maxHeight,

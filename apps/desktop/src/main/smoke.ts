@@ -729,7 +729,12 @@ message HelloReply { string message = 1; }
   await sleep(700);
   paths.push(await captureWindow(window, out, "sidebar-ai.png", tabs));
 
-  hooks.setPrefs({ sidebarOpen: false });
+  hooks.setPrefs({ sidebarOpen: true, toolsDockHeight: 400, llmSidebarOpen: true, llmSidebarWidth: 340 });
+  hooks.selectTool("history");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "topbar-traffic-llm.png", tabs));
+
+  hooks.setPrefs({ sidebarOpen: false, llmSidebarOpen: false });
   await sleep(300);
   const identity = (await window.webContents.executeJavaScript(`(() => {
     const el = document.querySelector('button[title="Site identity"]');
@@ -945,9 +950,218 @@ message HelloReply { string message = 1; }
   await sleep(1200);
   paths.push(await captureDevtools(window, out, "devtools.png", hooks.tabs()));
 
+  try {
+    await runPracticeTargets(hooks, window, out, paths, id);
+  } catch (error) {
+    console.log(`SMOKE practice targets failed: ${error instanceof Error ? error.stack ?? error.message : error}`);
+  }
+
   window.hide();
   hooks.panels()?.close();
   return paths;
+}
+
+
+const PRACTICE_JWT =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqdWljZS1zaG9wIiwibmFtZSI6IlByYWN0aWNlIiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+
+async function reachable(url: string, timeoutMs = 5000): Promise<boolean> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ac.signal, redirect: "follow" });
+    return res.ok || res.status < 500;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function runPracticeTargets(
+  hooks: SmokeHooks,
+  window: BrowserWindow,
+  out: string,
+  paths: string[],
+  tabId: string,
+): Promise<void> {
+  const tabs = hooks.tabs();
+  if (!tabs) {
+    throw new Error("tab manager missing");
+  }
+  const projectId = hooks.currentProjectId();
+  const showAndGo = async (url: string, label: string, match: string, timeoutMs = 20_000) => {
+    tabs.show(tabId);
+    await tabs.navigate(tabId, url);
+    return waitFor(label, () => {
+      const info = tabs.list(projectId ?? "").find((item) => item.id === tabId) ?? tabs.activeInfo();
+      const current = info?.url ?? "";
+      return current.includes(match) ? current : null;
+    }, timeoutMs);
+  };
+
+  const juice = "http://127.0.0.1:3000/";
+  try {
+  if (await reachable(juice, 4000)) {
+    await showAndGo(juice, "Juice Shop tab", "127.0.0.1:3000");
+    await sleep(800);
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "history", toolsDockHeight: 360, llmSidebarOpen: false });
+    hooks.selectTool("history");
+    await sleep(500);
+    paths.push(await captureWindow(window, out, "practice-juice-shop.png", tabs));
+    await showAndGo("http://127.0.0.1:3000/rest/products/search?q='))", "Juice Shop SQLi search tab", "products/search");
+    await waitFor("Juice Shop SQLi search", async () => {
+      const list = await hooks.control.listFlows({
+        project_id: projectId ?? undefined,
+        host: "127.0.0.1",
+        q: "products/search",
+        limit: 20,
+      });
+      return list.items[0] ?? null;
+    }, 15_000);
+    await showAndGo("http://127.0.0.1:3000/#/search?q=%3Cscript%3Ealert(1)%3C/script%3E", "Juice Shop XSS search", "127.0.0.1:3000");
+    await sleep(700);
+    paths.push(await captureWindow(window, out, "practice-juice-xss-search.png", tabs));
+    console.log("SMOKE practice Juice Shop ok");
+  } else {
+    console.log("SMOKE practice Juice Shop skipped (not reachable on :3000)");
+  }
+  } catch (error) {
+    console.log(`SMOKE practice Juice Shop failed: ${error instanceof Error ? error.message : error}`);
+  }
+
+  try {
+  if (await reachable("http://demo.testfire.net/", 6000)) {
+    await showAndGo("http://demo.testfire.net/search.jsp?query=%27+OR+1%3D1--", "testfire tab", "demo.testfire.net");
+    await sleep(700);
+    paths.push(await captureWindow(window, out, "practice-testfire-sqli.png", tabs));
+    console.log("SMOKE practice Altoro Mutual / testfire ok");
+  } else {
+    console.log("SMOKE practice testfire skipped (not reachable)");
+  }
+  } catch (error) {
+    console.log(`SMOKE practice testfire failed: ${error instanceof Error ? error.message : error}`);
+  }
+
+  try {
+  if (await reachable("http://testphp.vulnweb.com/", 5000)) {
+    await showAndGo("http://testphp.vulnweb.com/listproducts.php?cat=1%20OR%201%3D1", "testphp tab", "testphp.vulnweb.com");
+    await sleep(700);
+    paths.push(await captureWindow(window, out, "practice-testphp-sqli.png", tabs));
+    console.log("SMOKE practice testphp.vulnweb ok");
+  } else {
+    console.log("SMOKE practice testphp.vulnweb skipped (not reachable)");
+  }
+  } catch (error) {
+    console.log(`SMOKE practice testphp.vulnweb failed: ${error instanceof Error ? error.message : error}`);
+  }
+
+  // Intercept + edit request and response against httpbin (authorized sandbox).
+  try {
+  if (!(await reachable("https://httpbin.org/get", 8000))) {
+    console.log("SMOKE practice intercept skipped (httpbin not reachable)");
+  } else {
+    await hooks.control.setIntercept({
+      enabled: true,
+      requests: true,
+      responses: true,
+      timeout_ms: 60_000,
+    });
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "intercept", toolsDockHeight: 420 });
+    hooks.selectTool("intercept");
+    await sleep(300);
+    tabs.show(tabId);
+    void tabs.navigate(tabId, "https://httpbin.org/headers");
+    const pausedReq = await waitFor("intercepted request", async () => {
+      const state = await hooks.control.getIntercept();
+      return state.queue.find((item) => item.direction === "request" && item.url.includes("httpbin.org")) ?? null;
+    }, 20_000);
+    await hooks.control.forwardIntercept(pausedReq.id, {
+      headers: [...pausedReq.headers, { name: "X-Lurkwire-Practice", value: "1" }],
+    });
+    const pausedRes = await waitFor("intercepted response", async () => {
+      const state = await hooks.control.getIntercept();
+      return state.queue.find((item) => item.direction === "response" && item.url.includes("httpbin.org")) ?? null;
+    }, 20_000);
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-intercept-response.png", tabs));
+    const editedBody = (pausedRes.body && !pausedRes.body_base64)
+      ? `${pausedRes.body}\n/* lurkwire-edited */`
+      : undefined;
+    await hooks.control.forwardIntercept(pausedRes.id, {
+      status: pausedRes.status ?? 200,
+      body: editedBody,
+    });
+    await hooks.control.setIntercept({
+      enabled: false,
+      requests: true,
+      responses: true,
+      timeout_ms: 30_000,
+    });
+    await waitFor("httpbin headers tab", () => {
+      const url = tabs.activeInfo()?.url ?? "";
+      return url.includes("httpbin.org") ? url : null;
+    }, 15_000);
+    console.log("SMOKE practice intercept edit + forward ok");
+
+    const repeater = await hooks.control.sendRepeater({
+      project_id: projectId ?? undefined,
+      method: "GET",
+      url: "https://httpbin.org/get?from=repeater",
+      headers: [{ name: "X-Lurkwire-Practice", value: "repeater" }],
+      source: "repeater",
+    });
+    hooks.selectTool("repeater");
+    await sleep(500);
+    paths.push(await captureWindow(window, out, "practice-repeater-httpbin.png", tabs));
+    console.log(`SMOKE practice repeater status=${(repeater as { status?: number }).status ?? "?"}`);
+  }
+  } catch (error) {
+    try {
+      await hooks.control.setIntercept({ enabled: false, requests: true, responses: true, timeout_ms: 30_000 });
+    } catch {
+      // ignore
+    }
+    console.log(`SMOKE practice intercept/repeater failed: ${error instanceof Error ? error.message : error}`);
+  }
+
+  hooks.selectTool("decode");
+  await sleep(400);
+  await window.webContents.executeJavaScript(`(() => {
+    const area = document.querySelector(".decode textarea");
+    if (!area) return false;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+    setter?.call(area, ${JSON.stringify(PRACTICE_JWT)});
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+    return true;
+  })()`);
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "practice-jwt-decode.png", tabs));
+
+  hooks.selectTool("cookies");
+  await sleep(600);
+  paths.push(await captureWindow(window, out, "practice-cookies.png", tabs));
+
+  hooks.selectTool("scanner");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "practice-scanner.png", tabs));
+
+  hooks.selectTool("history");
+  await sleep(400);
+  await window.webContents.executeJavaScript(`(() => {
+    const btn = Array.from(document.querySelectorAll("button")).find((el) =>
+      (el.textContent || "").includes("Export HAR"),
+    );
+    if (btn) (btn as HTMLButtonElement).click();
+    return Boolean(btn);
+  })()`);
+  await sleep(400);
+  paths.push(await captureWindow(window, out, "practice-traffic-har.png", tabs));
+
+  hooks.setPrefs({ llmSidebarOpen: true, llmSidebarWidth: 340, sidebarOpen: true, toolsDockHeight: 360 });
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "practice-topbar-llm.png", tabs));
+  hooks.setPrefs({ llmSidebarOpen: false });
 }
 
 export function isolateSmokeUserData(): void {
