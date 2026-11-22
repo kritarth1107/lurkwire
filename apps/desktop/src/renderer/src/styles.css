@@ -2737,3 +2737,29 @@ button.primary:hover, .primary:hover { background: var(--accent-hover); filter: 
 
 .error { color: var(--danger); padding: 8px 12px; font-size: var(--fs-sm); }
 .muted { color: var(--text-secondary); }
+
+
+/* Menu slot lives in the chrome flow so the page BrowserView is pushed down,
+   instead of drawing over the page (where the native view would cover it). */
+.tools-cluster {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  background: var(--toolbar);
+  z-index: var(--z-dropdown);
+}
+.tools-menu-slot {
+  padding: 0 10px 8px;
+  background: var(--toolbar);
+  border-bottom: 1px solid var(--border);
+  animation: dock-open var(--motion-fast) var(--motion-ease-out) both;
+}
+.tool-menu.in-slot {
+  position: relative;
+  left: 0;
+  top: 0;
+  width: min(320px, calc(100% - 16px));
+  max-height: 360px;
+  margin: 0;
+  z-index: auto;
+}
