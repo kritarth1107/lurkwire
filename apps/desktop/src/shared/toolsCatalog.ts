@@ -167,6 +167,14 @@ export const PENTEST_TOOLS: PentestToolDef[] = [
     hint: "Inspect captured WebSocket, SSE, and gRPC frames and replay them",
     keywords: "websocket sse grpc stream replay",
   },
+
+  {
+    id: "cors",
+    shortName: "CORS",
+    label: "CORS tester",
+    hint: "Send Origin and preflight probes, then triage Access-Control headers",
+    keywords: "cors origin preflight access-control credentials",
+  },
   {
     id: "report",
     shortName: "Report",

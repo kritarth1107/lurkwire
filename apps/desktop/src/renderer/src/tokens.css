@@ -1,0 +1,209 @@
+/* Lurkwire design system. Light + dark tokens modelled on Firefox Proton and Chrome Refresh. */
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/Inter-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./fonts/Inter-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/Inter-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/Inter-Bold.woff2") format("woff2");
+}
+
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Surfaces */
+  --surface: #f0f0f4;
+  --surface-elevated: #ffffff;
+  --surface-sunken: #e7e7eb;
+  --toolbar: #f9f9fb;
+  --content: #ffffff;
+  --panel: #ffffff;
+  --field: #ffffff;
+  --overlay: rgba(21, 20, 26, 0.42);
+
+  /* Chrome aliases (Proton names) */
+  --frame: var(--surface);
+  --tab-selected: var(--toolbar);
+  --tab-hover: rgba(21, 20, 26, 0.07);
+
+  /* Borders */
+  --border: #cfcfd8;
+  --border-subtle: color-mix(in srgb, #15141a 8%, transparent);
+  --separator: var(--border);
+  --field-border: color-mix(in srgb, #15141a 12%, transparent);
+  --panel-border: var(--border);
+
+  /* Text */
+  --text: #15141a;
+  --text-secondary: #5b5b66;
+  --muted: var(--text-secondary);
+  --text-inverse: #fbfbfe;
+
+  /* Accent + semantic */
+  --accent: #0061e0;
+  --accent-hover: #0250bb;
+  --accent-soft: color-mix(in srgb, #0061e0 14%, transparent);
+  --link: var(--accent);
+  --focus-ring: var(--accent);
+  --field-focus: var(--accent);
+  --lw-accent: #c45a11;
+  --success: #1f7a1f;
+  --success-soft: color-mix(in srgb, #1f7a1f 14%, transparent);
+  --ok: var(--success);
+  --warn: #9a6700;
+  --warn-soft: color-mix(in srgb, #9a6700 16%, transparent);
+  --danger: #c50042;
+  --danger-hover: #a40037;
+  --danger-soft: color-mix(in srgb, #c50042 12%, transparent);
+
+  /* Icons / controls */
+  --icon: #5b5b66;
+  --icon-strong: #15141a;
+  --button-hover: rgba(21, 20, 26, 0.07);
+  --button-active: rgba(21, 20, 26, 0.12);
+
+  /* Elevation */
+  --shadow-xs: 0 1px 0 rgba(21, 20, 26, 0.06);
+  --shadow-sm: 0 1px 2px rgba(21, 20, 26, 0.08), 0 0 0 1px rgba(21, 20, 26, 0.05);
+  --shadow-md: 0 8px 24px rgba(21, 20, 26, 0.14), 0 0 0 1px rgba(21, 20, 26, 0.06);
+  --shadow-lg: 0 16px 40px rgba(21, 20, 26, 0.2), 0 0 0 1px rgba(21, 20, 26, 0.08);
+  --panel-shadow: var(--shadow-md);
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* Radius scale */
+  --radius-xs: 4px;
+  --radius-s: 6px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+  --tab-radius: 8px;
+
+  /* Z-index scale */
+  --z-base: 0;
+  --z-tab: 3;
+  --z-dock: 10;
+  --z-dropdown: 40;
+  --z-popover: 50;
+  --z-tooltip: 60;
+  --z-modal: 70;
+  --z-toast: 80;
+
+  /* Type ramp */
+  --font: "Inter", system-ui, "Segoe UI", "Ubuntu", "Cantarell", "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --lh-tight: 1.25;
+  --lh-body: 1.4;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* Chrome sizes */
+  --urlbar-height: 34px;
+  --tab-height: 36px;
+  --toolbar-height: 42px;
+  --bookmarks-height: 32px;
+  --rail-width: 46px;
+  --tools-topbar-height: 36px;
+
+  /* Motion */
+  --motion-fast: 140ms;
+  --motion-exit: 120ms;
+  --motion-med: 200ms;
+  --motion-slow: 280ms;
+  --motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Back-compat */
+  --bg: var(--content);
+  --bg-raise: var(--toolbar);
+  --bg-hover: var(--button-hover);
+  --line: var(--separator);
+  --accent-dim: var(--accent-soft);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1c1b22;
+  --surface-elevated: #2b2a33;
+  --surface-sunken: #15141a;
+  --toolbar: #2b2a33;
+  --content: #1c1b22;
+  --panel: #2b2a33;
+  --field: #1c1b22;
+  --overlay: rgba(0, 0, 0, 0.55);
+  --frame: var(--surface);
+  --tab-selected: var(--toolbar);
+  --tab-hover: rgba(255, 255, 255, 0.08);
+  --border: #52525e;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --separator: var(--border);
+  --field-border: rgba(255, 255, 255, 0.12);
+  --panel-border: var(--border);
+  --text: #fbfbfe;
+  --text-secondary: #bfbfc9;
+  --muted: var(--text-secondary);
+  --text-inverse: #15141a;
+  --accent: #0a84ff;
+  --accent-hover: #3d9bff;
+  --accent-soft: color-mix(in srgb, #0a84ff 22%, transparent);
+  --link: var(--accent);
+  --focus-ring: var(--accent);
+  --field-focus: var(--accent);
+  --lw-accent: #e8a54b;
+  --success: #3dcc8a;
+  --success-soft: color-mix(in srgb, #3dcc8a 18%, transparent);
+  --ok: var(--success);
+  --warn: #f5c518;
+  --warn-soft: color-mix(in srgb, #f5c518 18%, transparent);
+  --danger: #ff6b81;
+  --danger-hover: #ff8b9a;
+  --danger-soft: color-mix(in srgb, #ff6b81 18%, transparent);
+  --icon: #bfbfc9;
+  --icon-strong: #fbfbfe;
+  --button-hover: rgba(255, 255, 255, 0.08);
+  --button-active: rgba(255, 255, 255, 0.14);
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 56px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(0, 0, 0, 0.35);
+  --panel-shadow: var(--shadow-md);
+}

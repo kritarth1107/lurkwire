@@ -4,7 +4,7 @@ import { toolForSendTarget } from "../../shared/sendTo";
 import { addComparerItem } from "./workbench";
 import { queueIntruderDraft, queueRepeaterDraft, queueScannerDraft, queueParamMinerDraft } from "./workbench/pendingSend";
 import { setSelectedFlow } from "./flowSelection";
-import { addFlowHostToScope, copyFlowCurl } from "./FlowActions";
+import { addFlowHostToScope, copyFlowCurl, copyFlowFetch } from "./FlowActions";
 
 export async function dispatchSend(flow: FlowDetail, target: SendTarget): Promise<void> {
   setSelectedFlow(flow);
@@ -33,6 +33,10 @@ export async function copyUrlOf(flow: FlowDetail): Promise<void> {
 
 export async function copyCurlOf(flow: FlowDetail): Promise<void> {
   await copyFlowCurl(flow.id);
+}
+
+export async function copyFetchOf(flow: FlowDetail): Promise<void> {
+  await copyFlowFetch(flow.id);
 }
 
 export async function addToScope(flow: FlowDetail): Promise<void> {

@@ -80,11 +80,15 @@ It is local-first. Scope, rate limits, a global kill switch, and a hash-chained 
 
 ## Features
 
+The living roadmap, with done versus planned status, is in [`docs/FEATURES.md`](docs/FEATURES.md) (~1000 concrete items).
+
+
 ### Browser
 
-- Electron/Chromium daily-driver with Proton-style chrome, multi-window, private windows, and `lurkwire://` pages (settings, new tab, Workbench, and more)
+- Electron/Chromium daily-driver with a Proton / Chrome design system (semantic light and dark tokens, Inter typography, elevation, and motion), multi-window, private windows, and `lurkwire://` pages (settings, new tab, Workbench, and more)
 - Firefox-style tab throbber, tab groups, bookmarks with optional Chrome/Firefox import, and optional session restore
 - Command palette (Ctrl+K) and API Workbench (Ctrl+Shift+M or `lurkwire://workbench`)
+- Categorized Proxy, Attack, Recon, Decode, and Report menus on the tools bar, with pinned 1-click tools and an Assistant toggle
 - Native per-tab Chrome DevTools
 - Unpacked Chrome extension loading (no Web Store; Electron `chrome.*` subset)
 - Lock-icon site info: upstream certificate, permissions, cookie manager (copy, delete, Netscape export), and the tab's localStorage / sessionStorage
@@ -99,9 +103,9 @@ It is local-first. Scope, rate limits, a global kill switch, and a hash-chained 
 ### History and Burp-parity tools
 
 - Sortable HTTP History with Monaco Raw / Pretty / Hex / Headers / Render viewers, highlights, and comments
-- Send to Repeater, Intruder, Comparer, or Workbench; copy as cURL; add the host to scope
+- Send to Repeater, Intruder, Scanner, Comparer, or Workbench; copy as cURL or fetch; add the host to scope
 - HAR export of visible history, site map from History (Markdown export)
-- CSRF and clickjacking PoC generators, in-scope CORS preflight retest, and "send JWT to Decoder"
+- CSRF and clickjacking PoC generators, a CORS tester (Origin and preflight probes), in-scope CORS retest, and "send JWT to Decoder"
 - Repeater and Intruder-lite (sniper / pitchfork / battering ram, payload presets, load-from-file wordlists)
 - Autorize-style session replay and response diff
 - Comparer, Sequencer-lite, and Logger++ filters and highlight rules

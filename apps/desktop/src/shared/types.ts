@@ -27,6 +27,7 @@ export type ToolId =
   | "smuggling"
   | "report"
   | "websocket"
+  | "cors"
   | "settings";
 
 export type SidebarPanel =
@@ -53,7 +54,8 @@ export type SidebarPanel =
   | "paramminer"
   | "smuggling"
   | "report"
-  | "websocket";
+  | "websocket"
+  | "cors";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -96,6 +98,8 @@ export type AppPrefs = {
   llmSidebarWidth: number;
   sessionRestore: boolean;
   llm: LlmSettings;
+  /** 1-click tools on the categorized top bar. */
+  pinnedTools: SidebarPanel[];
 };
 
 export const DEFAULT_PREFS: AppPrefs = {
@@ -110,6 +114,7 @@ export const DEFAULT_PREFS: AppPrefs = {
   llmSidebarWidth: 340,
   sessionRestore: false,
   llm: DEFAULT_LLM,
+  pinnedTools: ["history", "intercept", "repeater", "intruder", "scanner"],
 };
 
 export type ProxyStatus = "starting" | "ready" | "down";

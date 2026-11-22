@@ -16,7 +16,7 @@ import { isJwtLike } from "../../../shared/jwt";
 import { queueJwt } from "../pendingJwt";
 import { SEND_TO_ACTIONS } from "../../../shared/sendTo";
 import { resolveCurrentFlow } from "../flowSelection";
-import { addToScope, copyCurlOf, copyUrlOf, dispatchSend } from "../sendActions";
+import { addToScope, copyCurlOf, copyFetchOf, copyUrlOf, dispatchSend } from "../sendActions";
 
 export function PanelView({ ctx, state }: { ctx: PanelContext; state: AppSnapshot }) {
   const kind = ctx.kind;
@@ -1035,6 +1035,15 @@ function PageMenu({ payload }: { payload: Record<string, unknown> }) {
         }}
       >
         Copy as curl
+      </button>
+      <button
+        type="button"
+        className="menu-item"
+        onClick={() => {
+          void flowForPage(payload).then((flow) => (flow ? copyFetchOf(flow) : window.alert("No captured request yet."))).finally(() => close());
+        }}
+      >
+        Copy as fetch
       </button>
       <button
         type="button"

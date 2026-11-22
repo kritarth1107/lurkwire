@@ -35,3 +35,4 @@ npm-debug.log*
 
 # Coverage
 coverage/
+__pycache__/

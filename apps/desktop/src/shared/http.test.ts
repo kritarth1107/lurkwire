@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flowToCurl, formatBytes, parseRawRequest } from "./http";
+import { flowToCurl, flowToFetch, formatBytes, parseRawRequest } from "./http";
 
 describe("http helpers", () => {
   it("formats byte sizes", () => {
@@ -37,5 +37,24 @@ describe("http helpers", () => {
     expect(curl).toContain("-H 'Content-Type: application/json'");
     expect(curl).not.toContain("Content-Length");
     expect(curl).toContain("--data-raw '{\"z\":2}'");
+  });
+
+  it("renders a fetch() call from a flow", () => {
+    const src = flowToFetch(
+      {
+        method: "POST",
+        url: "https://httpbin.org/post",
+        req_headers: [
+          { name: "Content-Type", value: "application/json" },
+          { name: "Content-Length", value: "9" },
+        ],
+      },
+      '{"z":2}',
+    );
+    expect(src).toContain('fetch("https://httpbin.org/post"');
+    expect(src).toContain('method: "POST"');
+    expect(src).toContain('"Content-Type": "application/json"');
+    expect(src).not.toContain("Content-Length");
+    expect(src).toContain(JSON.stringify('{"z":2}'));
   });
 });

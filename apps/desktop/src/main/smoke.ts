@@ -301,6 +301,27 @@ async function captureWithPanel(
   return outPath;
 }
 
+
+async function captureCategorizedMenus(
+  window: BrowserWindow,
+  out: string,
+  paths: string[],
+  tabs: TabManager | null,
+): Promise<void> {
+  paths.push(await captureWindow(window, out, "chrome-tools-bar.png", tabs));
+  for (const id of ["proxy", "attack", "recon", "decode", "report"]) {
+    const opened = await clickSelector(window, `button[data-menu="${id}"]`);
+    if (!opened) {
+      console.log(`SMOKE tool menu ${id} button missing`);
+      continue;
+    }
+    await sleep(350);
+    paths.push(await captureWindow(window, out, `menu-${id}.png`, tabs));
+    await clickSelector(window, `button[data-menu="${id}"]`);
+    await sleep(150);
+  }
+}
+
 async function clickSelector(window: BrowserWindow, selector: string): Promise<boolean> {
   return (await window.webContents.executeJavaScript(
     `Boolean(document.querySelector(${JSON.stringify(selector)}) && (document.querySelector(${JSON.stringify(selector)}).click(), true))`,
@@ -696,9 +717,10 @@ message HelloReply { string message = 1; }
   await new Promise<void>((resolve) => grpcServer.tryShutdown(() => resolve()));
   rmSync(tmp, { recursive: true, force: true });
 
-  hooks.setPrefs({ theme: "light", sidebarOpen: false });
+  hooks.setPrefs({ theme: "light", sidebarOpen: false, llmSidebarOpen: false });
   await sleep(700);
   paths.push(await captureWindow(window, out, "main-light.png", tabs));
+  await captureCategorizedMenus(window, out, paths, tabs);
 
   hooks.setPrefs({ theme: "dark", sidebarOpen: false });
   await sleep(700);
@@ -726,6 +748,10 @@ message HelloReply { string message = 1; }
   hooks.selectTool("recon");
   await sleep(700);
   paths.push(await captureWindow(window, out, "sidebar-recon.png", tabs));
+
+  hooks.selectTool("cors");
+  await sleep(700);
+  paths.push(await captureWindow(window, out, "sidebar-cors.png", tabs));
 
   hooks.selectTool("ai");
   await sleep(700);
@@ -1046,6 +1072,50 @@ async function runPracticeTargets(
   }
 
   try {
+  const dvwa = "http://127.0.0.1:4280/";
+  if (await reachable(dvwa, 4000)) {
+    await showAndGo(dvwa, "DVWA tab", "127.0.0.1:4280");
+    await sleep(800);
+    const setupClicked = await window.webContents.executeJavaScript(`(() => {
+      const btn = Array.from(document.querySelectorAll("input[type=submit], button, input[type=button]")).find((el) =>
+        /create|reset database/i.test((el.getAttribute("value") || el.textContent || "")),
+      );
+      if (btn) btn.click();
+      return Boolean(btn);
+    })()`);
+    console.log(`SMOKE DVWA setup click=${setupClicked}`);
+    await sleep(2000);
+    paths.push(await captureWindow(window, out, "practice-dvwa-setup.png", tabs));
+    // Try the SQL injection page after a best-effort login (admin / password).
+    await showAndGo("http://127.0.0.1:4280/login.php", "DVWA login", "127.0.0.1:4280");
+    await sleep(500);
+    await window.webContents.executeJavaScript(`(() => {
+      const user = document.querySelector('input[name="username"], input[type="text"]');
+      const pass = document.querySelector('input[name="password"], input[type="password"]');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      if (user) { setter?.call(user, "admin"); user.dispatchEvent(new Event("input", { bubbles: true })); }
+      if (pass) { setter?.call(pass, "password"); pass.dispatchEvent(new Event("input", { bubbles: true })); }
+      const btn = document.querySelector('input[type="submit"], button[type="submit"]');
+      if (btn) btn.click();
+      return Boolean(user && pass);
+    })()`);
+    await sleep(1500);
+    await showAndGo(
+      "http://127.0.0.1:4280/vulnerabilities/sqli/?id=1%27+OR+%271%27%3D%271&Submit=Submit",
+      "DVWA SQLi",
+      "127.0.0.1:4280",
+    );
+    await sleep(800);
+    paths.push(await captureWindow(window, out, "practice-dvwa-sqli.png", tabs));
+    console.log("SMOKE practice DVWA attempted");
+  } else {
+    console.log("SMOKE practice DVWA skipped (not reachable on :4280)");
+  }
+  } catch (error) {
+    console.log(`SMOKE practice DVWA failed: ${error instanceof Error ? error.message : error}`);
+  }
+
+  try {
   if (await reachable("http://testphp.vulnweb.com/", 5000)) {
     await showAndGo("http://testphp.vulnweb.com/listproducts.php?cat=1%20OR%201%3D1", "testphp tab", "testphp.vulnweb.com");
     await sleep(700);
@@ -1087,6 +1157,8 @@ async function runPracticeTargets(
     }, 20_000);
     await sleep(400);
     paths.push(await captureWindow(window, out, "practice-intercept-response.png", tabs));
+    // Same held response, after we already injected a request header the page never set.
+    paths.push(await captureWindow(window, out, "practice-intercept-bypass.png", tabs));
     const editedBody = (pausedRes.body && !pausedRes.body_base64)
       ? `${pausedRes.body}\n/* lurkwire-edited */`
       : undefined;
@@ -1127,6 +1199,28 @@ async function runPracticeTargets(
     console.log(`SMOKE practice intercept/repeater failed: ${error instanceof Error ? error.message : error}`);
   }
 
+  try {
+    hooks.selectTool("cors");
+    await sleep(400);
+    await window.webContents.executeJavaScript(`(() => {
+      const url = document.querySelector('input[aria-label="CORS target URL"]');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      if (url) {
+        setter?.call(url, "https://httpbin.org/get");
+        url.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      const btn = Array.from(document.querySelectorAll("button")).find((el) =>
+        /Send preflight/i.test(el.textContent || ""),
+      );
+      if (btn) btn.click();
+      return Boolean(url && btn);
+    })()`);
+    await sleep(2500);
+    paths.push(await captureWindow(window, out, "practice-cors.png", tabs));
+  } catch (error) {
+    console.log(`SMOKE practice CORS failed: ${error instanceof Error ? error.message : error}`);
+  }
+
   hooks.selectTool("decode");
   await sleep(400);
   await window.webContents.executeJavaScript(`(() => {
@@ -1139,6 +1233,21 @@ async function runPracticeTargets(
   })()`);
   await sleep(500);
   paths.push(await captureWindow(window, out, "practice-jwt-decode.png", tabs));
+  await window.webContents.executeJavaScript(`(() => {
+    const alg = document.querySelector('select, [aria-label="JWT algorithm"]');
+    if (alg && "value" in alg) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, "value")?.set;
+      setter?.call(alg, "none");
+      alg.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    const btn = Array.from(document.querySelectorAll("button")).find((el) =>
+      /Issue unsigned|alg none/i.test(el.textContent || ""),
+    );
+    if (btn) btn.click();
+    return Boolean(btn);
+  })()`);
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "practice-jwt-tamper.png", tabs));
 
   hooks.selectTool("cookies");
   await sleep(600);
