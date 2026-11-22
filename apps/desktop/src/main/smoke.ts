@@ -1085,16 +1085,24 @@ async function runPracticeTargets(
       if (btn) btn.click();
       return Boolean(email && pass && btn);
     })()`);
-    await sleep(2000);
-    const loggedIn = await pageJs(`(() => {
+    const loggedIn = await waitFor("Juice login admin challenge", async () => {
+      const state = await pageJs(`(() => {
+        const buttons = Array.from(document.querySelectorAll("button, a, span"));
+        const account = buttons.find((el) => /account|show\/hide account menu/i.test(el.getAttribute("aria-label") || el.textContent || ""));
+        if (account && !/logout/i.test(document.body.innerText || "")) account.click();
+        const text = document.body.innerText || "";
+        return {
+          text: text.slice(0, 500),
+          hasAdminChallenge: /Login Admin|administrator's user account/i.test(text),
+          hasLogout: /\blogout\b/i.test(text),
+          href: location.href,
+        };
+      })()`);
+      return state.hasAdminChallenge || state.hasLogout ? state : null;
+    }, 10_000).catch(async () => pageJs(`(() => {
       const text = document.body.innerText || "";
-      const menu = document.querySelector("button[aria-label*='account' i], button[aria-label*='Show/hide account' i], .mat-menu-trigger");
-      return {
-        text: text.slice(0, 400),
-        hasLogout: /logout|your basket|admin@|logged in/i.test(text),
-        href: location.href,
-      };
-    })()`);
+      return { text: text.slice(0, 500), hasAdminChallenge: false, hasLogout: /\blogout\b/i.test(text), href: location.href };
+    })()`));
     console.log("SMOKE Juice login bypass", JSON.stringify(loggedIn));
     paths.push(await captureWindow(window, out, "practice-juice-login-bypass.png", tabs));
     console.log("SMOKE practice Juice Shop ok");
@@ -1448,15 +1456,22 @@ async function runPracticeTargets(
         return { method: Boolean(method), url: Boolean(url), headers: Boolean(headers), payloads: Boolean(payloads), start: Boolean(start) };
       })()`);
       console.log("SMOKE DVWA intruder fill", JSON.stringify(filled));
+      hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "intruder", toolsDockHeight: 620, llmSidebarOpen: false });
       const rows = await waitFor("DVWA intruder results table", async () => {
-        const count = await window.webContents.executeJavaScript(
-          `document.querySelectorAll(".intruder-results tr").length`,
-        );
-        return Number(count) >= 2 ? Number(count) : null;
+        const info = await window.webContents.executeJavaScript(`(() => {
+          const table = document.querySelector(".intruder-results");
+          table?.scrollIntoView({ block: "start" });
+          const payloads = Array.from(document.querySelectorAll(".intruder-results tbody td.path")).map((el) => el.textContent || "");
+          const empty = Boolean(document.querySelector(".intruder-results td.empty"));
+          return { payloads, empty, rows: document.querySelectorAll(".intruder-results tbody tr").length };
+        })()`);
+        return !info.empty && info.payloads.length >= 2 ? info : null;
       }, 30_000);
       await sleep(400);
+      await window.webContents.executeJavaScript(`document.querySelector(".intruder-results")?.scrollIntoView({ block: "start" })`);
+      await sleep(200);
       paths.push(await captureWindow(window, out, "practice-intruder-dvwa-results.png", tabs));
-      console.log(`SMOKE practice DVWA intruder results table rows=${rows}`);
+      console.log(`SMOKE practice DVWA intruder results table ${JSON.stringify(rows)}`);
     }
 
     if (await reachable("http://127.0.0.1:3000/", 3000)) {
