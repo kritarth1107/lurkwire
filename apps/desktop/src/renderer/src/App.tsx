@@ -15,6 +15,7 @@ import { resolveCurrentFlow } from "./flowSelection";
 import { dispatchSend } from "./sendActions";
 import { hotkeyToSendTarget, type ToolHotkey } from "../../shared/sendTo";
 import { PanelHost } from "./chrome/PanelHost";
+import { insetStageForOverlay } from "../../shared/chromeBounds";
 import { useAppState } from "./useAppState";
 
 export function App() {
@@ -28,6 +29,7 @@ export function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
+  const [omniboxOpen, setOmniboxOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = state.theme;
@@ -90,18 +92,24 @@ export function App() {
     }
     const report = () => {
       const rect = node.getBoundingClientRect();
-      void window.lurkwire?.reportBounds({
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height,
-      });
+      const dropdown = document.querySelector(".omnibox-dropdown");
+      const overlayBottom = dropdown ? dropdown.getBoundingClientRect().bottom : null;
+      const bounds = insetStageForOverlay(
+        { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        overlayBottom,
+      );
+      void window.lurkwire?.reportBounds(bounds);
     };
-    report();
     const observer = new ResizeObserver(report);
     observer.observe(node);
+    const dropdown = document.querySelector(".omnibox-dropdown");
+    if (dropdown) {
+      observer.observe(dropdown);
+    }
     window.addEventListener("resize", report);
+    const raf = window.requestAnimationFrame(report);
     return () => {
+      window.cancelAnimationFrame(raf);
       observer.disconnect();
       window.removeEventListener("resize", report);
     };
@@ -114,12 +122,19 @@ export function App() {
     findOpen,
     showInternal,
     internalPage,
+    omniboxOpen,
   ]);
 
   return (
     <div className="shell" data-theme={state.theme}>
       <TabStrip state={state} />
-      <NavBar state={state} omnibox={omnibox} setOmnibox={setOmnibox} urlRef={urlRef} />
+      <NavBar
+        state={state}
+        omnibox={omnibox}
+        setOmnibox={setOmnibox}
+        urlRef={urlRef}
+        onSuggestLayout={setOmniboxOpen}
+      />
       <ToolsTopBar state={state} />
       {state.prefs.bookmarksBar ? <BookmarksBar /> : null}
       <ToolDock

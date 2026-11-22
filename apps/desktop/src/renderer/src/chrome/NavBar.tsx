@@ -13,7 +13,8 @@ import {
   Star,
   Unlock,
 } from "lucide-react";
-import { FormEvent, KeyboardEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { AppSnapshot, InterceptState } from "../../../shared/types";
 import { resolveOmnibox, type OmniboxSuggestion } from "../../../shared/omnibox";
 import { Mark } from "../Mark";
@@ -26,11 +27,13 @@ export function NavBar({
   omnibox,
   setOmnibox,
   urlRef,
+  onSuggestLayout,
 }: {
   state: AppSnapshot;
   omnibox: string;
   setOmnibox: (value: string) => void;
   urlRef: React.RefObject<HTMLInputElement | null>;
+  onSuggestLayout?: (open: boolean) => void;
 }) {
   const active = state.tabs.find((tab) => tab.id === state.activeTabId);
   const [intercept, setIntercept] = useState<InterceptState | null>(null);
@@ -40,6 +43,7 @@ export function NavBar({
   const interceptBtn = useRef<HTMLButtonElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const skipSuggest = useRef(false);
+  const [dropdownBox, setDropdownBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const suggestions = useOmniboxSuggestions(omnibox, focused && !skipSuggest.current);
   const open = focused && suggestions.length > 0;
   const top = suggestions[0];
@@ -80,6 +84,32 @@ export function NavBar({
   useEffect(() => {
     setActiveIndex(0);
   }, [omnibox]);
+
+  useEffect(() => {
+    onSuggestLayout?.(open);
+  }, [open, suggestions.length, onSuggestLayout]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setDropdownBox(null);
+      return;
+    }
+    const update = () => {
+      const node = formRef.current;
+      if (!node) {
+        return;
+      }
+      const rect = node.getBoundingClientRect();
+      setDropdownBox({
+        top: rect.bottom,
+        left: rect.left - 1,
+        width: rect.width + 2,
+      });
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [open, suggestions.length, omnibox]);
 
   const go = (value: string) => {
     skipSuggest.current = true;
@@ -245,14 +275,18 @@ export function NavBar({
             </button>
           </Tooltip>
         </div>
-        {open ? (
-          <OmniboxDropdown
-            items={suggestions}
-            activeIndex={activeIndex}
-            onHover={setActiveIndex}
-            onPick={(item) => go(item.url)}
-          />
-        ) : null}
+        {open && dropdownBox
+          ? createPortal(
+              <OmniboxDropdown
+                items={suggestions}
+                activeIndex={activeIndex}
+                onHover={setActiveIndex}
+                onPick={(item) => go(item.url)}
+                style={dropdownBox}
+              />,
+              document.body,
+            )
+          : null}
       </form>
 
       <Tooltip label="Lurkwire tools">
@@ -359,13 +393,6 @@ export function NavBar({
         </button>
       </Tooltip>
     </div>
-      {open ? (
-        <div
-          className="omnibox-slot"
-          style={{ height: Math.min(suggestions.length, 8) * 44 + 16 }}
-          aria-hidden="true"
-        />
-      ) : null}
     </div>
   );
 }
@@ -375,14 +402,21 @@ function OmniboxDropdown({
   activeIndex,
   onHover,
   onPick,
+  style,
 }: {
   items: OmniboxSuggestion[];
   activeIndex: number;
   onHover: (index: number) => void;
   onPick: (item: OmniboxSuggestion) => void;
+  style: { top: number; left: number; width: number };
 }) {
   return (
-    <div className="omnibox-dropdown" id="omnibox-suggestions" role="listbox">
+    <div
+      className="omnibox-dropdown omnibox-fixed"
+      id="omnibox-suggestions"
+      role="listbox"
+      style={{ top: style.top, left: style.left, width: style.width }}
+    >
       {items.map((item, index) => (
         <button
           key={item.id}
