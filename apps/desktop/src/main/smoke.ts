@@ -1104,7 +1104,11 @@ async function runPracticeTargets(
       return { text: text.slice(0, 500), hasAdminChallenge: false, hasLogout: /\blogout\b/i.test(text), href: location.href };
     })()`));
     console.log("SMOKE Juice login bypass", JSON.stringify(loggedIn));
+    hooks.setPrefs({ sidebarOpen: false, llmSidebarOpen: false });
+    await sleep(400);
     paths.push(await captureWindow(window, out, "practice-juice-login-bypass.png", tabs));
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "history" });
+    await sleep(200);
     console.log("SMOKE practice Juice Shop ok");
   } else {
     console.log("SMOKE practice Juice Shop skipped (not reachable on :3000)");
@@ -1456,20 +1460,35 @@ async function runPracticeTargets(
         return { method: Boolean(method), url: Boolean(url), headers: Boolean(headers), payloads: Boolean(payloads), start: Boolean(start) };
       })()`);
       console.log("SMOKE DVWA intruder fill", JSON.stringify(filled));
-      hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "intruder", toolsDockHeight: 620, llmSidebarOpen: false });
+      hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "intruder", toolsDockHeight: 720, llmSidebarOpen: false });
       const rows = await waitFor("DVWA intruder results table", async () => {
         const info = await window.webContents.executeJavaScript(`(() => {
           const table = document.querySelector(".intruder-results");
-          table?.scrollIntoView({ block: "start" });
           const payloads = Array.from(document.querySelectorAll(".intruder-results tbody td.path")).map((el) => el.textContent || "");
           const empty = Boolean(document.querySelector(".intruder-results td.empty"));
           return { payloads, empty, rows: document.querySelectorAll(".intruder-results tbody tr").length };
         })()`);
         return !info.empty && info.payloads.length >= 2 ? info : null;
       }, 30_000);
+      await window.webContents.executeJavaScript(`(() => {
+        document.querySelectorAll(".intruder textarea").forEach((el) => {
+          el.setAttribute("rows", "2");
+          el.style.height = "40px";
+          el.style.minHeight = "40px";
+          el.style.flex = "none";
+        });
+        const results = document.querySelector(".intruder-results");
+        if (results) {
+          results.style.flex = "none";
+          results.style.minHeight = "240px";
+          results.style.maxHeight = "none";
+        }
+        document.querySelector(".intruder")?.scrollTo({ top: 10_000, behavior: "instant" });
+        results?.scrollIntoView({ block: "start", inline: "nearest" });
+        document.querySelector(".tool-workspace-body")?.scrollTo({ top: 10_000, behavior: "instant" });
+        return Boolean(results);
+      })()`);
       await sleep(400);
-      await window.webContents.executeJavaScript(`document.querySelector(".intruder-results")?.scrollIntoView({ block: "start" })`);
-      await sleep(200);
       paths.push(await captureWindow(window, out, "practice-intruder-dvwa-results.png", tabs));
       console.log(`SMOKE practice DVWA intruder results table ${JSON.stringify(rows)}`);
     }
