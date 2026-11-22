@@ -10,6 +10,8 @@ import type { PanelManager } from "./panels";
 import { parseRunnerData } from "../shared/workbench";
 import { loadWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
 import { runLocalSmugglingLab } from "./smugglingLab";
+import { reportFromStores } from "../shared/reportExport";
+import { emptyNotes } from "../shared/notes";
 import { analyzeCors, CORS_PROBE_ORIGIN, corsProbeHeaders } from "../shared/corsProbe";
 import { invokeGrpc } from "./workbench/grpcClient";
 import * as grpc from "@grpc/grpc-js";
@@ -1157,6 +1159,182 @@ async function runPracticeTargets(
   })()`);
   await sleep(400);
   paths.push(await captureWindow(window, out, "practice-traffic-har.png", tabs));
+
+
+  // v6: send-to UX, match/replace, intruder, discover, report, new tools.
+  try {
+    const project = projectId ?? undefined;
+    for (const host of ["httpbin.org", "127.0.0.1", "localhost", "demo.testfire.net"]) {
+      try {
+        await hooks.control.addScope({ project_id: project, kind: "include", host, enabled: true });
+      } catch {
+        /* already present */
+      }
+    }
+    hooks.selectTool("scope");
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "scope", toolsDockHeight: 420, llmSidebarOpen: false });
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-scope.png", tabs));
+
+    const rule = await hooks.control.addMatchRule({
+      project_id: project,
+      name: "probe-rewrite",
+      match: "lurkwire-match",
+      replace: "lurkwire-replaced",
+      regex: false,
+      where: "anywhere",
+      direction: "request",
+      enabled: true,
+    });
+    void rule;
+    hooks.selectTool("matchreplace");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-match-replace.png", tabs));
+    const rewritten = await hooks.control.sendRepeater({
+      project_id: project,
+      method: "GET",
+      url: "https://httpbin.org/get?token=lurkwire-match",
+      headers: [],
+      source: "repeater",
+    });
+    const preview = (rewritten as { resp_preview?: string }).resp_preview ?? "";
+    if (!preview.includes("lurkwire-replaced")) {
+      console.log("SMOKE practice match/replace: response did not echo rewritten query, preview follows");
+      console.log(preview.slice(0, 400));
+    } else {
+      console.log("SMOKE practice match/replace rewrote token=lurkwire-replaced");
+    }
+
+    hooks.selectTool("history");
+    await sleep(400);
+    await window.webContents.executeJavaScript(`(() => {
+      const row = document.querySelector(".history-table tbody tr, .traffic-table tbody tr, table tbody tr");
+      if (!row) return false;
+      const rect = row.getBoundingClientRect();
+      row.dispatchEvent(new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + 80,
+        clientY: rect.top + 10,
+        button: 2,
+      }));
+      return true;
+    })()`);
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-send-to-menu.png", tabs));
+    // close menu
+    await window.webContents.executeJavaScript(`document.body.click()`);
+    await sleep(200);
+
+    const job = await hooks.control.startIntruder({
+      project_id: project,
+      method: "GET",
+      url: "https://httpbin.org/get?q=§probe§",
+      headers: [],
+      attack: "sniper",
+      payloads: [["alpha", "beta", "gamma"]],
+    });
+    const finished = await waitFor("practice intruder", async () => {
+      const current = await hooks.control.getIntruder(job.id);
+      return current.status === "running" ? null : current;
+    }, 30_000);
+    hooks.selectTool("intruder");
+    await sleep(500);
+    paths.push(await captureWindow(window, out, "practice-intruder.png", tabs));
+    console.log(`SMOKE practice intruder status=${finished.status} results=${finished.results.length}`);
+
+    if (await reachable("http://127.0.0.1:3000/", 3000)) {
+      hooks.selectTool("discover");
+      await sleep(300);
+      await window.webContents.executeJavaScript(`(() => {
+        const inputs = Array.from(document.querySelectorAll("input"));
+        const base = inputs.find((el) => (el.getAttribute("placeholder") || "").includes("http") || el.value === "");
+        const first = document.querySelector(".discover input, .workbench input");
+        const target = first;
+        if (!target) return false;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+        setter?.call(target, "http://127.0.0.1:3000/");
+        target.dispatchEvent(new Event("input", { bubbles: true }));
+        return true;
+      })()`);
+      // also run a short wordlist through the proxy so the tool isn't empty
+      for (const word of ["robots.txt", "rest/products", "api-docs"]) {
+        try {
+          await hooks.control.sendWorkbench({
+            project_id: project,
+            method: "GET",
+            url: "http://127.0.0.1:3000/" + word,
+            headers: [],
+            source: "discover",
+          });
+        } catch (error) {
+          console.log(`SMOKE discover ${word}: ${error instanceof Error ? error.message : error}`);
+        }
+      }
+      await sleep(400);
+      paths.push(await captureWindow(window, out, "practice-discover.png", tabs));
+      console.log("SMOKE practice discover probes sent");
+    } else {
+      console.log("SMOKE practice discover skipped (Juice Shop not up)");
+    }
+
+    hooks.selectTool("scanner");
+    await sleep(500);
+    paths.push(await captureWindow(window, out, "practice-scanner-grouped.png", tabs));
+
+    const findings = await hooks.control.listFindings({ project_id: project, limit: 200 });
+    const notes = emptyNotes();
+    const report = reportFromStores({
+      product: "Lurkwire",
+      projectName: "Practice (Juice Shop / httpbin / testfire)",
+      findings: findings.items,
+      notes,
+    });
+    writeFileSync(join(out, "practice-findings-report.md"), report.markdown, "utf8");
+    writeFileSync(join(out, "practice-findings-report.html"), report.html, "utf8");
+    hooks.selectTool("report");
+    await sleep(600);
+    paths.push(await captureWindow(window, out, "practice-report.png", tabs));
+    console.log(`SMOKE practice report findings=${findings.items.length}`);
+
+    hooks.selectTool("paramminer");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-paramminer.png", tabs));
+    hooks.selectTool("smuggling");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-smuggling.png", tabs));
+    hooks.selectTool("decode");
+    await sleep(300);
+    await window.webContents.executeJavaScript(`(() => {
+      const btn = Array.from(document.querySelectorAll("button")).find((el) => (el.textContent || "").includes("Decode all"));
+      if (btn) (btn as HTMLButtonElement).click();
+      return Boolean(btn);
+    })()`);
+    await sleep(300);
+    paths.push(await captureWindow(window, out, "practice-decoder-plus.png", tabs));
+    hooks.selectTool("oob");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-oob.png", tabs));
+    hooks.selectTool("websocket");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-websocket.png", tabs));
+
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "history", toolsDockHeight: 380 });
+    await sleep(200);
+    window.webContents.send("lurkwire:command-palette");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-command-palette.png", tabs));
+    window.webContents.send("lurkwire:escape");
+    await sleep(200);
+    window.webContents.send("lurkwire:tool-hotkey", "shortcuts");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-shortcuts.png", tabs));
+    window.webContents.send("lurkwire:escape");
+    console.log("SMOKE practice v6 tools ok");
+  } catch (error) {
+    console.log(`SMOKE practice v6 tools failed: ${error instanceof Error ? error.message : error}`);
+  }
+
 
   hooks.setPrefs({ llmSidebarOpen: true, llmSidebarWidth: 340, sidebarOpen: true, toolsDockHeight: 360 });
   await sleep(500);

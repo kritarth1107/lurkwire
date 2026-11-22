@@ -16,6 +16,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::guardrails::GuardError;
 use crate::intercept::{Decision, ForwardEdit, InterceptConfig, PausedItem};
+use crate::match_replace::{MatchDirection, MatchRule, MatchWhere, NewMatchRule};
 use crate::intruder::{self, IntruderJob, IntruderStart};
 use crate::proxy::{send_active, send_repeater};
 use crate::scope::{NewScopeRule, ScopeKind, ScopeRule};
@@ -50,6 +51,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/kill/resume", post(resume_kill))
         .route("/scope", get(list_scope).post(add_scope).put(replace_scope))
         .route("/scope/{id}", delete(delete_scope))
+        .route("/match-replace", get(list_match).post(add_match).put(replace_match))
+        .route("/match-replace/{id}", delete(delete_match))
         .route("/audit", get(list_audit))
         .route("/intruder", get(list_intruder).post(start_intruder))
         .route("/findings", get(list_findings))
@@ -614,6 +617,98 @@ async fn delete_scope(
             "scope.rule_delete",
             Some(&rule.project_id),
             serde_json::json!({ "id": rule.id, "host": rule.host }),
+        );
+    }
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+
+async fn list_match(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ProjectQuery>,
+) -> Result<Json<Vec<MatchRule>>, ApiError> {
+    let project_id = project_id_or_default(&state, query.project_id);
+    Ok(Json(state.store.list_match_rules(&project_id)?))
+}
+
+fn build_match_rule(_state: &AppState, body: NewMatchRule, project_id: String) -> Result<MatchRule, ApiError> {
+    let pattern = body.pattern;
+    if pattern.is_empty() {
+        return Err(ApiError::bad_request("match pattern is required"));
+    }
+    Ok(MatchRule {
+        id: uuid::Uuid::new_v4().to_string(),
+        project_id,
+        enabled: body.enabled.unwrap_or(true),
+        name: body
+            .name
+            .unwrap_or_else(|| "rule".into())
+            .trim()
+            .to_string(),
+        pattern,
+        replace: body.replace,
+        regex: body.regex.unwrap_or(false),
+        where_part: body.where_part.unwrap_or(MatchWhere::Anywhere),
+        direction: body.direction.unwrap_or(MatchDirection::Both),
+        created_at: crate::store::now_ms(),
+    })
+}
+
+async fn add_match(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<NewMatchRule>,
+) -> Result<Json<MatchRule>, ApiError> {
+    let project_id = project_id_or_default(&state, body.project_id.clone());
+    let rule = build_match_rule(&state, body, project_id)?;
+    state.store.add_match_rule(&rule)?;
+    let _ = state.store.append_audit(
+        "operator",
+        "match_replace.rule_add",
+        Some(&rule.project_id),
+        serde_json::json!({ "id": rule.id, "name": rule.name }),
+    );
+    Ok(Json(rule))
+}
+
+#[derive(Deserialize)]
+struct ReplaceMatch {
+    project_id: Option<String>,
+    rules: Vec<NewMatchRule>,
+}
+
+async fn replace_match(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ReplaceMatch>,
+) -> Result<Json<Vec<MatchRule>>, ApiError> {
+    let project_id = project_id_or_default(&state, body.project_id);
+    let mut rules = Vec::new();
+    for item in body.rules {
+        rules.push(build_match_rule(&state, item, project_id.clone())?);
+    }
+    state.store.replace_match_rules(&project_id, &rules)?;
+    let _ = state.store.append_audit(
+        "operator",
+        "match_replace.replace",
+        Some(&project_id),
+        serde_json::json!({ "count": rules.len() }),
+    );
+    Ok(Json(rules))
+}
+
+async fn delete_match(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let existing = state.store.get_match_rule(&id)?;
+    if !state.store.delete_match_rule(&id)? {
+        return Err(ApiError::not_found("match/replace rule not found"));
+    }
+    if let Some(rule) = existing {
+        let _ = state.store.append_audit(
+            "operator",
+            "match_replace.rule_delete",
+            Some(&rule.project_id),
+            serde_json::json!({ "id": rule.id, "name": rule.name }),
         );
     }
     Ok(Json(serde_json::json!({ "ok": true })))

@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AppSnapshot, ToolId } from "../../../shared/types";
 import { PENTEST_TOOLS } from "../../../shared/toolsCatalog";
+import { SEND_TO_ACTIONS } from "../../../shared/sendTo";
+import { resolveCurrentFlow } from "../flowSelection";
+import { dispatchSend } from "../sendActions";
+import { shortcutFor } from "../../../shared/shortcuts";
 
 export type PaletteCommand = {
   id: string;
@@ -41,12 +45,45 @@ function tools(): PaletteCommand[] {
     { id: "new-tab", title: "New tab", hint: "Ctrl+T", run: () => void window.lurkwire.newTab() },
     { id: "new-window", title: "New window", hint: "Ctrl+N", run: () => void window.lurkwire.newWindow() },
     { id: "private", title: "New private window", hint: "Ctrl+Shift+N", run: () => void window.lurkwire.newWindow({ privateMode: true }) },
-    { id: "devtools", title: "Developer tools", hint: "Ctrl+Shift+I", run: () => void window.lurkwire.openDevTools("detach") },
-    { id: "reload", title: "Reload this tab", hint: "Ctrl+R", run: () => void window.lurkwire.reload() },
+    { id: "devtools", title: "Developer tools", hint: "F12", run: () => void window.lurkwire.openDevTools("detach") },
+    { id: "reload", title: "Reload this tab", hint: "F5", run: () => void window.lurkwire.reload() },
     { id: "find", title: "Find in page", hint: "Ctrl+F", run: () => void window.lurkwire.requestFind() },
     { id: "kill", title: "Toggle kill switch", keywords: "emergency stop proxy", run: () => void window.lurkwire.getState().then((state) => window.lurkwire.setKillSwitch(!state.killed)) },
+    { id: "toggle-intercept", title: "Toggle intercept", hint: shortcutFor("toggle-intercept"), keywords: "pause intercept traffic", run: () => void toggleIntercept() },
+    { id: "shortcuts", title: "Keyboard shortcuts", hint: shortcutFor("shortcuts"), keywords: "hotkeys cheatsheet", run: () => window.dispatchEvent(new CustomEvent("lurkwire:open-shortcuts")) },
+    ...SEND_TO_ACTIONS.map((item) => ({
+      id: `send-${item.id}`,
+      title: item.label,
+      hint: item.shortcut,
+      keywords: `send-to ${item.id} request`,
+      run: () => {
+        void window.lurkwire.getState().then(async (state) => {
+          const tab = state.tabs.find((entry) => entry.id === state.activeTabId);
+          const flow = await resolveCurrentFlow(tab?.url);
+          if (!flow) {
+            window.alert("No captured request to send. Right-click one in Traffic, or browse a site first.");
+            return;
+          }
+          await dispatchSend(flow, item.id);
+        });
+      },
+    })),
   ];
   return [...pages, ...toolCommands, ...actions];
+}
+
+async function toggleIntercept() {
+  const current = await window.lurkwire.getIntercept();
+  const enabled = !current.config.enabled;
+  await window.lurkwire.setIntercept({
+    ...current.config,
+    enabled,
+    requests: true,
+    responses: true,
+  });
+  if (enabled) {
+    await window.lurkwire.setTool("intercept");
+  }
 }
 
 export function CommandPalette({

@@ -14,10 +14,11 @@ import { analyzeSecurityHeaders, formatSecurityReport } from "../../shared/secur
 export type FlowSendHandlers = {
   onSendToRepeater: (flow: FlowDetail) => void;
   onSendToIntruder: (flow: FlowDetail) => void;
+  onSendToScanner?: (flow: FlowDetail) => void;
   onSendToComparer?: (flow: FlowDetail) => void;
 };
 
-export async function sendFlow(id: string, target: "repeater" | "intruder" | "comparer" | "workbench", handlers: FlowSendHandlers) {
+export async function sendFlow(id: string, target: "repeater" | "intruder" | "scanner" | "comparer" | "workbench", handlers: FlowSendHandlers) {
   const flow = await window.lurkwire.getFlow(id);
   if (target === "repeater") {
     handlers.onSendToRepeater(flow);
@@ -25,6 +26,13 @@ export async function sendFlow(id: string, target: "repeater" | "intruder" | "co
   }
   if (target === "intruder") {
     handlers.onSendToIntruder(flow);
+    return;
+  }
+  if (target === "scanner") {
+    handlers.onSendToScanner?.(flow);
+    if (!handlers.onSendToScanner) {
+      await window.lurkwire.setTool("scanner");
+    }
     return;
   }
   if (target === "workbench") {
@@ -197,10 +205,16 @@ export function FlowContextMenu({
   return (
     <div className="ctx-menu" style={{ left: menu.x, top: menu.y }} role="menu">
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "repeater", handlers)}>
-        Send to Repeater
+        Send to Repeater <kbd>Ctrl+R</kbd>
       </button>
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "intruder", handlers)}>
-        Send to Intruder
+        Send to Intruder <kbd>Ctrl+I</kbd>
+      </button>
+      <button type="button" onClick={() => void sendFlow(menu.flow.id, "scanner", handlers)}>
+        Send to Scanner
+      </button>
+      <button type="button" onClick={() => void sendFlow(menu.flow.id, "comparer", handlers)}>
+        Send to Comparer
       </button>
       <button type="button" onClick={() => void sendFlow(menu.flow.id, "workbench", handlers)}>
         Send to Workbench
@@ -213,9 +227,6 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void copySecurityHeaderReport(menu.flow.id)}>
         Copy security header report
-      </button>
-      <button type="button" onClick={() => void sendFlow(menu.flow.id, "comparer", handlers)}>
-        Send to Comparer
       </button>
       <div className="ctx-sep" />
       <div className="ctx-label">Highlight</div>
@@ -238,10 +249,10 @@ export function FlowContextMenu({
         Copy URL
       </button>
       <button type="button" onClick={() => void copyFlowCurl(menu.flow.id)}>
-        Copy as cURL
+        Copy as curl
       </button>
       <button type="button" onClick={() => void addFlowHostToScope(menu.flow.id)}>
-        Add host to scope
+        Add to scope
       </button>
       <button type="button" onClick={() => void retestCors(menu.flow.id).then((summary) => window.alert(summary))}>
         Retest CORS

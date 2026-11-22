@@ -2239,3 +2239,106 @@ button.intercept-toggle.on { background: var(--accent-dim); color: var(--lw-acce
     transition: none !important;
   }
 }
+
+.empty-state {
+  margin: 8px 12px 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--border, #c6c6cd);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel, #f7f7f8) 80%, transparent);
+}
+.empty-state h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+.empty-state-body, .empty-state p {
+  margin: 0;
+  color: var(--muted, #5b5b66);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.tool-split {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(240px, 1fr);
+  min-height: 0;
+  height: 100%;
+  gap: 0;
+}
+.tool-list, .tool-detail {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 16px;
+}
+.tool-detail {
+  border-left: 1px solid var(--border, #c6c6cd);
+}
+tr.anomaly td {
+  background: color-mix(in srgb, #c45a11 16%, transparent);
+}
+.shortcuts-sheet {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  margin: 10vh auto 0;
+  padding: 16px 18px 20px;
+  border-radius: 12px;
+  background: var(--panel, #fff);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.25);
+}
+.shortcuts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+.shortcuts-table td {
+  padding: 4px 8px 4px 0;
+  vertical-align: top;
+}
+.shortcuts-table kbd, .ctx-menu kbd, .menu-item kbd {
+  font-size: 11px;
+  padding: 1px 5px;
+  border: 1px solid var(--border, #c6c6cd);
+  border-radius: 4px;
+  margin-left: 8px;
+}
+.report-frame {
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+  background: #fff;
+}
+.finding-group h4 {
+  margin: 8px 8px 4px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.repeater-editor-pane {
+  min-height: 180px;
+  flex: 1;
+}
+.repeater-editor-pane .monaco-wrap {
+  height: 220px;
+}
+button.linkish {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+.decode-steps {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+.workbench-toolbar.wrap {
+  flex-wrap: wrap;
+}

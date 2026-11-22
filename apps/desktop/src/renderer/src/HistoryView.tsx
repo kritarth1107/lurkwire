@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail, FlowSummary } from "../../shared/types";
 import { formatBytes, formatTime, shortMime, statusClass } from "../../shared/http";
 import { flowTitle, highlightOf, tlsLabel } from "../../shared/flowMeta";
+import { setSelectedFlow } from "./flowSelection";
 import { AnnotationBar, addFlowHostToScope, copyClickjackPoc, copyCsrfPoc, copyFlowCurl, copySecurityHeaderReport, retestCors, sendJwtToDecoder, FlowContextMenu, sendFlow, useFlowContextMenu, type FlowSendHandlers } from "./FlowActions";
 import { flowsToHar, harToString, type HarBody, type HarFlowInput } from "../../shared/harExport";
 import { downloadText } from "./downloadText";
@@ -136,6 +137,7 @@ export function HistoryView({ projectId, handlers }: Props) {
     void window.lurkwire.getFlow(selectedId).then((flow) => {
       if (!cancelled) {
         setDetail(flow);
+        setSelectedFlow(flow);
       }
     });
     return () => {

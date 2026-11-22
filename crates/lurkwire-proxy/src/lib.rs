@@ -4,6 +4,7 @@ pub mod config;
 pub mod control;
 pub mod guardrails;
 pub mod intercept;
+pub mod match_replace;
 pub mod intruder;
 pub mod proxy;
 pub mod scanner;

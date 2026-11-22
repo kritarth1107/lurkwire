@@ -10,6 +10,10 @@ import { ToolsTopBar } from "./chrome/ToolsTopBar";
 import { ToolDock } from "./chrome/ToolDock";
 import { LlmSidebar } from "./chrome/LlmSidebar";
 import { CommandPalette } from "./chrome/CommandPalette";
+import { ShortcutsSheet } from "./chrome/ShortcutsSheet";
+import { resolveCurrentFlow } from "./flowSelection";
+import { dispatchSend } from "./sendActions";
+import { hotkeyToSendTarget, type ToolHotkey } from "../../shared/sendTo";
 import { PanelHost } from "./chrome/PanelHost";
 import { useAppState } from "./useAppState";
 
@@ -21,6 +25,7 @@ export function App() {
   const [intruderDraft, setIntruderDraft] = useState<FlowDetail | null>(null);
   const [findOpen, setFindOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
 
@@ -37,8 +42,14 @@ export function App() {
     const offFocus = window.lurkwire.onFocusUrl(() => urlRef.current?.focus());
     const offFind = window.lurkwire.onOpenFind(() => setFindOpen(true));
     const offPalette = window.lurkwire.onCommandPalette(() => setPaletteOpen((open) => !open));
+    const offHotkey = window.lurkwire.onToolHotkey((id) => {
+      void handleToolHotkey(id as ToolHotkey, () => setShortcutsOpen(true));
+    });
+    const onShortcuts = () => setShortcutsOpen(true);
+    window.addEventListener("lurkwire:open-shortcuts", onShortcuts);
     const offEsc = window.lurkwire.onEscape(() => {
       setPaletteOpen(false);
+      setShortcutsOpen(false);
       setFindOpen(false);
       void window.lurkwire.closePanel();
     });
@@ -46,7 +57,9 @@ export function App() {
       offFocus();
       offFind();
       offPalette();
+      offHotkey();
       offEsc();
+      window.removeEventListener("lurkwire:open-shortcuts", onShortcuts);
     };
   }, []);
 
@@ -109,6 +122,7 @@ export function App() {
           <main className="stage" ref={stageRef} hidden={showInternal} />
           <FindBar open={findOpen} onClose={() => setFindOpen(false)} />
           <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} state={state} />
+          <ShortcutsSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         </div>
         <LlmSidebar
           state={state}
@@ -121,4 +135,38 @@ export function App() {
       <PanelHost state={state} />
     </div>
   );
+}
+
+
+async function handleToolHotkey(id: ToolHotkey, openShortcuts: () => void): Promise<void> {
+  if (id === "shortcuts") {
+    openShortcuts();
+    return;
+  }
+  if (id === "toggle-intercept") {
+    const current = await window.lurkwire.getIntercept();
+    const enabled = !current.config.enabled;
+    await window.lurkwire.setIntercept({
+      ...current.config,
+      enabled,
+      requests: true,
+      responses: true,
+    });
+    if (enabled) {
+      await window.lurkwire.setTool("intercept");
+    }
+    return;
+  }
+  const target = hotkeyToSendTarget(id);
+  if (!target) {
+    return;
+  }
+  const state = await window.lurkwire.getState();
+  const tab = state.tabs.find((entry) => entry.id === state.activeTabId);
+  const flow = await resolveCurrentFlow(tab?.url);
+  if (!flow) {
+    window.alert("No captured request to send. Right-click one in Traffic, or browse a site first.");
+    return;
+  }
+  await dispatchSend(flow, target);
 }

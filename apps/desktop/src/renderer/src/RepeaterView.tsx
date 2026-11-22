@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail } from "../../shared/types";
 import { formatRawRequest, parseRawRequest, statusClass } from "../../shared/http";
+import { HttpViewer } from "./HttpViewer";
+import { MonacoView } from "./MonacoView";
+import { EmptyState } from "./EmptyState";
 
 type RepeaterTab = {
   id: string;
@@ -63,6 +66,17 @@ export function RepeaterView({ draft, onDraftConsumed }: Props) {
     }
     return active.history[active.selectedIndex] ?? null;
   }, [active]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        void send();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const send = async () => {
     if (!active || !window.lurkwire) {
@@ -160,15 +174,12 @@ export function RepeaterView({ draft, onDraftConsumed }: Props) {
               disabled={active.sending || !active.url}
               onClick={() => void send()}
             >
-              {active.sending ? "Sending…" : "Send"}
+              {active.sending ? "Sending…" : "Send (Ctrl+Enter)"}
             </button>
           </div>
-          <textarea
-            className="raw-editor"
-            value={active.raw}
-            onChange={(event) => update({ raw: event.target.value })}
-            spellCheck={false}
-          />
+          <div className="repeater-editor-pane">
+            <MonacoView value={active.raw} language="http" readOnly={false} onChange={(value) => update({ raw: value })} />
+          </div>
           {active.error ? <div className="banner">{active.error}</div> : null}
         </section>
 
@@ -212,20 +223,15 @@ export function RepeaterView({ draft, onDraftConsumed }: Props) {
           </div>
           {selected ? (
             <>
-              <pre className="headers">
-                {selected.resp_headers
-                  .map((header) => `${header.name}: ${header.value}`)
-                  .join("\n") || "(no headers)"}
-              </pre>
-              <pre className="body">
-                {selected.resp_preview ||
-                  (selected.resp_blob ? "(binary body)" : "(empty)")}
-              </pre>
+              <p className="muted">
+                {selected.duration_ms ?? 0} ms · req {selected.req_len} B · resp {selected.resp_len} B
+              </p>
+              <HttpViewer flow={selected} />
             </>
           ) : (
-            <div className="empty-pane">
-              Edit the request and press Send. The human always sends.
-            </div>
+            <EmptyState title="No response yet">
+              Right-click a request in Traffic or the page and choose Send to Repeater, press Ctrl+R, or paste a raw request here and press Ctrl+Enter.
+            </EmptyState>
           )}
         </section>
       </div>

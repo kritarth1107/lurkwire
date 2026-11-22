@@ -22,6 +22,12 @@ const SIDEBAR_PANELS = new Set<SidebarPanel>([
   "notes",
   "discover",
   "graphql",
+  "scope",
+  "matchreplace",
+  "paramminer",
+  "smuggling",
+  "report",
+  "websocket",
 ]);
 
 export function prefsPath(): string {

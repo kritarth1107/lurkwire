@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AttackType, FlowDetail, IntruderJob } from "../../shared/types";
 import { INTRUDER_PRESETS, presetPayloads } from "../../shared/intruderPresets";
 import { parseHeaderBlock, statusClass } from "../../shared/http";
+import { EmptyState } from "./EmptyState";
 
 function parseLines(text: string): string[] {
   return text
@@ -31,6 +32,8 @@ export function IntruderView({
   const [job, setJob] = useState<IntruderJob | null>(null);
   const [error, setError] = useState<string | null>(null);
   const running = job?.status === "running";
+  const [sortKey, setSortKey] = useState<"index" | "status" | "length" | "duration_ms">("index");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
     if (!draft) {
@@ -57,7 +60,7 @@ export function IntruderView({
 
   async function start() {
     setError(null);
-    const payloads = (attack === "pitchfork" ? lists : lists.slice(0, 1)).map(parseLines);
+    const payloads = (attack === "pitchfork" || attack === "cluster_bomb" ? lists : lists.slice(0, 1)).map(parseLines);
     if (payloads.some((list) => list.length === 0)) {
       setError("Add at least one payload per list.");
       return;
@@ -90,7 +93,44 @@ export function IntruderView({
     }
   }
 
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) {
+      setSortDir((value) => (value === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "index" ? "asc" : "desc");
+    }
+  }
+
+  const results = [...(job?.results ?? [])].sort((a, b) => {
+    const av = Number(a[sortKey] ?? 0);
+    const bv = Number(b[sortKey] ?? 0);
+    return sortDir === "asc" ? av - bv : bv - av;
+  });
+  const lengths = results.map((row) => row.length);
+  const median = lengths.length
+    ? [...lengths].sort((a, b) => a - b)[Math.floor(lengths.length / 2)]
+    : 0;
+  const statusCounts = new Map<number, number>();
+  for (const row of results) {
+    if (row.status != null) {
+      statusCounts.set(row.status, (statusCounts.get(row.status) ?? 0) + 1);
+    }
+  }
+  const commonStatus = [...statusCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  function isAnomaly(row: (typeof results)[number]): boolean {
+    if (row.grep_hit) {
+      return true;
+    }
+    if (commonStatus != null && row.status != null && row.status !== commonStatus) {
+      return true;
+    }
+    return median > 0 && Math.abs(row.length - median) >= Math.max(32, median * 0.25);
+  }
+
   async function openResult(flowId: string | null) {
+
     if (!flowId) {
       return;
     }
@@ -100,10 +140,19 @@ export function IntruderView({
 
   return (
     <div className="intruder">
+      {!draft && !job ? (
+        <EmptyState title="No request loaded">
+          Right-click a request and choose Send to Intruder, or press Ctrl+I. Then select text and click Mark §, pick an attack type, and start. Hosts must be in scope.
+        </EmptyState>
+      ) : null}
       <p className="hint">
-        Wrap each insertion point with §, for example <code>/user/§id§</code>. Attacks stay in
-        scope, honor the rate cap, and stop when the kill switch is on.
+        Wrap each insertion point with §, for example <code>/user/§id§</code>. Select text in the URL, headers, or body and click Mark §. Cluster bomb runs the cartesian product of payload sets (capped).
       </p>
+      <div className="workbench-toolbar">
+        <button type="button" onClick={() => markSelection(setUrl, url)}>Mark § in URL</button>
+        <button type="button" onClick={() => markSelection(setHeaders, headers)}>Mark § in headers</button>
+        <button type="button" onClick={() => markSelection(setBody, body)}>Mark § in body</button>
+      </div>
       <div className="repeater-url">
         <input
           className="method"
@@ -148,6 +197,7 @@ export function IntruderView({
             <option value="sniper">Sniper</option>
             <option value="battering_ram">Battering ram</option>
             <option value="pitchfork">Pitchfork</option>
+            <option value="cluster_bomb">Cluster bomb</option>
           </select>
         </label>
         <label>
@@ -162,7 +212,7 @@ export function IntruderView({
       </div>
       {lists.map((list, index) => (
         <label className="intruder-label" key={index}>
-          Payloads {attack === "pitchfork" ? `for position ${index + 1}` : "(one per line)"}
+          Payloads {attack === "pitchfork" || attack === "cluster_bomb" ? `for position ${index + 1}` : "(one per line)"}
           <select
             defaultValue=""
             onChange={(event) => {
@@ -217,7 +267,7 @@ export function IntruderView({
           />
         </label>
       ))}
-      {attack === "pitchfork" ? (
+      {attack === "pitchfork" || attack === "cluster_bomb" ? (
         <div className="intruder-actions">
           <button type="button" onClick={() => setLists([...lists, ""])}>
             Add list
@@ -253,18 +303,18 @@ export function IntruderView({
               <th>#</th>
               <th>Payload</th>
               <th>Pos</th>
-              <th>Status</th>
-              <th>Len</th>
-              <th>ms</th>
+              <th><button type="button" className="linkish" onClick={() => toggleSort("status")}>Status</button></th>
+              <th><button type="button" className="linkish" onClick={() => toggleSort("length")}>Len</button></th>
+              <th><button type="button" className="linkish" onClick={() => toggleSort("duration_ms")}>ms</button></th>
               <th>Grep</th>
             </tr>
           </thead>
           <tbody>
-            {job && job.results.length > 0 ? (
-              job.results.map((row) => (
+            {results.length > 0 ? (
+              results.map((row) => (
                 <tr
                   key={row.index}
-                  className={row.grep_hit ? "selected" : undefined}
+                  className={row.grep_hit ? "selected" : isAnomaly(row) ? "anomaly" : undefined}
                   onClick={() => void openResult(row.flow_id)}
                   title={row.error ?? undefined}
                 >
@@ -289,4 +339,24 @@ export function IntruderView({
       </div>
     </div>
   );
+}
+
+
+function markSelection(setter: (value: string) => void, current: string) {
+  const target = document.activeElement;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+    const picked = window.getSelection()?.toString() || "";
+    if (!picked) {
+      return;
+    }
+    setter(current.replace(picked, `§${picked}§`));
+    return;
+  }
+  const start = target.selectionStart ?? 0;
+  const end = target.selectionEnd ?? 0;
+  if (start === end) {
+    return;
+  }
+  const next = `${current.slice(0, start)}§${current.slice(start, end)}§${current.slice(end)}`;
+  setter(next);
 }
