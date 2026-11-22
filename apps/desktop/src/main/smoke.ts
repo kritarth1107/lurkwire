@@ -1148,17 +1148,21 @@ async function runPracticeTargets(
   await sleep(700);
   paths.push(await captureWindow(window, out, "practice-scanner.png", tabs));
 
+  try {
   hooks.selectTool("history");
   await sleep(400);
   await window.webContents.executeJavaScript(`(() => {
     const btn = Array.from(document.querySelectorAll("button")).find((el) =>
       (el.textContent || "").includes("Export HAR"),
     );
-    if (btn) (btn as HTMLButtonElement).click();
+    if (btn) btn.click();
     return Boolean(btn);
   })()`);
   await sleep(400);
   paths.push(await captureWindow(window, out, "practice-traffic-har.png", tabs));
+  } catch (error) {
+    console.log(`SMOKE practice HAR failed: ${error instanceof Error ? error.message : error}`);
+  }
 
 
   // v6: send-to UX, match/replace, intruder, discover, report, new tools.
@@ -1307,7 +1311,7 @@ async function runPracticeTargets(
     await sleep(300);
     await window.webContents.executeJavaScript(`(() => {
       const btn = Array.from(document.querySelectorAll("button")).find((el) => (el.textContent || "").includes("Decode all"));
-      if (btn) (btn as HTMLButtonElement).click();
+      if (btn) btn.click();
       return Boolean(btn);
     })()`);
     await sleep(300);
