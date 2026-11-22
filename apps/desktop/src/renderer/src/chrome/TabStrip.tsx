@@ -1,10 +1,11 @@
 import { AlertTriangle, ChevronDown, Globe, Plus, Volume2, VolumeX } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { AppSnapshot, TabGroup, TabInfo } from "../../../shared/types";
 import { TAB_GROUP_COLOR_HEX, groupLabel, tabStripSegments } from "../../../shared/tabGroups";
 import { projectColor } from "../../../shared/projectColor";
 import { openAnchoredPanel, openAtCursor } from "./openPanel";
 import { WindowControls } from "./WindowControls";
+import { Tooltip, formatMemory } from "./Tooltip";
 import { BrandMark } from "../Brand";
 
 export function TabStrip({ state }: { state: AppSnapshot }) {
@@ -50,26 +51,28 @@ export function TabStrip({ state }: { state: AppSnapshot }) {
           ),
         )}
       </div>
-      <button
-        type="button"
-        className="new-tab"
-        aria-label="New tab"
-        title="New tab (Ctrl+T)"
-        onClick={() => void window.lurkwire.newTab()}
-      >
-        <Plus size={16} />
-      </button>
-      <button
-        type="button"
-        className="strip-btn"
-        aria-label="List all tabs"
-        title="List all tabs"
-        onClick={(event) =>
-          openAnchoredPanel("alltabs", event.currentTarget, { width: 280, height: 360 })
-        }
-      >
-        <ChevronDown size={16} />
-      </button>
+      <Tooltip label="New tab" shortcut="Ctrl+T">
+        <button
+          type="button"
+          className="new-tab"
+          aria-label="New tab"
+          onClick={() => void window.lurkwire.newTab()}
+        >
+          <Plus size={16} />
+        </button>
+      </Tooltip>
+      <Tooltip label="List all tabs">
+        <button
+          type="button"
+          className="strip-btn"
+          aria-label="List all tabs"
+          onClick={(event) =>
+            openAnchoredPanel("alltabs", event.currentTarget, { width: 280, height: 360 })
+          }
+        >
+          <ChevronDown size={16} />
+        </button>
+      </Tooltip>
       <WindowControls />
     </div>
   );
@@ -150,6 +153,7 @@ function TabButton({
 }) {
   const [dragging, setDragging] = useState(false);
   return (
+    <TabTip tab={tab}>
     <button
       type="button"
       draggable
@@ -194,7 +198,6 @@ function TabButton({
           payload: { tabId: tab.id, pinned: tab.pinned, groupId: tab.groupId },
         });
       }}
-      title={tab.title}
     >
       <TabGlyph tab={tab} />
       <span className="tab-title">{tab.title || "New Tab"}</span>
@@ -213,6 +216,30 @@ function TabButton({
       )}
       <span className="tab-container-line" />
     </button>
+    </TabTip>
+  );
+}
+
+function TabTip({ tab, children }: { tab: TabInfo; children: ReactNode }) {
+  const [memory, setMemory] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    void window.lurkwire.getTabMemory(tab.id).then((info) => {
+      if (!cancelled) {
+        setMemory(formatMemory(info.bytes));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tab.id, tab.url]);
+  const extra = [tab.url && tab.url !== "lurkwire://newtab" ? tab.url : "", memory ? `Memory · ${memory}` : ""]
+    .filter(Boolean)
+    .join("  ·  ");
+  return (
+    <Tooltip label={tab.title || "New Tab"} extra={extra || undefined}>
+      {children}
+    </Tooltip>
   );
 }
 
