@@ -20,6 +20,7 @@ use tokio::sync::oneshot;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::intercept::{decode_edit_body, Decision};
+use crate::match_replace::{self, MatchDirection};
 use crate::store::{now_ms, NewFlow};
 use crate::types::{HeaderPair, RepeaterSendRequest};
 use crate::AppState;
@@ -218,6 +219,27 @@ async fn intercept(
         anyhow::bail!("request body too large");
     }
     let mut target = target;
+    let match_rules = state
+        .store
+        .list_match_rules(&state.default_project_id)
+        .unwrap_or_default();
+    let applied_req = match_replace::apply_request(
+        &target.scheme,
+        &target.host,
+        target.port,
+        &path,
+        &query,
+        &req_headers,
+        &req_body,
+        &match_rules,
+    )?;
+    target.scheme = applied_req.scheme;
+    target.host = applied_req.host;
+    target.port = applied_req.port;
+    path = applied_req.path;
+    query = applied_req.query;
+    req_headers = applied_req.headers;
+    req_body = Bytes::from(applied_req.body);
 
     if state.intercept.should_pause_request() {
         let url =
@@ -290,43 +312,55 @@ async fn intercept(
     let (store_tx, store_rx) = oneshot::channel();
     let client_body: BoxBody<Bytes, std::io::Error>;
 
-    if state.intercept.should_pause_response() {
+    let need_buffer = state.intercept.should_pause_response()
+        || match_replace::has_direction(&match_rules, MatchDirection::Response);
+    if need_buffer {
         let resp_bytes = upstream
             .into_body()
             .collect()
             .await
             .context("read intercepted response")?
             .to_bytes();
-        let mut resp_body = resp_bytes.to_vec();
-        match state
-            .intercept
-            .pause_response(
-                method.as_str(),
-                &upstream_uri,
-                &resp_headers,
-                &resp_body,
-                status.as_u16(),
-                &state.events,
-            )
-            .await
-        {
-            Decision::Drop => {
-                return Ok(error_response(
-                    StatusCode::FORBIDDEN,
-                    anyhow::anyhow!("response dropped by intercept"),
-                ));
-            }
-            Decision::Forward(edit) => {
-                if let Some(code) = edit.status {
-                    status = StatusCode::from_u16(code).unwrap_or(status);
-                }
-                if let Some(headers) = edit.headers.clone() {
-                    resp_headers = headers;
-                }
-                resp_body = decode_edit_body(&edit, &resp_body)?;
-            }
-        }
+        let applied_resp = match_replace::apply_response(
+            &upstream_uri,
+            &resp_headers,
+            &resp_bytes,
+            &match_rules,
+        )?;
+        resp_headers = applied_resp.headers;
+        let mut resp_body = applied_resp.body;
         set_content_length(&mut resp_headers, resp_body.len());
+        if state.intercept.should_pause_response() {
+            match state
+                .intercept
+                .pause_response(
+                    method.as_str(),
+                    &upstream_uri,
+                    &resp_headers,
+                    &resp_body,
+                    status.as_u16(),
+                    &state.events,
+                )
+                .await
+            {
+                Decision::Drop => {
+                    return Ok(error_response(
+                        StatusCode::FORBIDDEN,
+                        anyhow::anyhow!("response dropped by intercept"),
+                    ));
+                }
+                Decision::Forward(edit) => {
+                    if let Some(code) = edit.status {
+                        status = StatusCode::from_u16(code).unwrap_or(status);
+                    }
+                    if let Some(headers) = edit.headers.clone() {
+                        resp_headers = headers;
+                    }
+                    resp_body = decode_edit_body(&edit, &resp_body)?;
+                }
+            }
+            set_content_length(&mut resp_headers, resp_body.len());
+        }
         let len = resp_body.len() as u64;
         let _ = store_tx.send((resp_body.clone(), len, false));
         client_body = full_body(Bytes::from(resp_body));
@@ -494,12 +528,30 @@ pub async fn send_active(
     };
     let query = url.query().unwrap_or("").to_string();
     let method: Method = req.method.parse().context("invalid method")?;
-    let body = decode_body(&req)?;
+    let mut body = decode_body(&req)?;
     let project_id = req
         .project_id
         .clone()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| state.default_project_id.clone());
+    let match_rules = state.store.list_match_rules(&project_id).unwrap_or_default();
+    let applied_req = match_replace::apply_request(
+        &scheme,
+        &host,
+        port,
+        &path,
+        &query,
+        &req.headers,
+        &body,
+        &match_rules,
+    )?;
+    let scheme = applied_req.scheme;
+    let host = applied_req.host;
+    let port = applied_req.port;
+    let path = applied_req.path;
+    let query = applied_req.query;
+    let req_headers = applied_req.headers;
+    body = applied_req.body;
 
     let rules = state.store.list_scope_rules(&project_id)?;
     let _permit = match permit {
@@ -533,7 +585,7 @@ pub async fn send_active(
     let mut builder = Request::builder().method(method.clone()).uri(&upstream_uri);
     copy_forward_headers(
         builder.headers_mut().expect("headers"),
-        &req.headers,
+        &req_headers,
         &Target {
             scheme: scheme.clone(),
             host: host.clone(),
@@ -553,13 +605,21 @@ pub async fn send_active(
         .await
         .with_context(|| format!("repeater {upstream_uri}"))?;
     let status = upstream.status();
-    let resp_headers = headers_from(upstream.headers());
-    let resp_bytes = upstream
+    let mut resp_headers = headers_from(upstream.headers());
+    let mut resp_bytes = upstream
         .into_body()
         .collect()
         .await
         .context("read repeater response")?
         .to_bytes();
+    let applied_resp = match_replace::apply_response(
+        &upstream_uri,
+        &resp_headers,
+        &resp_bytes,
+        &match_rules,
+    )?;
+    resp_headers = applied_resp.headers;
+    resp_bytes = Bytes::from(applied_resp.body);
     let req_stored = truncate_body_vec(&body);
     let resp_stored = truncate_body(&Bytes::from(resp_bytes.clone()));
     let flow = NewFlow {
@@ -574,7 +634,7 @@ pub async fn send_active(
         query,
         http_version: "HTTP/1.1".into(),
         status: Some(status.as_u16()),
-        req_headers: req.headers,
+        req_headers,
         resp_headers,
         req_len: body.len() as u64,
         resp_len: resp_bytes.len() as u64,

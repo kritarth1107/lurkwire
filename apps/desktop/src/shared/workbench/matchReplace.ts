@@ -2,6 +2,8 @@ import type { HeaderPair } from "../types";
 
 export type MatchWhere = "url" | "headers" | "body" | "anywhere";
 
+export type MatchDirection = "request" | "response" | "both";
+
 export type MatchRule = {
   id: string;
   enabled: boolean;
@@ -10,6 +12,7 @@ export type MatchRule = {
   replace: string;
   regex: boolean;
   where: MatchWhere;
+  direction?: MatchDirection;
 };
 
 export type MatchTarget = {
@@ -60,4 +63,19 @@ export function applyMatchRules(target: MatchTarget, rules: MatchRule[]): { valu
     }
   }
   return { value: { url, headers, body: body || undefined }, applied };
+}
+
+export function rulesForDirection(rules: MatchRule[], direction: "request" | "response"): MatchRule[] {
+  return rules.filter((rule) => {
+    const dir = rule.direction ?? "both";
+    return dir === "both" || dir === direction;
+  });
+}
+
+export function applyMatchRulesFor(
+  target: MatchTarget,
+  rules: MatchRule[],
+  direction: "request" | "response",
+): { value: MatchTarget; applied: string[] } {
+  return applyMatchRules(target, rulesForDirection(rules, direction));
 }

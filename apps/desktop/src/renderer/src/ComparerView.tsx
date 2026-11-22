@@ -129,7 +129,7 @@ export function ComparerView({ handlers }: { handlers: FlowSendHandlers }) {
             </button>
           </li>
         ))}
-        {items.length === 0 ? <li className="muted">Send requests here from History, Logger, or the site map.</li> : null}
+        {items.length === 0 ? <li className="muted">Right-click a request and choose Send to Comparer, or send two flows from Traffic.</li> : null}
       </ul>
       {left && right ? (
         <div className="diff-view">

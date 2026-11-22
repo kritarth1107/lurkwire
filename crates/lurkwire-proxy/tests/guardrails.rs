@@ -162,6 +162,7 @@ async fn audit_log_is_hash_chained() {
     let running = RunningProxy::start(Config::for_test(dir.path().to_path_buf(), Vec::new()))
         .await
         .unwrap();
+    let before = running.state.store.list_audit(None, 50, 0).unwrap();
     running
         .state
         .store
@@ -173,9 +174,16 @@ async fn audit_log_is_hash_chained() {
         .append_audit("test", "two", None, serde_json::json!({"n": 2}))
         .unwrap();
     let entries = running.state.store.list_audit(None, 50, 0).unwrap();
-    assert!(entries.len() >= 2);
-    assert_eq!(entries[0].prev_hash, GENESIS_HASH);
-    assert_eq!(entries[1].prev_hash, entries[0].hash);
+    let start = before.len();
+    assert!(entries.len() >= start + 2);
+    if start == 0 {
+        assert_eq!(entries[0].prev_hash, GENESIS_HASH);
+    } else {
+        assert_eq!(entries[start].prev_hash, entries[start - 1].hash);
+    }
+    assert_eq!(entries[start].action, "one");
+    assert_eq!(entries[start + 1].action, "two");
+    assert_eq!(entries[start + 1].prev_hash, entries[start].hash);
     assert!(running.state.store.verify_audit_chain().unwrap());
     running.join().await;
 }

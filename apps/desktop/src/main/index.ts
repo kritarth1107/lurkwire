@@ -14,7 +14,7 @@ import type {
   LlmAction,
   LlmProvider,
   LlmRequest,
-  NewScopeRule,
+  NewScopeRule, NewProxyMatchRule,
   PanelOpenRequest,
   RepeaterSendRequest,
   SidebarPanel,
@@ -58,7 +58,7 @@ import type { GrpcInvokeInput } from "./workbench/grpcClient";
 import { exchangeOauthCode, startOauthBrowserFlow } from "./workbench/oauth";
 import { parseRedirectCallback } from "../shared/workbench/oauthPkce";
 import { exportNotesMarkdown, loadNotes, saveNotes } from "./notesStore";
-import { runLocalSmugglingLab } from "./smugglingLab";
+import { runLocalSmugglingLab, runScopedSmugglingProbe } from "./smugglingLab";
 import type { NotesStore } from "../shared/notes";
 
 app.setName(PRODUCT_NAME);
@@ -567,10 +567,25 @@ function handleShortcut(input: Electron.Input, win: ChromeWin, contents: Electro
     win.window.webContents.focus();
     return true;
   }
-  if (ctrl && key === "r") {
+  if (ctrl && shift && key === "r") {
     if (!killed) {
-      win.tabs.reload(shift);
+      win.tabs.reload(true);
     }
+    return true;
+  }
+  if (ctrl && key === "r") {
+    win.window.webContents.send("lurkwire:tool-hotkey", "send-repeater");
+    win.window.webContents.focus();
+    return true;
+  }
+  if (ctrl && !shift && key === "i") {
+    win.window.webContents.send("lurkwire:tool-hotkey", "send-intruder");
+    win.window.webContents.focus();
+    return true;
+  }
+  if (ctrl && (key === "/" || key === "?")) {
+    win.window.webContents.send("lurkwire:tool-hotkey", "shortcuts");
+    win.window.webContents.focus();
     return true;
   }
   if (key === "f5") {
@@ -643,7 +658,12 @@ function handleShortcut(input: Electron.Input, win: ChromeWin, contents: Electro
     win.window.setFullScreen(!win.window.isFullScreen());
     return true;
   }
-  if ((ctrl && shift && key === "i") || key === "f12") {
+  if (ctrl && shift && key === "i") {
+    win.window.webContents.send("lurkwire:tool-hotkey", "toggle-intercept");
+    win.window.webContents.focus();
+    return true;
+  }
+  if (key === "f12") {
     if (contents === win.window.webContents) {
       win.window.webContents.openDevTools({ mode: "detach" });
     } else {
@@ -940,6 +960,32 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:listScope", (_event, projectId?: string) => control.listScope(projectId));
   ipcMain.handle("lurkwire:addScope", (_event, rule: NewScopeRule) => control.addScope(rule));
   ipcMain.handle("lurkwire:deleteScope", (_event, id: string) => control.deleteScope(id));
+  ipcMain.handle("lurkwire:listMatchRules", (_event, projectId?: string) => control.listMatchRules(projectId));
+  ipcMain.handle("lurkwire:addMatchRule", (_event, rule: NewProxyMatchRule) => control.addMatchRule(rule));
+  ipcMain.handle("lurkwire:replaceMatchRules", (_event, projectId: string | undefined, rules: NewProxyMatchRule[]) =>
+    control.replaceMatchRules(projectId, rules),
+  );
+  ipcMain.handle("lurkwire:deleteMatchRule", (_event, id: string) => control.deleteMatchRule(id));
+  ipcMain.handle("lurkwire:saveTextFile", async (event, defaultName: string, content: string, filters?: { name: string; extensions: string[] }[]) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options = {
+      title: "Save report",
+      defaultPath: defaultName,
+      filters: filters ?? [
+        { name: "Markdown", extensions: ["md"] },
+        { name: "HTML", extensions: ["html"] },
+        { name: "Text", extensions: ["txt"] },
+      ],
+    };
+    const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (choice.canceled || !choice.filePath) {
+      return null;
+    }
+    const { writeFileSync } = await import("node:fs");
+    writeFileSync(choice.filePath, content, "utf8");
+    return choice.filePath;
+  });
+  ipcMain.handle("lurkwire:smugglingProbe", (_event, url: string) => runScopedSmugglingProbe(url, control));
   ipcMain.handle("lurkwire:listAudit", (_event, projectId?: string) => control.listAudit(projectId));
   ipcMain.handle("lurkwire:hasLlmKey", (_event, provider?: LlmProvider) => hasLlmKey(provider));
   ipcMain.handle("lurkwire:listLlmKeys", () => listLlmKeyProviders());

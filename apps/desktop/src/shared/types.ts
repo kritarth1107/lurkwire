@@ -21,6 +21,12 @@ export type ToolId =
   | "notes"
   | "discover"
   | "graphql"
+  | "scope"
+  | "matchreplace"
+  | "paramminer"
+  | "smuggling"
+  | "report"
+  | "websocket"
   | "settings";
 
 export type SidebarPanel =
@@ -41,7 +47,13 @@ export type SidebarPanel =
   | "autorize"
   | "notes"
   | "discover"
-  | "graphql";
+  | "graphql"
+  | "scope"
+  | "matchreplace"
+  | "paramminer"
+  | "smuggling"
+  | "report"
+  | "websocket";
 
 export type ThemePref = "system" | "light" | "dark";
 
@@ -396,7 +408,7 @@ export type KillState = {
   killed: boolean;
 };
 
-export type AttackType = "sniper" | "pitchfork" | "battering_ram";
+export type AttackType = "sniper" | "pitchfork" | "battering_ram" | "cluster_bomb";
 
 export type IntruderJobStatus = "running" | "done" | "stopped" | "error";
 
@@ -470,3 +482,28 @@ export type FindingList = {
   total: number;
 };
 
+
+
+export type ProxyMatchRule = {
+  id: string;
+  project_id: string;
+  enabled: boolean;
+  name: string;
+  match: string;
+  replace: string;
+  regex: boolean;
+  where: "url" | "headers" | "body" | "anywhere";
+  direction: "request" | "response" | "both";
+  created_at: number;
+};
+
+export type NewProxyMatchRule = {
+  project_id?: string;
+  enabled?: boolean;
+  name?: string;
+  match: string;
+  replace: string;
+  regex?: boolean;
+  where?: "url" | "headers" | "body" | "anywhere";
+  direction?: "request" | "response" | "both";
+};

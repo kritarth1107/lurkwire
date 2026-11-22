@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { INTERACTSH_SERVERS, type InteractshState } from "../../shared/interactsh";
+import { EmptyState } from "./EmptyState";
 
 export function OobView() {
   const [state, setState] = useState<InteractshState | null>(null);
@@ -40,10 +41,9 @@ export function OobView() {
 
   return (
     <div className="workbench oob-workbench">
-      <p className="muted">
-        Out-of-band collaborator using the interactsh protocol. Register a payload, place it in a
-        request or DNS lookup, and watch for callbacks here.
-      </p>
+      <EmptyState title="Collaborator / OOB">
+        Register, copy the payload, and drop it into a request, host header, or DNS lookup. The hit log on the right lists callbacks after you poll.
+      </EmptyState>
       <div className="workbench-toolbar">
         <select
           value={state?.registered ? state.server : server}
@@ -81,8 +81,8 @@ export function OobView() {
       {state?.payload ? (
         <div className="oob-payload">
           <code>{state.payload}</code>
-          <button type="button" onClick={() => void window.lurkwire.copyText(state.payload ?? "")}>
-            Copy URL
+          <button type="button" className="primary" onClick={() => void window.lurkwire.copyText(state.payload ?? "")}>
+            Copy payload
           </button>
           <button
             type="button"
@@ -114,7 +114,7 @@ export function OobView() {
             </button>
           ))}
           {state?.registered && state.interactions.length === 0 ? (
-            <p className="muted empty-pane">Waiting for callbacks…</p>
+            <p className="muted empty-pane">Hit log is empty. Copy the payload, place it in a request or DNS lookup, then poll.</p>
           ) : null}
         </div>
         {item ? (

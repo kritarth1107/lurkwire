@@ -264,7 +264,7 @@ export function NavBar({
           <Mark className="mark" />
         </button>
       </Tooltip>
-      <Tooltip label={intercept?.config.enabled ? "Intercept is on" : "Turn intercept on"} shortcut="click">
+      <Tooltip label={intercept?.config.enabled ? "Intercept is on" : "Turn intercept on"} shortcut="Ctrl+Shift+I">
         <button
           ref={interceptBtn}
           type="button"

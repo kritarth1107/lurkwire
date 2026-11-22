@@ -22,3 +22,26 @@ export function takeIntruderDraft(): FlowDetail | null {
   intruder = null;
   return value;
 }
+
+let scanner: FlowDetail | null = null;
+let paramMiner: FlowDetail | null = null;
+
+export function queueScannerDraft(flow: FlowDetail): void {
+  scanner = flow;
+}
+
+export function takeScannerDraft(): FlowDetail | null {
+  const value = scanner;
+  scanner = null;
+  return value;
+}
+
+export function queueParamMinerDraft(flow: FlowDetail): void {
+  paramMiner = flow;
+}
+
+export function takeParamMinerDraft(): FlowDetail | null {
+  const value = paramMiner;
+  paramMiner = null;
+  return value;
+}

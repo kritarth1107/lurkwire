@@ -3,6 +3,7 @@ import type { FlowSummary } from "../../shared/types";
 import { DEFAULT_WORDLIST, expandWordlist, isInterestingStatus, joinPath, parseWordlist, type DiscoverHit } from "../../shared/discover";
 import { endpointsOf, extractJsFindings, isHighConfidence, secretsOf, type ExtractedItem } from "../../shared/jsSecrets";
 import { emptyNote } from "../../shared/notes";
+import { EmptyState } from "./EmptyState";
 
 type Tab = "paths" | "js";
 
@@ -137,6 +138,11 @@ export function DiscoverView({ projectId }: { projectId: string | null }) {
           <p className="hint">
             Directory and content discovery only runs against hosts in scope, through the proxy rate limiter and kill switch.
           </p>
+          {!base && !hits.length ? (
+            <EmptyState title="No target yet">
+              Paste a base URL for an in-scope host (add it under Scope or right-click Add to scope), then start the built-in wordlist or load your own. Interesting status codes are listed as they come in.
+            </EmptyState>
+          ) : null}
           <div className="repeater-url">
             <input value={base} onChange={(event) => setBase(event.target.value)} placeholder="https://example.com" spellCheck={false} aria-label="Base URL" />
             <button type="button" className="primary" disabled={busy || !base.trim()} onClick={() => void run()}>

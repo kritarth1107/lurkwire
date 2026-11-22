@@ -20,6 +20,7 @@ pub enum AttackType {
     Sniper,
     Pitchfork,
     BatteringRam,
+    ClusterBomb,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -256,6 +257,49 @@ fn plan_cases(n: usize, bases: &[String], attack: AttackType, lists: &[Vec<Strin
                 });
                 if cases.len() >= max {
                     return cases;
+                }
+            }
+        }
+        AttackType::ClusterBomb => {
+            let lists: Vec<Vec<String>> = (0..n)
+                .map(|i| lists.get(i).cloned().unwrap_or_else(|| primary.clone()))
+                .collect();
+            if lists.iter().any(|list| list.is_empty()) {
+                return cases;
+            }
+            let mut acc: Vec<Vec<String>> = vec![Vec::new()];
+            for list in &lists {
+                let mut next = Vec::new();
+                for prefix in &acc {
+                    for word in list {
+                        let mut row = prefix.clone();
+                        row.push(word.clone());
+                        next.push(row);
+                        if next.len() >= max {
+                            break;
+                        }
+                    }
+                    if next.len() >= max {
+                        break;
+                    }
+                }
+                acc = next;
+                if acc.len() >= max {
+                    break;
+                }
+            }
+            for row in acc {
+                let mut values = HashMap::new();
+                for (i, word) in row.iter().enumerate() {
+                    values.insert(i, word.clone());
+                }
+                cases.push(Case {
+                    position: None,
+                    payload: row.join(" | "),
+                    values,
+                });
+                if cases.len() >= max {
+                    break;
                 }
             }
         }
@@ -552,5 +596,20 @@ mod tests {
         assert_eq!(cases.len(), 2);
         assert_eq!(cases[1].values.get(&0).unwrap(), "2");
         assert_eq!(cases[1].values.get(&1).unwrap(), "b");
+    }
+    #[test]
+    fn cluster_bomb_is_cartesian() {
+        let cases = plan_cases(
+            2,
+            &["A".into(), "B".into()],
+            AttackType::ClusterBomb,
+            &[vec!["1".into(), "2".into()], vec!["a".into(), "b".into()]],
+            100,
+        );
+        assert_eq!(cases.len(), 4);
+        assert_eq!(cases[0].payload, "1 | a");
+        assert_eq!(cases[3].payload, "2 | b");
+        assert_eq!(cases[3].values.get(&0).unwrap(), "2");
+        assert_eq!(cases[3].values.get(&1).unwrap(), "b");
     }
 }

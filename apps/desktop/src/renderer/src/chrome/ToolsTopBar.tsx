@@ -17,6 +17,12 @@ import {
   Radar,
   Activity,
   Wrench,
+  Filter,
+  Replace,
+  ScanSearch,
+  Split,
+  FileOutput,
+  Waypoints,
 } from "lucide-react";
 import type { AppSnapshot, SidebarPanel } from "../../../shared/types";
 import { PENTEST_TOOLS } from "../../../shared/toolsCatalog";
@@ -41,6 +47,12 @@ const ICONS: Record<SidebarPanel, typeof Activity> = {
   graphql: Share2,
   notes: StickyNote,
   ai: Wrench,
+  scope: Filter,
+  matchreplace: Replace,
+  paramminer: ScanSearch,
+  smuggling: Split,
+  report: FileOutput,
+  websocket: Waypoints,
 };
 
 export function ToolsTopBar({ state }: { state: AppSnapshot }) {

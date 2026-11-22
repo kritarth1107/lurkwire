@@ -80,6 +80,14 @@ const api = {
   listScope: (projectId?: string) => ipcRenderer.invoke("lurkwire:listScope", projectId),
   addScope: (rule: NewScopeRule) => ipcRenderer.invoke("lurkwire:addScope", rule),
   deleteScope: (id: string) => ipcRenderer.invoke("lurkwire:deleteScope", id),
+  listMatchRules: (projectId?: string) => ipcRenderer.invoke("lurkwire:listMatchRules", projectId),
+  addMatchRule: (rule: import("../shared/types").NewProxyMatchRule) => ipcRenderer.invoke("lurkwire:addMatchRule", rule),
+  replaceMatchRules: (projectId: string | undefined, rules: import("../shared/types").NewProxyMatchRule[]) =>
+    ipcRenderer.invoke("lurkwire:replaceMatchRules", projectId, rules),
+  deleteMatchRule: (id: string) => ipcRenderer.invoke("lurkwire:deleteMatchRule", id),
+  saveTextFile: (defaultName: string, content: string, filters?: { name: string; extensions: string[] }[]) =>
+    ipcRenderer.invoke("lurkwire:saveTextFile", defaultName, content, filters),
+  smugglingProbe: (url: string) => ipcRenderer.invoke("lurkwire:smugglingProbe", url),
   listAudit: (projectId?: string) => ipcRenderer.invoke("lurkwire:listAudit", projectId),
   hasLlmKey: (provider?: LlmProvider): Promise<boolean> => ipcRenderer.invoke("lurkwire:hasLlmKey", provider),
   listLlmKeys: (): Promise<LlmProvider[]> => ipcRenderer.invoke("lurkwire:listLlmKeys"),
@@ -186,6 +194,7 @@ const api = {
   onOpenFind: (callback: () => void) => listen("lurkwire:open-find", callback),
   onEscape: (callback: () => void) => listen("lurkwire:escape", callback),
   onCommandPalette: (callback: () => void) => listen("lurkwire:command-palette", callback),
+  onToolHotkey: (callback: (id: string) => void) => listen("lurkwire:tool-hotkey", callback),
   workbenchGet: (): Promise<WbWorkspace> => ipcRenderer.invoke("lurkwire:workbenchGet"),
   workbenchSave: (workspace: WbWorkspace): Promise<WbWorkspace> =>
     ipcRenderer.invoke("lurkwire:workbenchSave", workspace),
@@ -252,6 +261,7 @@ const api = {
   smugglingLabRun: (): Promise<{ kind: string; smuggled: boolean; leftover: string; detail: string; port: number; bytesSent: number }> =>
     ipcRenderer.invoke("lurkwire:smugglingLabRun"),
   activeSend: (req: RepeaterSendRequest) => ipcRenderer.invoke("lurkwire:activeSend", req),
+  revealPath: (filePath: string) => ipcRenderer.invoke("lurkwire:revealPath", filePath),
 };
 
 

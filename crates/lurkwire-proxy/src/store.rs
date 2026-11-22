@@ -7,6 +7,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 
 use crate::body_decode::{content_type, indexable_text as decode_indexable_text, preview_text as decode_preview_text};
+use crate::match_replace::{MatchDirection, MatchRule, MatchWhere};
 use crate::scope::{ScopeKind, ScopeRule};
 use crate::types::{
     url_from_parts, Finding, FindingDraft, FindingQuery, FlowDetail, FlowQuery, FlowSummary,
@@ -117,6 +118,21 @@ CREATE TABLE IF NOT EXISTS findings (
 CREATE UNIQUE INDEX IF NOT EXISTS findings_dedup
   ON findings(project_id, check_id, host, path, method);
 CREATE INDEX IF NOT EXISTS findings_project_ts ON findings(project_id, ts DESC);
+
+CREATE TABLE IF NOT EXISTS match_rules (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1,
+  name TEXT NOT NULL,
+  pattern TEXT NOT NULL,
+  replacement TEXT NOT NULL,
+  regex INTEGER NOT NULL DEFAULT 0,
+  where_part TEXT NOT NULL DEFAULT 'anywhere',
+  direction TEXT NOT NULL DEFAULT 'both',
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+CREATE INDEX IF NOT EXISTS match_rules_project ON match_rules(project_id);
 "#;
 
 const MAX_INDEX_CHARS: usize = 256 * 1024;
@@ -583,6 +599,85 @@ impl Store {
         .map_err(Into::into)
     }
 
+
+    pub fn list_match_rules(&self, project_id: &str) -> Result<Vec<MatchRule>> {
+        let conn = self.conn.lock().expect("store lock");
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, enabled, name, pattern, replacement, regex, where_part, direction, created_at
+             FROM match_rules WHERE project_id = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![project_id], row_match_rule)?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    pub fn add_match_rule(&self, rule: &MatchRule) -> Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "INSERT INTO match_rules(id, project_id, enabled, name, pattern, replacement, regex, where_part, direction, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                rule.id,
+                rule.project_id,
+                if rule.enabled { 1 } else { 0 },
+                rule.name,
+                rule.pattern,
+                rule.replace,
+                if rule.regex { 1 } else { 0 },
+                where_str(rule.where_part),
+                direction_str(rule.direction),
+                rule.created_at,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_match_rule(&self, id: &str) -> Result<bool> {
+        let conn = self.conn.lock().expect("store lock");
+        let n = conn.execute("DELETE FROM match_rules WHERE id = ?1", params![id])?;
+        Ok(n > 0)
+    }
+
+    pub fn replace_match_rules(&self, project_id: &str, rules: &[MatchRule]) -> Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        let tx = conn.unchecked_transaction()?;
+        tx.execute(
+            "DELETE FROM match_rules WHERE project_id = ?1",
+            params![project_id],
+        )?;
+        for rule in rules {
+            tx.execute(
+                "INSERT INTO match_rules(id, project_id, enabled, name, pattern, replacement, regex, where_part, direction, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    rule.id,
+                    rule.project_id,
+                    if rule.enabled { 1 } else { 0 },
+                    rule.name,
+                    rule.pattern,
+                    rule.replace,
+                    if rule.regex { 1 } else { 0 },
+                    where_str(rule.where_part),
+                    direction_str(rule.direction),
+                    rule.created_at,
+                ],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn get_match_rule(&self, id: &str) -> Result<Option<MatchRule>> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.query_row(
+            "SELECT id, project_id, enabled, name, pattern, replacement, regex, where_part, direction, created_at
+             FROM match_rules WHERE id = ?1",
+            params![id],
+            row_match_rule,
+        )
+        .optional()
+        .map_err(Into::into)
+    }
+
     pub fn append_audit(
         &self,
         actor: &str,
@@ -970,13 +1065,13 @@ fn migrate(conn: &Connection) -> Result<()> {
     match version.as_deref() {
         None => {
             conn.execute(
-                "INSERT INTO meta(key, value) VALUES ('schema_version', '3')",
+                "INSERT INTO meta(key, value) VALUES ('schema_version', '4')",
                 [],
             )?;
         }
-        Some("1") | Some("2") => {
+        Some("1") | Some("2") | Some("3") => {
             conn.execute(
-                "UPDATE meta SET value = '3' WHERE key = 'schema_version'",
+                "UPDATE meta SET value = '4' WHERE key = 'schema_version'",
                 [],
             )?;
         }
@@ -1006,9 +1101,86 @@ fn migrate(conn: &Connection) -> Result<()> {
         CREATE UNIQUE INDEX IF NOT EXISTS findings_dedup
           ON findings(project_id, check_id, host, path, method);
         CREATE INDEX IF NOT EXISTS findings_project_ts ON findings(project_id, ts DESC);
+        CREATE TABLE IF NOT EXISTS match_rules (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          name TEXT NOT NULL,
+          pattern TEXT NOT NULL,
+          replacement TEXT NOT NULL,
+          regex INTEGER NOT NULL DEFAULT 0,
+          where_part TEXT NOT NULL DEFAULT 'anywhere',
+          direction TEXT NOT NULL DEFAULT 'both',
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id)
+        );
+        CREATE INDEX IF NOT EXISTS match_rules_project ON match_rules(project_id);
         "#,
     )?;
+    match version.as_deref() {
+        Some("3") | Some("1") | Some("2") | None => {
+            conn.execute(
+                "UPDATE meta SET value = '4' WHERE key = 'schema_version'",
+                [],
+            )?;
+        }
+        _ => {}
+    }
     Ok(())
+}
+
+
+fn where_str(value: MatchWhere) -> &'static str {
+    match value {
+        MatchWhere::Url => "url",
+        MatchWhere::Headers => "headers",
+        MatchWhere::Body => "body",
+        MatchWhere::Anywhere => "anywhere",
+    }
+}
+
+fn parse_where(value: &str) -> MatchWhere {
+    match value {
+        "url" => MatchWhere::Url,
+        "headers" => MatchWhere::Headers,
+        "body" => MatchWhere::Body,
+        _ => MatchWhere::Anywhere,
+    }
+}
+
+fn direction_str(value: MatchDirection) -> &'static str {
+    match value {
+        MatchDirection::Request => "request",
+        MatchDirection::Response => "response",
+        MatchDirection::Both => "both",
+    }
+}
+
+fn parse_direction(value: &str) -> MatchDirection {
+    match value {
+        "request" => MatchDirection::Request,
+        "response" => MatchDirection::Response,
+        _ => MatchDirection::Both,
+    }
+}
+
+fn row_match_rule(row: &rusqlite::Row<'_>) -> rusqlite::Result<MatchRule> {
+    let enabled: i64 = row.get(2)?;
+    let regex: i64 = row.get(6)?;
+    let where_part: String = row.get(7)?;
+    let direction: String = row.get(8)?;
+    Ok(MatchRule {
+        id: row.get(0)?,
+        project_id: row.get(1)?,
+        enabled: enabled != 0,
+        name: row.get(3)?,
+        pattern: row.get(4)?,
+        replace: row.get(5)?,
+        regex: regex != 0,
+        where_part: parse_where(&where_part),
+        direction: parse_direction(&direction),
+        created_at: row.get(9)?,
+    })
 }
 
 pub fn genesis_hash() -> String {

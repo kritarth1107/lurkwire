@@ -18,6 +18,8 @@ import type {
   IntruderStart,
   RepeaterSendRequest,
   ScopeRule,
+  ProxyMatchRule,
+  NewProxyMatchRule,
 } from "../shared/types";
 import type { ProxyReady } from "./proxy";
 
@@ -117,6 +119,23 @@ export class ControlClient {
 
   deleteScope(id: string): Promise<void> {
     return this.json("DELETE", `/scope/${encodeURIComponent(id)}`);
+  }
+
+  listMatchRules(projectId?: string): Promise<ProxyMatchRule[]> {
+    const qs = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+    return this.json("GET", `/match-replace${qs}`);
+  }
+
+  addMatchRule(rule: NewProxyMatchRule): Promise<ProxyMatchRule> {
+    return this.json("POST", "/match-replace", rule);
+  }
+
+  replaceMatchRules(projectId: string | undefined, rules: NewProxyMatchRule[]): Promise<ProxyMatchRule[]> {
+    return this.json("PUT", "/match-replace", { project_id: projectId, rules });
+  }
+
+  deleteMatchRule(id: string): Promise<void> {
+    return this.json("DELETE", `/match-replace/${encodeURIComponent(id)}`);
   }
 
   listAudit(projectId?: string): Promise<AuditEntry[]> {

@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import type { AppSnapshot, FlowDetail, SidebarPanel } from "../../../shared/types";
 import { pentestTool } from "../../../shared/toolsCatalog";
 import { takeIntruderDraft, takeRepeaterDraft } from "../workbench/pendingSend";
+import { queueScannerDraft } from "../workbench/pendingSend";
+import { addComparerItem } from "../workbench";
+import { setSelectedFlow } from "../flowSelection";
 import { TrafficMonitor } from "../TrafficMonitor";
 import { RepeaterView } from "../RepeaterView";
 import { IntruderView } from "../IntruderView";
@@ -19,6 +22,12 @@ import { NotesView } from "../NotesView";
 import { DiscoverView } from "../DiscoverView";
 import { GraphqlView } from "../GraphqlView";
 import type { FlowSendHandlers } from "../FlowActions";
+import { ScopeView } from "../ScopeView";
+import { MatchReplaceView } from "../MatchReplaceView";
+import { ParamMinerView } from "../ParamMinerView";
+import { SmugglingView } from "../SmugglingView";
+import { ReportView } from "../ReportView";
+import { WebSocketView } from "../WebSocketView";
 
 export function ToolWorkspace({
   state,
@@ -52,15 +61,24 @@ export function ToolWorkspace({
 
   const handlers: FlowSendHandlers = {
     onSendToRepeater: (flow) => {
+      setSelectedFlow(flow);
       onRepeaterDraft(flow);
       void window.lurkwire.setTool("repeater");
     },
     onSendToIntruder: (flow) => {
+      setSelectedFlow(flow);
       onIntruderDraft(flow);
       void window.lurkwire.setTool("intruder");
     },
-    onSendToComparer: () => {
+    onSendToComparer: (flow) => {
+      addComparerItem(flow.id, `${flow.method} ${flow.host}${flow.path}`);
+      setSelectedFlow(flow);
       void window.lurkwire.setTool("comparer");
+    },
+    onSendToScanner: (flow) => {
+      setSelectedFlow(flow);
+      queueScannerDraft(flow);
+      void window.lurkwire.setTool("scanner");
     },
   };
 
@@ -118,6 +136,18 @@ export function ToolWorkspace({
           <LoggerView projectId={state.currentProjectId} handlers={handlers} />
         ) : panel === "scanner" ? (
           <ScannerView projectId={state.currentProjectId} onSendToRepeater={handlers.onSendToRepeater} />
+        ) : panel === "scope" ? (
+          <ScopeView projectId={state.currentProjectId} />
+        ) : panel === "matchreplace" ? (
+          <MatchReplaceView projectId={state.currentProjectId} />
+        ) : panel === "paramminer" ? (
+          <ParamMinerView projectId={state.currentProjectId} />
+        ) : panel === "smuggling" ? (
+          <SmugglingView projectId={state.currentProjectId} />
+        ) : panel === "report" ? (
+          <ReportView projectId={state.currentProjectId} />
+        ) : panel === "websocket" ? (
+          <WebSocketView />
         ) : panel === "oob" ? (
           <OobView />
         ) : panel === "autorize" ? (

@@ -14,6 +14,9 @@ import { cookiesToNetscape, cookieHeaderList } from "../../../shared/workbench";
 import type { WbCookie } from "../../../shared/workbench";
 import { isJwtLike } from "../../../shared/jwt";
 import { queueJwt } from "../pendingJwt";
+import { SEND_TO_ACTIONS } from "../../../shared/sendTo";
+import { resolveCurrentFlow } from "../flowSelection";
+import { addToScope, copyCurlOf, copyUrlOf, dispatchSend } from "../sendActions";
 
 export function PanelView({ ctx, state }: { ctx: PanelContext; state: AppSnapshot }) {
   const kind = ctx.kind;
@@ -981,6 +984,11 @@ function GroupMenu({ payload, state }: { payload: Record<string, unknown>; state
   );
 }
 
+async function flowForPage(payload: Record<string, unknown>) {
+  const pageURL = String(payload.pageURL ?? payload.linkURL ?? "");
+  return resolveCurrentFlow(pageURL || null);
+}
+
 function PageMenu({ payload }: { payload: Record<string, unknown> }) {
   const link = String(payload.linkURL ?? "");
   const selection = String(payload.selectionText ?? "");
@@ -990,6 +998,17 @@ function PageMenu({ payload }: { payload: Record<string, unknown> }) {
   const canPaste = Boolean(payload.canPaste);
   const canCut = Boolean(payload.canCut);
   const isEditable = Boolean(payload.isEditable);
+  const runSend = (target: (typeof SEND_TO_ACTIONS)[number]["id"]) => {
+    void flowForPage(payload)
+      .then((flow) => {
+        if (!flow) {
+          window.alert("No captured request for this page yet. Browse through the Lurkwire proxy first.");
+          return;
+        }
+        return dispatchSend(flow, target);
+      })
+      .finally(() => close());
+  };
   return (
     <>
       <button type="button" className="menu-item" disabled={!canGoBack} onClick={() => { void window.lurkwire.back(); close(); }}>
@@ -1000,6 +1019,40 @@ function PageMenu({ payload }: { payload: Record<string, unknown> }) {
       </button>
       <button type="button" className="menu-item" onClick={() => { void window.lurkwire.reload(); close(); }}>
         Reload
+      </button>
+      <div className="menu-sep" />
+      {SEND_TO_ACTIONS.filter((item) => item.id !== "workbench").map((item) => (
+        <button key={item.id} type="button" className="menu-item" onClick={() => runSend(item.id)}>
+          <span className="menu-label-text">{item.label}</span>
+          {item.shortcut ? <kbd>{item.shortcut}</kbd> : null}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="menu-item"
+        onClick={() => {
+          void flowForPage(payload).then((flow) => (flow ? copyCurlOf(flow) : window.alert("No captured request yet."))).finally(() => close());
+        }}
+      >
+        Copy as curl
+      </button>
+      <button
+        type="button"
+        className="menu-item"
+        onClick={() => {
+          void flowForPage(payload).then((flow) => (flow ? copyUrlOf(flow) : window.alert("No captured request yet."))).finally(() => close());
+        }}
+      >
+        Copy URL
+      </button>
+      <button
+        type="button"
+        className="menu-item"
+        onClick={() => {
+          void flowForPage(payload).then((flow) => (flow ? addToScope(flow) : window.alert("No captured request yet."))).finally(() => close());
+        }}
+      >
+        Add to scope
       </button>
       <div className="menu-sep" />
       {link ? (
@@ -1059,7 +1112,7 @@ function PageMenu({ payload }: { payload: Record<string, unknown> }) {
         Inspect
       </button>
       <button type="button" className="menu-item" onClick={() => { void window.lurkwire.openDevTools("detach"); close(); }}>
-        Developer tools <kbd>Ctrl+Shift+I</kbd>
+        Developer tools <kbd>F12</kbd>
       </button>
     </>
   );

@@ -14,7 +14,7 @@ export const DEFAULT_WORDLIST = [
   "admin.php", "admin.html", "login.php", "index.php", "index.json",
   "trace", "server", "info", "version", "readme", "README.md", "LICENSE", "CHANGELOG",
   "cpanel", "webmail", "owa", "exchange", "jenkins", "solr", "kibana", "grafana",
-  "phpmyadmin", "adminer", "elmah", "trace.axd",
+  "phpmyadmin", "adminer", "elmah", "trace.axd", "cgi-bin", "xmlrpc.php", "web.config", ".htaccess", "rest", "api/users", "api/products", "backup.tar", "login.jsp", "search.jsp",
 ].map((item) => item.replace(/^\//, ""));
 
 export function joinPath(baseUrl: string, word: string, extension = ""): string {

@@ -10,8 +10,10 @@ import {
   verifyJwt,
 } from "../../shared/jwt";
 import { takeJwt } from "./pendingJwt";
+import { decodeAll, identifyHash } from "../../shared/decodeAll";
+import { EmptyState } from "./EmptyState";
 
-type Tab = "jwt" | "encode" | "recipe";
+type Tab = "jwt" | "encode" | "recipe" | "magic";
 
 export function DecodeView() {
   const [tab, setTab] = useState<Tab>("jwt");
@@ -27,8 +29,11 @@ export function DecodeView() {
         <button type="button" className={tab === "recipe" ? "chip active" : "chip"} onClick={() => setTab("recipe")}>
           Recipe
         </button>
+        <button type="button" className={tab === "magic" ? "chip active" : "chip"} onClick={() => setTab("magic")}>
+          Decode all
+        </button>
       </div>
-      {tab === "jwt" ? <JwtPane /> : tab === "encode" ? <EncodePane /> : <RecipePane />}
+      {tab === "jwt" ? <JwtPane /> : tab === "encode" ? <EncodePane /> : tab === "recipe" ? <RecipePane /> : <MagicPane />}
     </div>
   );
 }
@@ -290,4 +295,97 @@ function RecipePane() {
       </label>
     </div>
   );
+}
+
+
+function MagicPane() {
+  const [input, setInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [gzipOut, setGzipOut] = useState<string | null>(null);
+  const steps = input.trim() ? decodeAll(input) : [];
+  const hashes = input.trim() ? identifyHash(input) : [];
+
+  async function runGzip(direction: "compress" | "decompress") {
+    setError(null);
+    try {
+      setGzipOut(await gzipCodec(input, direction));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  return (
+    <div className="decode-pane">
+      <EmptyState title="Decoder++">
+        Paste a token, hash, or stacked encoding. Decode all peels URL, HTML, Base64, hex, and JWT. The identifier guesses hash algorithms from length and prefixes. Gzip uses the browser CompressionStream.
+      </EmptyState>
+      <label className="intruder-label">
+        Input
+        <textarea className="mono" rows={6} value={input} onChange={(event) => setInput(event.target.value)} spellCheck={false} />
+      </label>
+      <div className="intruder-actions">
+        <button type="button" onClick={() => void runGzip("compress")}>Gzip compress</button>
+        <button type="button" onClick={() => void runGzip("decompress")}>Gzip decompress</button>
+      </div>
+      {error ? <p className="error">{error}</p> : null}
+      {hashes.length ? (
+        <p>
+          Hash identifier: {hashes.map((item) => `${item.alg} (${item.reason})`).join(" · ")}
+        </p>
+      ) : (
+        <p className="muted">No hash guess yet.</p>
+      )}
+      {steps.length ? (
+        <ol className="decode-steps">
+          {steps.map((step, index) => (
+            <li key={`${step.codec}-${index}`}>
+              <strong>{step.codec}</strong>
+              {step.note ? <span className="muted"> {step.note}</span> : null}
+              <pre className="mono evidence">{step.output}</pre>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="muted">No automatic decode steps.</p>
+      )}
+      {gzipOut ? <pre className="mono evidence">{gzipOut}</pre> : null}
+    </div>
+  );
+}
+
+async function gzipCodec(input: string, direction: "compress" | "decompress"): Promise<string> {
+  const streamName = direction === "compress" ? "CompressionStream" : "DecompressionStream";
+  const Ctor = (globalThis as unknown as Record<string, unknown>)[streamName] as
+    | (new (format: string) => GenericTransformStream)
+    | undefined;
+  if (!Ctor) {
+    throw new Error("Gzip is not available in this runtime.");
+  }
+  const bytes = direction === "decompress" ? hexOrBase64OrRaw(input) : new TextEncoder().encode(input);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  const stream = new Blob([copy]).stream().pipeThrough(new Ctor("gzip"));
+  const out = new Uint8Array(await new Response(stream).arrayBuffer());
+  return direction === "compress" ? toHex(out) : new TextDecoder().decode(out);
+}
+
+function hexOrBase64OrRaw(input: string): Uint8Array {
+  const trimmed = input.trim();
+  if (/^[0-9a-fA-F]+$/.test(trimmed) && trimmed.length % 2 === 0) {
+    const out = new Uint8Array(trimmed.length / 2);
+    for (let i = 0; i < out.length; i += 1) {
+      out[i] = Number.parseInt(trimmed.slice(i * 2, i * 2 + 2), 16);
+    }
+    return out;
+  }
+  try {
+    const bin = atob(trimmed);
+    return Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+  } catch {
+    return new TextEncoder().encode(input);
+  }
+}
+
+function toHex(bytes: Uint8Array): string {
+  return [...bytes].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
