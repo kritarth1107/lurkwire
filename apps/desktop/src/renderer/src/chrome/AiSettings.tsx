@@ -9,9 +9,13 @@ import {
 } from "../../../shared/llm";
 
 const TASKS: { id: LlmAction; label: string }[] = [
-  { id: "explain", label: "Explain" },
+  { id: "explain", label: "Explain request/response" },
   { id: "suggest", label: "Suggest tests" },
+  { id: "payloads", label: "Generate payloads" },
+  { id: "summarize", label: "Summarize traffic" },
+  { id: "poc", label: "Draft a PoC" },
   { id: "draft", label: "Draft into Repeater" },
+  { id: "chat", label: "Chat" },
 ];
 
 export function AiSettings({ state }: { state: AppSnapshot }) {

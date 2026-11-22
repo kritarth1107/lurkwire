@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AppSnapshot, SidebarPanel, ToolId } from "../../../shared/types";
+import type { AppSnapshot, ToolId } from "../../../shared/types";
+import { PENTEST_TOOLS } from "../../../shared/toolsCatalog";
 
 export type PaletteCommand = {
   id: string;
@@ -16,25 +17,6 @@ function tools(): PaletteCommand[] {
   const go = (url: string) => () => {
     void window.lurkwire.navigate(url);
   };
-  const panels: Array<[SidebarPanel, string]> = [
-    ["history", "History"],
-    ["sitemap", "Site map"],
-    ["intercept", "Intercept"],
-    ["repeater", "Repeater"],
-    ["intruder", "Intruder"],
-    ["decode", "Decoder"],
-    ["recon", "Recon"],
-    ["scanner", "Scanner"],
-    ["comparer", "Comparer"],
-    ["logger", "Logger"],
-    ["sequencer", "Sequencer"],
-    ["oob", "OOB collaborator"],
-    ["autorize", "Autorize"],
-    ["discover", "Discover"],
-    ["graphql", "GraphQL explorer"],
-    ["notes", "Notes and CVSS"],
-    ["ai", "AI assistant"],
-  ];
   const pages: PaletteCommand[] = [
     { id: "workbench", title: "API Workbench", hint: "lurkwire://workbench", keywords: "postman insomnia api http", run: go("lurkwire://workbench") },
     { id: "newtab", title: "New tab page", hint: "lurkwire://newtab", run: go("lurkwire://newtab") },
@@ -45,13 +27,16 @@ function tools(): PaletteCommand[] {
     { id: "extensions", title: "Extensions", hint: "lurkwire://extensions", run: go("lurkwire://extensions") },
     { id: "about", title: "About Lurkwire", hint: "lurkwire://about", run: go("lurkwire://about") },
   ];
-  const toolCommands: PaletteCommand[] = panels.map(([id, title]) => ({
-    id: `tool-${id}`,
-    title,
-    hint: "Sidebar",
-    keywords: `tool panel ${id}`,
-    run: open(id),
-  }));
+  const toolCommands: PaletteCommand[] = [
+    ...PENTEST_TOOLS.map((tool) => ({
+      id: `tool-${tool.id}`,
+      title: tool.label,
+      hint: "Top bar",
+      keywords: `tool panel ${tool.id} ${tool.keywords}`,
+      run: open(tool.id),
+    })),
+    { id: "tool-ai", title: "AI assistant", hint: "Right sidebar", keywords: "llm chat assistant", run: open("ai") },
+  ];
   const actions: PaletteCommand[] = [
     { id: "new-tab", title: "New tab", hint: "Ctrl+T", run: () => void window.lurkwire.newTab() },
     { id: "new-window", title: "New window", hint: "Ctrl+N", run: () => void window.lurkwire.newWindow() },
