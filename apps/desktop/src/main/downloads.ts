@@ -72,6 +72,28 @@ export class DownloadManager {
     }
   }
 
+  pause(id: string): void {
+    const tracked = this.tracked.get(id);
+    if (tracked && !tracked.item.isPaused()) {
+      tracked.item.pause();
+      this.onChange();
+    }
+  }
+
+  resume(id: string): void {
+    const tracked = this.tracked.get(id);
+    if (tracked && tracked.item.isPaused() && tracked.item.canResume()) {
+      tracked.item.resume();
+      this.onChange();
+    }
+  }
+
+  clearCompleted(): DownloadInfo[] {
+    this.finished = this.finished.filter((item) => item.state === "progressing");
+    this.onChange();
+    return this.list();
+  }
+
   private toInfo(id: string): DownloadInfo | null {
     const tracked = this.tracked.get(id);
     if (tracked) {
@@ -84,6 +106,7 @@ export class DownloadManager {
         receivedBytes: tracked.item.getReceivedBytes(),
         totalBytes: tracked.item.getTotalBytes(),
         path: tracked.item.getSavePath() || null,
+        paused: tracked.item.isPaused(),
       };
     }
     return this.finished.find((item) => item.id === id) ?? null;

@@ -6,6 +6,7 @@ import { ExtensionsPage } from "./ExtensionsPage";
 import { NewTabPage } from "./NewTabPage";
 import { WorkbenchPage } from "../workbench/WorkbenchPage";
 import { BrandMark, BrandWordmark } from "../Brand";
+import { groupVisitsByDay, visitInRange, type VisitRangeId } from "../../../shared/visitFilter";
 
 export function InternalPage({ state, url }: { state: AppSnapshot; url: string }) {
   const page = parseInternalPage(url);
@@ -37,6 +38,9 @@ export function InternalPage({ state, url }: { state: AppSnapshot; url: string }
   if (page === "workbench") {
     return <WorkbenchPage url={url} />;
   }
+  if (page === "reader") {
+    return <ReaderPage />;
+  }
   return <AboutPage state={state} />;
 }
 
@@ -51,31 +55,61 @@ function PageShell({ page, children }: { page: PageId; children: React.ReactNode
 
 function DownloadsPage() {
   const [items, setItems] = useState<DownloadInfo[]>([]);
+  const [query, setQuery] = useState("");
   useEffect(() => {
     void window.lurkwire.listDownloads().then(setItems);
     return window.lurkwire.onDownloads(setItems);
   }, []);
+  const filtered = items.filter((item) => {
+    const q = query.trim().toLowerCase();
+    if (!q) {
+      return true;
+    }
+    return `${item.filename} ${item.url}`.toLowerCase().includes(q);
+  });
   return (
     <PageShell page="downloads">
       <p className="lead">Files you downloaded in this window.</p>
-      {items.length === 0 ? (
+      <div className="internal-toolbar">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search downloads" />
+        <button type="button" onClick={() => void window.lurkwire.clearCompletedDownloads()}>
+          Clear completed
+        </button>
+      </div>
+      {filtered.length === 0 ? (
         <p className="internal-empty">No downloads yet.</p>
       ) : (
         <div className="internal-list">
-          {items.map((item) => {
+          {filtered.map((item) => {
             const pct = item.totalBytes > 0 ? Math.round((item.receivedBytes / item.totalBytes) * 100) : 0;
             return (
               <div key={item.id} className="internal-row">
                 <div className="grow">
                   <div className="title">{item.filename}</div>
                   <div className="meta">
-                    {item.state === "progressing" ? `${pct}%` : item.state} · {item.url}
+                    {item.state === "progressing" ? (item.paused ? "paused" : `${pct}%`) : item.state} · {item.url}
                   </div>
+                  {item.state === "progressing" ? (
+                    <div className="download-bar">
+                      <span style={{ width: `${pct}%` }} />
+                    </div>
+                  ) : null}
                 </div>
                 {item.state === "progressing" ? (
-                  <button type="button" onClick={() => void window.lurkwire.cancelDownload(item.id)}>
-                    Cancel
-                  </button>
+                  <>
+                    {item.paused ? (
+                      <button type="button" onClick={() => void window.lurkwire.resumeDownload(item.id)}>
+                        Resume
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => void window.lurkwire.pauseDownload(item.id)}>
+                        Pause
+                      </button>
+                    )}
+                    <button type="button" onClick={() => void window.lurkwire.cancelDownload(item.id)}>
+                      Cancel
+                    </button>
+                  </>
                 ) : item.path ? (
                   <>
                     <button type="button" onClick={() => void window.lurkwire.showDownload(item.id)}>
@@ -97,6 +131,7 @@ function DownloadsPage() {
 
 function VisitHistoryPage() {
   const [query, setQuery] = useState("");
+  const [range, setRange] = useState<VisitRangeId>("all");
   const [items, setItems] = useState<Visit[]>([]);
   const load = (q?: string) => {
     void window.lurkwire.listVisits(q).then(setItems);
@@ -104,6 +139,8 @@ function VisitHistoryPage() {
   useEffect(() => {
     load(query);
   }, [query]);
+  const visible = items.filter((item) => visitInRange(item.visitedAt, range));
+  const groups = groupVisitsByDay(visible);
   return (
     <PageShell page="history">
       <p className="lead">Pages you have visited in Lurkwire.</p>
@@ -113,6 +150,13 @@ function VisitHistoryPage() {
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search history"
         />
+        <select value={range} onChange={(event) => setRange(event.target.value as VisitRangeId)} aria-label="Date range">
+          <option value="all">All time</option>
+          <option value="today">Today</option>
+          <option value="yesterday">Yesterday</option>
+          <option value="7d">Last 7 days</option>
+          <option value="30d">Last 30 days</option>
+        </select>
         <button
           type="button"
           onClick={() => {
@@ -122,36 +166,79 @@ function VisitHistoryPage() {
           Clear browsing data
         </button>
       </div>
-      {items.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="internal-empty">No browsing history yet.</p>
       ) : (
         <div className="internal-list">
-          {items.map((item) => (
-            <div key={item.id} className="internal-row">
-              <button
-                type="button"
-                className="internal-row grow"
-                style={{ padding: 0 }}
-                onClick={() => void window.lurkwire.navigate(item.url)}
-              >
-                <div className="grow">
-                  <div className="title">{item.title || item.url}</div>
-                  <div className="meta">
-                    {new Date(item.visitedAt).toLocaleString()} · {item.url}
-                    {item.count > 1 ? ` · ${item.count} visits` : ""}
-                  </div>
+          {groups.map((group) => (
+            <div key={group.label}>
+              <h2 className="history-day">{group.label}</h2>
+              {group.items.map((item) => (
+                <div key={item.id} className="internal-row">
+                  <button
+                    type="button"
+                    className="internal-row grow"
+                    style={{ padding: 0 }}
+                    onClick={() => void window.lurkwire.navigate(item.url)}
+                  >
+                    <div className="grow">
+                      <div className="title">{item.title || item.url}</div>
+                      <div className="meta">
+                        {new Date(item.visitedAt).toLocaleString()} · {item.url}
+                        {item.count > 1 ? ` · ${item.count} visits` : ""}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void window.lurkwire.deleteVisit(item.id).then(setItems)}
+                  >
+                    Remove
+                  </button>
                 </div>
-              </button>
-              <button
-                type="button"
-                onClick={() => void window.lurkwire.deleteVisit(item.id).then(setItems)}
-              >
-                Remove
-              </button>
+              ))}
             </div>
           ))}
         </div>
       )}
+    </PageShell>
+  );
+}
+
+function ReaderPage() {
+  const [article, setArticle] = useState<{ title: string; byline: string; text: string; url?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    void window.lurkwire
+      .getReaderArticle()
+      .then((next) => {
+        if (!next) {
+          setError("Open a page and choose Reader view from the command palette or the Find menu.");
+          return;
+        }
+        setArticle(next);
+      })
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
+  }, []);
+  return (
+    <PageShell page="reader">
+      {error ? <p className="internal-empty">{error}</p> : null}
+      {article ? (
+        <article className="reader-article">
+          <h2>{article.title}</h2>
+          {article.byline ? <p className="reader-byline">{article.byline}</p> : null}
+          {article.url ? (
+            <p className="meta">
+              <button type="button" onClick={() => void window.lurkwire.navigate(article.url!)}>
+                Back to original
+              </button>
+            </p>
+          ) : null}
+          {article.text.split("\n").map((para, index) => (
+            para.trim() ? <p key={index}>{para.trim()}</p> : null
+          ))}
+        </article>
+      ) : null}
     </PageShell>
   );
 }

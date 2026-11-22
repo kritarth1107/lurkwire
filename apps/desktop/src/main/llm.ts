@@ -13,6 +13,7 @@ import type {
 import { modelsUrl, ollamaTagsUrl, parseModelList, providerInfo, resolveLlmForTask } from "../shared/llm";
 import { isLocalLlmUrl, redactForCloud } from "../shared/redact";
 import { appendAiMemory, memoryPromptFor } from "./aiMemory";
+import { formatFindingForLlm } from "../shared/llmFinding";
 
 function keysDir(): string {
   return join(app.getPath("userData"), "llm-keys");
@@ -90,9 +91,15 @@ function loadLlmKey(provider: LlmProvider): string | null {
   return null;
 }
 
-function systemPrompt(action: LlmRequest["action"]): string {
+function systemPrompt(action: LlmRequest["action"], hasFinding = false): string {
   const common =
     "You are a senior application-security assistant inside Lurkwire. Be concise and practical. Never claim you sent a request yourself; a human always sends.";
+  if (hasFinding && action === "explain") {
+    return `${common} Explain the scanner finding: why it fired, how an attacker could abuse it in an authorized lab, and a concrete remediation. Quote only the evidence provided.`;
+  }
+  if (hasFinding && (action === "suggest" || action === "poc")) {
+    return `${common} Suggest a concrete, in-scope exploit or confirmation test for this finding, then a remediation. Do not invent evidence that is not in the prompt.`;
+  }
   if (action === "explain") {
     return `${common} Explain the HTTP exchange: what it does, interesting headers, and likely security implications.`;
   }
@@ -130,6 +137,7 @@ export async function completeLlm(
   settingsInput: LlmSettings,
   request: LlmRequest,
   getFlow: (id: string) => Promise<FlowDetail>,
+  getFinding?: (id: string) => Promise<import("../shared/types").Finding>,
 ): Promise<LlmResult> {
   const settings = resolveLlmForTask(settingsInput, request.action);
   if (settings.localOnly && !isLocalLlmUrl(settings.baseUrl)) {
@@ -142,12 +150,23 @@ export async function completeLlm(
   }
 
   let raw = request.raw?.trim() ?? "";
-  if (request.flowId) {
+  if (request.findingId && getFinding) {
+    const finding = await getFinding(request.findingId);
+    raw = [raw, formatFindingForLlm(finding)].filter(Boolean).join("\n\n");
+    if (finding.flow_id) {
+      try {
+        const flow = await getFlow(finding.flow_id);
+        raw = `${raw}\n\n${formatFlow(flow)}`;
+      } catch {
+        // Evidence text on the finding is enough when the flow is gone.
+      }
+    }
+  } else if (request.flowId) {
     const flow = await getFlow(request.flowId);
     raw = [raw, formatFlow(flow)].filter(Boolean).join("\n\n");
   }
   if (!raw) {
-    throw new Error("Select a history item or paste a request first.");
+    throw new Error("Select a history item, a finding, or paste a request first.");
   }
 
   const shouldRedact = !isLocalLlmUrl(settings.baseUrl);
@@ -160,7 +179,7 @@ export async function completeLlm(
     memoryRedacted = preparedMem.redacted;
     user = `${preparedMem.text}\n\n---\n\n${prepared.text}`;
   }
-  const text = await invokeProvider(settings, key, systemPrompt(request.action), user);
+  const text = await invokeProvider(settings, key, systemPrompt(request.action, Boolean(request.findingId)), user);
   appendAiMemory({
     action: request.action,
     input: prepared.text,

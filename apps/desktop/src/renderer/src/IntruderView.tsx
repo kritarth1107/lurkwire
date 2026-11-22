@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AttackType, FlowDetail, IntruderJob } from "../../shared/types";
 import { INTRUDER_PRESETS, presetPayloads } from "../../shared/intruderPresets";
+import { deletePayloadList, listPayloadLists, savePayloadList, type SavedPayloadList } from "../../shared/intruderLists";
 import { parseHeaderBlock, statusClass } from "../../shared/http";
 import { EmptyState } from "./EmptyState";
 
@@ -34,6 +35,7 @@ export function IntruderView({
   const running = job?.status === "running";
   const [sortKey, setSortKey] = useState<"index" | "status" | "length" | "duration_ms">("index");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [savedLists, setSavedLists] = useState<SavedPayloadList[]>(() => listPayloadLists());
 
   useEffect(() => {
     if (!draft) {
@@ -234,6 +236,55 @@ export function IntruderView({
               </option>
             ))}
           </select>
+          <select
+            defaultValue=""
+            aria-label="Saved payload list"
+            onChange={(event) => {
+              const id = event.target.value;
+              event.currentTarget.value = "";
+              if (!id) {
+                return;
+              }
+              const saved = savedLists.find((item) => item.id === id);
+              if (!saved) {
+                return;
+              }
+              const next = [...lists];
+              next[index] = saved.text;
+              setLists(next);
+            }}
+          >
+            <option value="">Saved lists…</option>
+            {savedLists.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => {
+              const name = window.prompt("Name this payload list", `List ${index + 1}`);
+              if (!name) {
+                return;
+              }
+              setSavedLists(savePayloadList(name, list));
+            }}
+          >
+            Save list
+          </button>
+          {savedLists[0] ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (window.confirm(`Delete saved list “${savedLists[0].name}”?`)) {
+                  setSavedLists(deletePayloadList(savedLists[0].id));
+                }
+              }}
+            >
+              Delete list
+            </button>
+          ) : null}
           <label className="file-btn">
             Load from file
             <input

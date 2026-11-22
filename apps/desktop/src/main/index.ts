@@ -41,12 +41,14 @@ import {
   type InternalPage,
 } from "../shared/url";
 import { collectSiteInfo } from "./siteInfo";
-import { cookieTargetUrl, type SiteCookie, type SiteStorage } from "../shared/siteInfo";
+import { cookieTargetUrl, type SessionCookieInput, type SiteCookie, type SiteStorage } from "../shared/siteInfo";
 import { attachExtensions, listExtensions, pickUnpackedExtension, removeUnpackedExtension } from "./extensions";
 import { clearAiMemory, listAiMemory } from "./aiMemory";
 import { deregisterInteractsh, interactshState, loadInteractsh, newPayload, pollInteractsh, registerInteractsh, stopPolling } from "./interactsh";
 import { clearVisits, deleteVisit, importVisits, listVisits } from "./visits";
 import { searchSuggest } from "./searchSuggest";
+import { articleFromHtml, getReaderArticle } from "./reader";
+import type { ScannerOptions } from "../shared/types";
 import { getMaskedWorkspace, importFlowToWorkbench, putWorkspace, runWorkbenchCollection, sendFromWorkbench, transportFrom } from "./workbench";
 import type { RunnerSpec, WbOAuth2, WbRequest, WbWorkspace } from "../shared/workbench";
 import { pickBinary } from "./workbench/binary";
@@ -567,6 +569,11 @@ function handleShortcut(input: Electron.Input, win: ChromeWin, contents: Electro
     win.window.webContents.focus();
     return true;
   }
+  if (ctrl && shift && key === "a") {
+    win.window.webContents.send("lurkwire:open-all-tabs");
+    win.window.webContents.focus();
+    return true;
+  }
   if (ctrl && shift && key === "r") {
     if (!killed) {
       win.tabs.reload(true);
@@ -1014,7 +1021,7 @@ function registerIpc(): void {
   );
   ipcMain.handle("lurkwire:llmComplete", async (_event, request: LlmRequest) => {
     const prefs = loadPrefs();
-    return completeLlm(prefs.llm, request, (id) => control.getFlow(id));
+    return completeLlm(prefs.llm, request, (id) => control.getFlow(id), (id) => control.getFinding(id));
   });
   ipcMain.handle("lurkwire:startIntruder", (_event, req: IntruderStart) =>
     control.startIntruder({
@@ -1128,6 +1135,44 @@ function registerIpc(): void {
       await ses.cookies.remove(cookieTargetUrl(mapped), cookie.name);
     }
   });
+  ipcMain.handle("lurkwire:setSessionCookies", async (event, cookies: SessionCookieInput[]) => {
+    const win = ctx(event);
+    const partition = win?.privateMode
+      ? `temp:incognito-${win.id}`
+      : currentProjectId
+        ? `persist:proj-${currentProjectId}`
+        : undefined;
+    const ses = partition ? electronSession.fromPartition(partition) : electronSession.defaultSession;
+    for (const cookie of cookies) {
+      await ses.cookies.set({
+        url: cookie.url,
+        name: cookie.name,
+        value: cookie.value,
+        path: cookie.path || "/",
+        domain: cookie.domain,
+        secure: Boolean(cookie.secure),
+        httpOnly: Boolean(cookie.httpOnly),
+        expirationDate: cookie.expirationDate,
+      });
+    }
+  });
+  ipcMain.handle("lurkwire:getScannerSettings", () => control.getScannerSettings());
+  ipcMain.handle("lurkwire:setScannerSettings", (_event, opts: ScannerOptions) => control.setScannerSettings(opts));
+  ipcMain.handle("lurkwire:openReaderMode", async (event) => {
+    const win = ctx(event);
+    const tab = win?.tabs.active();
+    const wc = tab?.view.webContents;
+    if (!wc || wc.isDestroyed()) {
+      throw new Error("No page is open to simplify.");
+    }
+    const url = wc.getURL();
+    const title = wc.getTitle();
+    const html = await wc.executeJavaScript("document.documentElement.outerHTML");
+    const article = articleFromHtml(String(html ?? ""), url, title);
+    await openInternalPage("reader", win);
+    return article;
+  });
+  ipcMain.handle("lurkwire:getReaderArticle", () => getReaderArticle());
   ipcMain.handle("lurkwire:listVisits", (_event, query?: string) => listVisits(query));
   ipcMain.handle("lurkwire:searchSuggest", async (_event, query: string) => searchSuggest(query));
   ipcMain.handle("lurkwire:getTabMemory", async (event, tabId: string) => {
@@ -1203,6 +1248,9 @@ function registerIpc(): void {
   ipcMain.handle("lurkwire:cancelDownload", (_event, id: string) => downloads.cancel(id));
   ipcMain.handle("lurkwire:showDownload", (_event, id: string) => downloads.show(id));
   ipcMain.handle("lurkwire:openDownload", (_event, id: string) => downloads.open(id));
+  ipcMain.handle("lurkwire:pauseDownload", (_event, id: string) => downloads.pause(id));
+  ipcMain.handle("lurkwire:resumeDownload", (_event, id: string) => downloads.resume(id));
+  ipcMain.handle("lurkwire:clearCompletedDownloads", () => downloads.clearCompleted());
   ipcMain.handle("lurkwire:findInPage", (event, text: string, options?: Electron.FindInPageOptions) => {
     ctx(event)?.tabs.find(text, options);
   });

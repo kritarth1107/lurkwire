@@ -65,3 +65,14 @@ export type SiteInfo = {
   permissions: SitePermission[];
   intel: SiteIntel;
 };
+
+export type SessionCookieInput = {
+  url: string;
+  name: string;
+  value: string;
+  path?: string;
+  domain?: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  expirationDate?: number;
+};

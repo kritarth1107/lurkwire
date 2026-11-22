@@ -75,7 +75,13 @@ export { TAB_GROUP_COLORS, TAB_GROUP_COLOR_HEX } from "./tabGroups";
 export type LlmRequest = {
   action: LlmAction;
   flowId?: string;
+  findingId?: string;
   raw?: string;
+};
+
+export type ScannerOptions = {
+  enabled: boolean;
+  in_scope_only: boolean;
 };
 
 export type LlmResult = {
@@ -305,6 +311,7 @@ export type DownloadInfo = {
   receivedBytes: number;
   totalBytes: number;
   path: string | null;
+  paused?: boolean;
 };
 
 export type FindResult = {

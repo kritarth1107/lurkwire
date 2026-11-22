@@ -4,6 +4,9 @@ import { formatTime, statusClass } from "../../shared/http";
 import { HttpViewer } from "./HttpViewer";
 import { EmptyState } from "./EmptyState";
 import { takeScannerDraft } from "./workbench/pendingSend";
+import { queueLlm } from "./workbench/pendingLlm";
+import { localFindingBrief } from "../../shared/llmFinding";
+import type { ScannerOptions } from "../../shared/types";
 
 const SEVERITIES: { id: "" | Severity; label: string }[] = [
   { id: "", label: "All" },
@@ -32,6 +35,12 @@ export function ScannerView({
   const [evidence, setEvidence] = useState<FlowDetail | null>(null);
   const [queue, setQueue] = useState<FlowDetail[]>([]);
   const [retesting, setRetesting] = useState(false);
+  const [scanOpts, setScanOpts] = useState<ScannerOptions>({ enabled: true, in_scope_only: false });
+  const [brief, setBrief] = useState<string | null>(null);
+
+  useEffect(() => {
+    setBrief(null);
+  }, [selected?.id]);
 
   useEffect(() => {
     const draft = takeScannerDraft();
@@ -39,6 +48,7 @@ export function ScannerView({
       setQueue((current) => [draft, ...current.filter((item) => item.id !== draft.id)]);
       void retest(draft);
     }
+    void window.lurkwire.getScannerSettings().then(setScanOpts).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -153,6 +163,30 @@ export function ScannerView({
           ))}
         </select>
         <span className="muted">{total} finding{total === 1 ? "" : "s"}</span>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={scanOpts.enabled}
+            onChange={(event) => {
+              const next = { ...scanOpts, enabled: event.target.checked };
+              setScanOpts(next);
+              void window.lurkwire.setScannerSettings(next).then(setScanOpts);
+            }}
+          />
+          Passive scan
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={scanOpts.in_scope_only}
+            onChange={(event) => {
+              const next = { ...scanOpts, in_scope_only: event.target.checked };
+              setScanOpts(next);
+              void window.lurkwire.setScannerSettings(next).then(setScanOpts);
+            }}
+          />
+          In-scope only
+        </label>
       </div>
       {queue.length ? (
         <p className="muted">
@@ -214,7 +248,28 @@ export function ScannerView({
               </p>
               <p>{selected.detail}</p>
               {selected.evidence ? <pre className="mono evidence">{selected.evidence}</pre> : null}
+              {brief ? <pre className="mono evidence finding-brief">{brief}</pre> : null}
               <div className="intruder-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBrief(localFindingBrief(selected, "explain"));
+                    queueLlm({ action: "explain", findingId: selected.id, title: selected.title });
+                    void window.lurkwire.setPrefs({ llmSidebarOpen: true });
+                  }}
+                >
+                  Explain finding
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBrief(localFindingBrief(selected, "suggest"));
+                    queueLlm({ action: "suggest", findingId: selected.id, title: selected.title });
+                    void window.lurkwire.setPrefs({ llmSidebarOpen: true });
+                  }}
+                >
+                  Suggest exploit
+                </button>
                 <button type="button" className="primary" disabled={!selected.flow_id} onClick={() => void openFlow(selected)}>
                   Send evidence to Repeater
                 </button>

@@ -7,6 +7,7 @@ export const INTERNAL_PAGES = [
   "workbench",
   "newtab",
   "about",
+  "reader",
 ] as const;
 
 export type InternalPage = (typeof INTERNAL_PAGES)[number];
@@ -20,6 +21,7 @@ export const INTERNAL_TITLES: Record<InternalPage, string> = {
   workbench: "Workbench",
   newtab: "New Tab",
   about: "About Lurkwire",
+  reader: "Reader",
 };
 
 const ALIASES: Record<string, InternalPage> = {
@@ -36,6 +38,7 @@ const ALIASES: Record<string, InternalPage> = {
   "about:workbench": "workbench",
   "about:about": "about",
   "about:lurkwire": "about",
+  "about:reader": "reader",
   "chrome://settings": "settings",
   "chrome://downloads": "downloads",
   "chrome://history": "history",

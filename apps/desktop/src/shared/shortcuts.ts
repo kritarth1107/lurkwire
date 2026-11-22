@@ -18,6 +18,8 @@ export const SHORTCUTS: ShortcutEntry[] = [
   { id: "new-tab", keys: "Ctrl+T", action: "New tab", group: "Browser" },
   { id: "find", keys: "Ctrl+F", action: "Find in page", group: "Browser" },
   { id: "history", keys: "Ctrl+H", action: "Browsing history", group: "Browser" },
+  { id: "downloads", keys: "Ctrl+J", action: "Downloads", group: "Browser" },
+  { id: "all-tabs", keys: "Ctrl+Shift+A", action: "Search and manage tabs", group: "Browser" },
 ];
 
 export function shortcutFor(id: string): string | undefined {

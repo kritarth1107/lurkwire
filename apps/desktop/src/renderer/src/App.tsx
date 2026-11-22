@@ -41,6 +41,20 @@ export function App() {
   useEffect(() => {
     const offFocus = window.lurkwire.onFocusUrl(() => urlRef.current?.focus());
     const offFind = window.lurkwire.onOpenFind(() => setFindOpen(true));
+    const openAllTabs = () => {
+      void window.lurkwire.openPanel({
+        kind: "alltabs",
+        x: 48,
+        y: 48,
+        width: 420,
+        height: 440,
+        anchor: { left: 48, top: 36, right: 80, bottom: 56 },
+        align: "start",
+        placement: "below",
+      });
+    };
+    const offAllTabs = window.lurkwire.onOpenAllTabs(openAllTabs);
+    window.addEventListener("lurkwire:open-all-tabs", openAllTabs);
     const offPalette = window.lurkwire.onCommandPalette(() => setPaletteOpen((open) => !open));
     const offHotkey = window.lurkwire.onToolHotkey((id) => {
       void handleToolHotkey(id as ToolHotkey, () => setShortcutsOpen(true));
@@ -56,6 +70,8 @@ export function App() {
     return () => {
       offFocus();
       offFind();
+      offAllTabs();
+      window.removeEventListener("lurkwire:open-all-tabs", openAllTabs);
       offPalette();
       offHotkey();
       offEsc();

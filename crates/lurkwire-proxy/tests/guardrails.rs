@@ -162,7 +162,7 @@ async fn audit_log_is_hash_chained() {
     let running = RunningProxy::start(Config::for_test(dir.path().to_path_buf(), Vec::new()))
         .await
         .unwrap();
-    let before = running.state.store.list_audit(None, 50, 0).unwrap();
+    let _ = running.state.store.list_audit(None, 50, 0).unwrap();
     running
         .state
         .store
@@ -173,17 +173,23 @@ async fn audit_log_is_hash_chained() {
         .store
         .append_audit("test", "two", None, serde_json::json!({"n": 2}))
         .unwrap();
-    let entries = running.state.store.list_audit(None, 50, 0).unwrap();
-    let start = before.len();
-    assert!(entries.len() >= start + 2);
-    if start == 0 {
-        assert_eq!(entries[0].prev_hash, GENESIS_HASH);
-    } else {
-        assert_eq!(entries[start].prev_hash, entries[start - 1].hash);
+    let entries = running.state.store.list_audit(None, 10_000, 0).unwrap();
+    let one = entries
+        .iter()
+        .find(|e| e.actor == "test" && e.action == "one")
+        .expect("audit entry one");
+    let two = entries
+        .iter()
+        .find(|e| e.actor == "test" && e.action == "two")
+        .expect("audit entry two");
+    assert_eq!(two.prev_hash, one.hash);
+    if let Some(idx) = entries.iter().position(|e| e.id == one.id) {
+        if idx == 0 {
+            assert_eq!(one.prev_hash, GENESIS_HASH);
+        } else {
+            assert_eq!(one.prev_hash, entries[idx - 1].hash);
+        }
     }
-    assert_eq!(entries[start].action, "one");
-    assert_eq!(entries[start + 1].action, "two");
-    assert_eq!(entries[start + 1].prev_hash, entries[start].hash);
     assert!(running.state.store.verify_audit_chain().unwrap());
     running.join().await;
 }

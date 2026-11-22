@@ -1,4 +1,4 @@
-import { app, BrowserWindow, type NativeImage } from "electron";
+import { app, BrowserWindow, session as electronSession, type NativeImage } from "electron";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +16,7 @@ import { analyzeCors, CORS_PROBE_ORIGIN, corsProbeHeaders } from "../shared/cors
 import { invokeGrpc } from "./workbench/grpcClient";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
+import { setupDvwa, DVWA_SQLI_OR, DVWA_SQLI_UNION, DVWA_XSS } from "./dvwaLab";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -1028,28 +1029,86 @@ async function runPracticeTargets(
     }, timeoutMs);
   };
 
+  let dvwaCookieHeader = "";
+
+  const pageJs = async (code: string) => {
+    const wc = tabs.active()?.view.webContents;
+    if (!wc || wc.isDestroyed()) {
+      throw new Error("no tab page");
+    }
+    return wc.executeJavaScript(code);
+  };
+
   const juice = "http://127.0.0.1:3000/";
   try {
   if (await reachable(juice, 4000)) {
     await showAndGo(juice, "Juice Shop tab", "127.0.0.1:3000");
+    await sleep(1200);
+    const dismissed = await pageJs(`(() => {
+      const labels = (el) => ((el.getAttribute("aria-label") || "") + " " + (el.textContent || "")).trim();
+      const clickers = Array.from(document.querySelectorAll("button, a, .close-dialog, [aria-label]"));
+      let count = 0;
+      for (const el of clickers) {
+        if (/me want it|dismiss|close this dialog|force close|welcome|skip|got it|accept all|allow all|ok, i agree/i.test(labels(el))) {
+          el.click();
+          count += 1;
+        }
+      }
+      document.querySelectorAll(".close-dialog, button.close-dialog, .cc-dismiss, #cookieconsent .cc-btn").forEach((el) => {
+        el.click();
+        count += 1;
+      });
+      return { count, text: document.body.innerText.slice(0, 180) };
+    })()`);
+    console.log("SMOKE Juice modal dismiss", JSON.stringify(dismissed));
     await sleep(800);
     hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "history", toolsDockHeight: 360, llmSidebarOpen: false });
     hooks.selectTool("history");
-    await sleep(500);
+    await sleep(400);
     paths.push(await captureWindow(window, out, "practice-juice-shop.png", tabs));
-    await showAndGo("http://127.0.0.1:3000/rest/products/search?q='))", "Juice Shop SQLi search tab", "products/search");
-    await waitFor("Juice Shop SQLi search", async () => {
-      const list = await hooks.control.listFlows({
-        project_id: projectId ?? undefined,
-        host: "127.0.0.1",
-        q: "search",
-        limit: 20,
+
+    await showAndGo("http://127.0.0.1:3000/#/login", "Juice Shop login", "127.0.0.1:3000");
+    await sleep(900);
+    await pageJs(`(() => {
+      const labels = (el) => ((el.getAttribute("aria-label") || "") + " " + (el.textContent || "")).trim();
+      Array.from(document.querySelectorAll("button, .close-dialog")).forEach((el) => {
+        if (/me want it|close this dialog|dismiss/i.test(labels(el))) el.click();
       });
-      return list.items[0] ?? null;
-    }, 15_000);
-    await showAndGo("http://127.0.0.1:3000/#/search?q=%3Cscript%3Ealert(1)%3C/script%3E", "Juice Shop XSS search", "127.0.0.1:3000");
-    await sleep(700);
-    paths.push(await captureWindow(window, out, "practice-juice-xss-search.png", tabs));
+      const email = document.querySelector('#email, input[name="email"], input[type="email"]');
+      const pass = document.querySelector('#password, input[name="password"], input[type="password"]');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      if (email) { setter?.call(email, "' or 1=1--"); email.dispatchEvent(new Event("input", { bubbles: true })); }
+      if (pass) { setter?.call(pass, "a"); pass.dispatchEvent(new Event("input", { bubbles: true })); }
+      const btn = Array.from(document.querySelectorAll("button, input[type=submit]")).find((el) =>
+        /log in|login/i.test(el.textContent || el.getAttribute("aria-label") || el.getAttribute("value") || ""),
+      );
+      if (btn) btn.click();
+      return Boolean(email && pass && btn);
+    })()`);
+    const loggedIn = await waitFor("Juice login admin challenge", async () => {
+      const state = await pageJs(`(() => {
+        const buttons = Array.from(document.querySelectorAll("button, a, span"));
+        const account = buttons.find((el) => /account|show\/hide account menu/i.test(el.getAttribute("aria-label") || el.textContent || ""));
+        if (account && !/logout/i.test(document.body.innerText || "")) account.click();
+        const text = document.body.innerText || "";
+        return {
+          text: text.slice(0, 500),
+          hasAdminChallenge: /Login Admin|administrator's user account/i.test(text),
+          hasLogout: /\blogout\b/i.test(text),
+          href: location.href,
+        };
+      })()`);
+      return state.hasAdminChallenge || state.hasLogout ? state : null;
+    }, 10_000).catch(async () => pageJs(`(() => {
+      const text = document.body.innerText || "";
+      return { text: text.slice(0, 500), hasAdminChallenge: false, hasLogout: /\blogout\b/i.test(text), href: location.href };
+    })()`));
+    console.log("SMOKE Juice login bypass", JSON.stringify(loggedIn));
+    hooks.setPrefs({ sidebarOpen: false, llmSidebarOpen: false });
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "practice-juice-login-bypass.png", tabs));
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "history" });
+    await sleep(200);
     console.log("SMOKE practice Juice Shop ok");
   } else {
     console.log("SMOKE practice Juice Shop skipped (not reachable on :3000)");
@@ -1072,41 +1131,67 @@ async function runPracticeTargets(
   }
 
   try {
-  const dvwa = "http://127.0.0.1:4280/";
-  if (await reachable(dvwa, 4000)) {
-    await showAndGo(dvwa, "DVWA tab", "127.0.0.1:4280");
+  const dvwaBase = "http://127.0.0.1:4280/";
+  if (await reachable(dvwaBase, 4000)) {
+    const setup = await setupDvwa(dvwaBase.replace(/\/$/, ""));
+    console.log(`SMOKE DVWA setup ok=${setup.ok} cookies=${setup.cookies.map((c) => c.name).join(",")} error=${setup.error ?? ""}`);
+    if (setup.ok && projectId) {
+      const ses = electronSession.fromPartition(`persist:proj-${projectId}`);
+      dvwaCookieHeader = setup.sessionHeader;
+      for (const cookie of setup.cookies) {
+        await ses.cookies.set({
+          url: dvwaBase,
+          name: cookie.name,
+          value: cookie.value,
+          path: cookie.path || "/",
+        });
+      }
+    } else if (!setup.ok) {
+      console.log("SMOKE DVWA headless setup failed; pages may redirect to login");
+    }
+    try {
+      await hooks.control.addScope({ project_id: projectId ?? undefined, kind: "include", host: "127.0.0.1", enabled: true });
+    } catch {
+      /* already present */
+    }
+
+    await showAndGo(DVWA_SQLI_OR, "DVWA SQLi OR", "vulnerabilities/sqli");
     await sleep(800);
-    const setupClicked = await window.webContents.executeJavaScript(`(() => {
-      const btn = Array.from(document.querySelectorAll("input[type=submit], button, input[type=button]")).find((el) =>
-        /create|reset database/i.test((el.getAttribute("value") || el.textContent || "")),
-      );
-      if (btn) btn.click();
-      return Boolean(btn);
-    })()`);
-    console.log(`SMOKE DVWA setup click=${setupClicked}`);
-    await sleep(2000);
-    paths.push(await captureWindow(window, out, "practice-dvwa-setup.png", tabs));
-    // Try the SQL injection page after a best-effort login (admin / password).
-    await showAndGo("http://127.0.0.1:4280/login.php", "DVWA login", "127.0.0.1:4280");
-    await sleep(500);
-    await window.webContents.executeJavaScript(`(() => {
-      const user = document.querySelector('input[name="username"], input[type="text"]');
-      const pass = document.querySelector('input[name="password"], input[type="password"]');
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
-      if (user) { setter?.call(user, "admin"); user.dispatchEvent(new Event("input", { bubbles: true })); }
-      if (pass) { setter?.call(pass, "password"); pass.dispatchEvent(new Event("input", { bubbles: true })); }
-      const btn = document.querySelector('input[type="submit"], button[type="submit"]');
-      if (btn) btn.click();
-      return Boolean(user && pass);
-    })()`);
-    await sleep(1500);
-    await showAndGo(
-      "http://127.0.0.1:4280/vulnerabilities/sqli/?id=1%27+OR+%271%27%3D%271&Submit=Submit",
-      "DVWA SQLi",
-      "127.0.0.1:4280",
-    );
-    await sleep(800);
+    const orBody = await pageJs(`({ href: location.href, text: document.body.innerText.slice(0, 1200) })`);
+    console.log("SMOKE DVWA SQLi OR", JSON.stringify(orBody).slice(0, 500));
     paths.push(await captureWindow(window, out, "practice-dvwa-sqli.png", tabs));
+
+    await showAndGo(DVWA_SQLI_UNION, "DVWA SQLi hashes", "vulnerabilities/sqli");
+    await sleep(800);
+    const dump = await pageJs(`({ href: location.href, text: document.body.innerText, hasHash: /5f4dcc3b5aa765d61d8327deb882cf99/.test(document.body.innerText) })`);
+    console.log(`SMOKE DVWA SQLi hashes hasHash=${(dump as { hasHash?: boolean }).hasHash}`);
+    paths.push(await captureWindow(window, out, "practice-dvwa-sqli-hashes.png", tabs));
+
+    // Use a script payload that paints a visible banner instead of alert(),
+    // which would block the tab and stall smoke on a native dialog.
+    const xssUrl =
+      "http://127.0.0.1:4280/vulnerabilities/xss_r/?name=" +
+      encodeURIComponent(
+        "<script>document.documentElement.prepend(Object.assign(document.createElement('div'),{id:'lurkwire-xss-proof',textContent:'XSS executed',style:'position:fixed;z-index:2147483647;top:0;left:0;right:0;padding:16px;background:#b00020;color:#fff;font:600 18px/1.4 sans-serif'}))</script>",
+      );
+    void DVWA_XSS;
+    await showAndGo(xssUrl, "DVWA XSS", "vulnerabilities/xss_r");
+    await sleep(1000);
+    let xss: unknown = null;
+    try {
+      xss = await Promise.race([
+        pageJs(`({
+          href: location.href,
+          proof: Boolean(document.getElementById("lurkwire-xss-proof")),
+          text: document.body.innerText.slice(0, 400),
+        })`),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("xss pageJs timeout")), 4000)),
+      ]);
+    } catch (error) {
+      console.log(`SMOKE DVWA XSS pageJs: ${error instanceof Error ? error.message : error}`);
+    }
+    console.log("SMOKE DVWA XSS", JSON.stringify(xss));
+    paths.push(await captureWindow(window, out, "practice-dvwa-xss.png", tabs));
     console.log("SMOKE practice DVWA attempted");
   } else {
     console.log("SMOKE practice DVWA skipped (not reachable on :4280)");
@@ -1115,20 +1200,10 @@ async function runPracticeTargets(
     console.log(`SMOKE practice DVWA failed: ${error instanceof Error ? error.message : error}`);
   }
 
-  try {
-  if (await reachable("http://testphp.vulnweb.com/", 5000)) {
-    await showAndGo("http://testphp.vulnweb.com/listproducts.php?cat=1%20OR%201%3D1", "testphp tab", "testphp.vulnweb.com");
-    await sleep(700);
-    paths.push(await captureWindow(window, out, "practice-testphp-sqli.png", tabs));
-    console.log("SMOKE practice testphp.vulnweb ok");
-  } else {
-    console.log("SMOKE practice testphp.vulnweb skipped (not reachable)");
-  }
-  } catch (error) {
-    console.log(`SMOKE practice testphp.vulnweb failed: ${error instanceof Error ? error.message : error}`);
-  }
+  console.log("SMOKE practice testphp.vulnweb skipped by request");
 
-  // Intercept + edit request and response against httpbin (authorized sandbox).
+
+    // Intercept + edit request and response against httpbin (authorized sandbox).
   try {
   if (!(await reachable("https://httpbin.org/get", 8000))) {
     console.log("SMOKE practice intercept skipped (httpbin not reachable)");
@@ -1356,6 +1431,68 @@ async function runPracticeTargets(
     paths.push(await captureWindow(window, out, "practice-intruder.png", tabs));
     console.log(`SMOKE practice intruder status=${finished.status} results=${finished.results.length}`);
 
+    if (dvwaCookieHeader) {
+      hooks.selectTool("intruder");
+      hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "intruder", toolsDockHeight: 480, llmSidebarOpen: false });
+      await sleep(500);
+      const bruteUrl = "http://127.0.0.1:4280/vulnerabilities/brute/?username=admin&password=§pass§&Login=Login";
+      const headerBlock = `Cookie: ${dvwaCookieHeader}\n`;
+      const payloadBlock = "password\nwrong\nadmin";
+      const filled = await window.webContents.executeJavaScript(`(() => {
+        const setNative = (el, value) => {
+          const proto = el instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+          setter?.call(el, value);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        };
+        const method = document.querySelector('input[aria-label="Method"]');
+        const url = document.querySelector('input[aria-label="URL template"]');
+        const areas = Array.from(document.querySelectorAll("textarea"));
+        const headers = areas.find((el) => (el.closest("label")?.textContent || "").includes("Headers"));
+        const payloads = areas.find((el) => /payloads/i.test(el.closest("label")?.textContent || ""));
+        if (method) setNative(method, "GET");
+        if (url) setNative(url, ${JSON.stringify(bruteUrl)});
+        if (headers) setNative(headers, ${JSON.stringify(headerBlock)});
+        if (payloads) setNative(payloads, ${JSON.stringify(payloadBlock)});
+        const start = Array.from(document.querySelectorAll("button")).find((el) => /Start attack/i.test(el.textContent || ""));
+        if (start) start.click();
+        return { method: Boolean(method), url: Boolean(url), headers: Boolean(headers), payloads: Boolean(payloads), start: Boolean(start) };
+      })()`);
+      console.log("SMOKE DVWA intruder fill", JSON.stringify(filled));
+      hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "intruder", toolsDockHeight: 720, llmSidebarOpen: false });
+      const rows = await waitFor("DVWA intruder results table", async () => {
+        const info = await window.webContents.executeJavaScript(`(() => {
+          const table = document.querySelector(".intruder-results");
+          const payloads = Array.from(document.querySelectorAll(".intruder-results tbody td.path")).map((el) => el.textContent || "");
+          const empty = Boolean(document.querySelector(".intruder-results td.empty"));
+          return { payloads, empty, rows: document.querySelectorAll(".intruder-results tbody tr").length };
+        })()`);
+        return !info.empty && info.payloads.length >= 2 ? info : null;
+      }, 30_000);
+      await window.webContents.executeJavaScript(`(() => {
+        document.querySelectorAll(".intruder textarea").forEach((el) => {
+          el.setAttribute("rows", "2");
+          el.style.height = "40px";
+          el.style.minHeight = "40px";
+          el.style.flex = "none";
+        });
+        const results = document.querySelector(".intruder-results");
+        if (results) {
+          results.style.flex = "none";
+          results.style.minHeight = "240px";
+          results.style.maxHeight = "none";
+        }
+        document.querySelector(".intruder")?.scrollTo({ top: 10_000, behavior: "instant" });
+        results?.scrollIntoView({ block: "start", inline: "nearest" });
+        document.querySelector(".tool-workspace-body")?.scrollTo({ top: 10_000, behavior: "instant" });
+        return Boolean(results);
+      })()`);
+      await sleep(400);
+      paths.push(await captureWindow(window, out, "practice-intruder-dvwa-results.png", tabs));
+      console.log(`SMOKE practice DVWA intruder results table ${JSON.stringify(rows)}`);
+    }
+
     if (await reachable("http://127.0.0.1:3000/", 3000)) {
       hooks.selectTool("discover");
       await sleep(300);
@@ -1394,6 +1531,33 @@ async function runPracticeTargets(
     hooks.selectTool("scanner");
     await sleep(500);
     paths.push(await captureWindow(window, out, "practice-scanner-grouped.png", tabs));
+
+    try {
+    const interesting = await waitFor("SQLi or XSS finding", async () => {
+      const list = await hooks.control.listFindings({ project_id: project, limit: 250 });
+      return list.items.find((item) => item.check_id === "sqli-data" || item.check_id === "reflected-xss" || item.check_id === "sql-error") ?? null;
+    }, 20_000);
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "scanner", toolsDockHeight: 500, llmSidebarOpen: false });
+    await window.webContents.executeJavaScript(`(() => {
+      const rows = Array.from(document.querySelectorAll(".scanner tr, table tr, .finding-row, tbody tr"));
+      const hit = rows.find((el) => /sql injection|cross-site scripting|reflected|sqli/i.test(el.textContent || ""));
+      if (hit) hit.click();
+      return { clicked: Boolean(hit), text: (hit?.textContent || "").slice(0, 160) };
+    })()`);
+    await sleep(600);
+    paths.push(await captureWindow(window, out, "practice-scanner-finding-evidence.png", tabs));
+    const explained = await window.webContents.executeJavaScript(`(() => {
+      const btn = Array.from(document.querySelectorAll("button")).find((el) => /Explain finding/i.test(el.textContent || ""));
+      if (btn) btn.click();
+      return Boolean(btn);
+    })()`);
+    console.log(`SMOKE scanner finding ${interesting.check_id} explainClick=${explained}`);
+    await sleep(800);
+    paths.push(await captureWindow(window, out, "practice-scanner-explain-finding.png", tabs));
+
+    } catch (error) {
+      console.log(`SMOKE scanner finding evidence failed: ${error instanceof Error ? error.message : error}`);
+    }
 
     const findings = await hooks.control.listFindings({ project_id: project, limit: 200 });
     const notes = emptyNotes();
@@ -1443,6 +1607,38 @@ async function runPracticeTargets(
     await sleep(400);
     paths.push(await captureWindow(window, out, "practice-shortcuts.png", tabs));
     window.webContents.send("lurkwire:escape");
+
+    hooks.selectTool("history");
+    hooks.setPrefs({ sidebarOpen: true, sidebarPanel: "history", toolsDockHeight: 420, llmSidebarOpen: false });
+    await sleep(400);
+    await window.webContents.executeJavaScript(`(() => {
+      const input = document.querySelector('.history-workbench input[type="search"], .workbench-toolbar input[type="search"]');
+      if (!input) return false;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "status:2xx host:127.0.0.1");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    })()`);
+    await sleep(800);
+    paths.push(await captureWindow(window, out, "feature-filter-dsl.png", tabs));
+
+    window.webContents.send("lurkwire:open-all-tabs");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "feature-tab-search.png", tabs));
+    window.webContents.send("lurkwire:escape");
+    await sleep(200);
+
+    window.webContents.send("lurkwire:open-find");
+    await sleep(300);
+    paths.push(await captureWindow(window, out, "feature-find-in-page.png", tabs));
+    window.webContents.send("lurkwire:escape");
+
+    hooks.selectTool("repeater");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "feature-repeater-collections.png", tabs));
+    hooks.selectTool("comparer");
+    await sleep(400);
+    paths.push(await captureWindow(window, out, "feature-comparer-diff.png", tabs));
     console.log("SMOKE practice v6 tools ok");
   } catch (error) {
     console.log(`SMOKE practice v6 tools failed: ${error instanceof Error ? error.message : error}`);

@@ -17,8 +17,10 @@ pub struct ScanInput<'a> {
 
 pub fn scan_flow(flow: &ScanInput<'_>) -> Vec<FindingDraft> {
     let mut out = Vec::new();
-    let req_text = text_preview(&flow.req_body);
-    let resp_text = text_preview(&flow.resp_body);
+    let req_decoded = crate::body_decode::decode_http_body(flow.req_body, flow.req_headers);
+    let resp_decoded = crate::body_decode::decode_http_body(flow.resp_body, flow.resp_headers);
+    let req_text = text_preview(&req_decoded);
+    let resp_text = text_preview(&resp_decoded);
     let mime = header(&flow.resp_headers, "content-type").unwrap_or("");
 
     missing_security_headers(flow, &mut out);
@@ -27,6 +29,7 @@ pub fn scan_flow(flow: &ScanInput<'_>) -> Vec<FindingDraft> {
     info_banners(flow, &mut out);
     body_issues(flow, &resp_text, mime, &mut out);
     request_issues(flow, &req_text, &mut out);
+    injection_signals(flow, &req_text, &resp_text, mime, &mut out);
     request_smuggling_hints(flow, &mut out);
     cache_poisoning_hints(flow, &resp_text, &mut out);
     out
@@ -399,6 +402,144 @@ fn request_issues(flow: &ScanInput<'_>, req_text: &str, out: &mut Vec<FindingDra
     }
 }
 
+
+fn injection_signals(
+    flow: &ScanInput<'_>,
+    req_text: &str,
+    resp_text: &str,
+    mime: &str,
+    out: &mut Vec<FindingDraft>,
+) {
+    let query = urlencoding_decode(&flow.query);
+    let blob = format!("{} {}", query, req_text);
+    let blob_l = blob.to_ascii_lowercase();
+    let looks_inject = blob_l.contains("union select")
+        || blob_l.contains("' or '")
+        || blob_l.contains("' or 1=1")
+        || blob_l.contains(" or 1=1--")
+        || blob_l.contains("\" or \"")
+        || blob_l.contains("' or '1'='1");
+
+    if looks_inject {
+        let hashes = md5_hashes(resp_text);
+        let first_names = resp_text.to_ascii_lowercase().matches("first name:").count();
+        if hashes.len() >= 2 || first_names >= 2 {
+            let evidence = if hashes.len() >= 2 {
+                format!("hashes: {}", hashes.join(", "))
+            } else {
+                clip(resp_text, 400)
+            };
+            push(
+                out,
+                flow,
+                "sqli-data",
+                "SQL injection appears to have returned data",
+                Severity::High,
+                "The request used SQL injection syntax and the response looks like a database dump (repeated rows or password hashes).",
+                &evidence,
+            );
+        }
+    }
+
+    let htmlish = mime.is_empty()
+        || mime.to_ascii_lowercase().contains("html")
+        || mime.to_ascii_lowercase().contains("xml")
+        || resp_text.to_ascii_lowercase().contains("<html")
+        || resp_text.to_ascii_lowercase().contains("<pre");
+    if htmlish {
+        for value in query_values(&query) {
+            if !looks_like_xss_payload(&value) {
+                continue;
+            }
+            if resp_text.contains(&value) {
+                push(
+                    out,
+                    flow,
+                    "reflected-xss",
+                    "Reflected cross-site scripting",
+                    Severity::High,
+                    "A request parameter that looks like a script or HTML payload was reflected in the response without encoding.",
+                    &clip(&value, 200),
+                );
+                break;
+            }
+        }
+    }
+}
+
+fn query_values(query: &str) -> Vec<String> {
+    let raw = query.trim_start_matches('?');
+    let mut values = Vec::new();
+    for part in raw.split('&') {
+        if part.is_empty() {
+            continue;
+        }
+        let value = part.split_once('=').map(|(_, v)| v).unwrap_or(part);
+        let decoded = urlencoding_decode(value);
+        if !decoded.is_empty() {
+            values.push(decoded);
+        }
+    }
+    values
+}
+
+fn looks_like_xss_payload(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    lower.contains("<script")
+        || lower.contains("javascript:")
+        || lower.contains("onerror=")
+        || lower.contains("onload=")
+        || lower.contains("<img")
+        || lower.contains("<svg")
+        || lower.contains("<iframe")
+}
+
+fn md5_hashes(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i + 32 <= bytes.len() {
+        if bytes[i..i + 32].iter().all(|b| b.is_ascii_hexdigit()) {
+            let prev_ok = i == 0 || !bytes[i - 1].is_ascii_hexdigit();
+            let next_ok = i + 32 == bytes.len() || !bytes[i + 32].is_ascii_hexdigit();
+            if prev_ok && next_ok {
+                let hash = text[i..i + 32].to_ascii_lowercase();
+                if !out.contains(&hash) {
+                    out.push(hash);
+                }
+                i += 32;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
+fn urlencoding_decode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let bytes = input.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'+' {
+            out.push(' ');
+            i += 1;
+            continue;
+        }
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = &input[i + 1..i + 3];
+            if let Ok(v) = u8::from_str_radix(hex, 16) {
+                out.push(v as char);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
+}
+
 fn looks_like_stack(body: &str) -> bool {
     let lower = body.to_ascii_lowercase();
     lower.contains("traceback (most recent call last)")
@@ -565,6 +706,19 @@ mod tests {
         }
     }
 
+    fn input_on<'a>(
+        path: &'a str,
+        query: &'a str,
+        status: u16,
+        headers: &'a [HeaderPair],
+        body: &'a str,
+    ) -> ScanInput<'a> {
+        let mut base = input(status, headers, body, &[]);
+        base.path = path;
+        base.query = query;
+        base
+    }
+
     #[test]
     fn flags_insecure_session_cookie_and_wildcard_cors() {
         let headers = vec![
@@ -623,4 +777,75 @@ mod tests {
             .collect();
         assert!(ids.contains(&"unkeyed-header-reflected".into()));
     }
+
+
+    #[test]
+    fn flags_sql_dump_and_reflected_xss() {
+        let headers = vec![HeaderPair { name: "Content-Type".into(), value: "text/html".into() }];
+        let dump = "<pre>First name: admin<br />Surname: 5f4dcc3b5aa765d61d8327deb882cf99</pre>\
+<pre>First name: gordonb<br />Surname: e99a18c428cb38d5f260853678922e03</pre>";
+        let ids: Vec<_> = scan_flow(&input_on(
+            "/vulnerabilities/sqli/",
+            "id=-1'+UNION+SELECT+user,+password+FROM+users%23&Submit=Submit",
+            200,
+            &headers,
+            dump,
+        ))
+        .into_iter()
+        .map(|x| x.check_id)
+        .collect();
+        assert!(ids.contains(&"sqli-data".to_string()), "{ids:?}");
+
+        let xss_body = "Hello <script>alert(1)</script>";
+        let ids: Vec<_> = scan_flow(&input_on(
+            "/vulnerabilities/xss_r/",
+            "name=%3Cscript%3Ealert(1)%3C/script%3E",
+            200,
+            &headers,
+            xss_body,
+        ))
+        .into_iter()
+        .map(|x| x.check_id)
+        .collect();
+        assert!(ids.contains(&"reflected-xss".to_string()), "{ids:?}");
+
+        let safe = "Hello &lt;script&gt;alert(1)&lt;/script&gt;";
+        let ids: Vec<_> = scan_flow(&input_on(
+            "/vulnerabilities/xss_r/",
+            "name=%3Cscript%3Ealert(1)%3C/script%3E",
+            200,
+            &headers,
+            safe,
+        ))
+        .into_iter()
+        .map(|x| x.check_id)
+        .collect();
+        assert!(!ids.contains(&"reflected-xss".to_string()), "encoded reflection must not flag");
+    }
+
+    #[test]
+    fn decodes_gzip_before_sql_dump_check() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+        let plain = b"<pre>First name: admin<br />Surname: 5f4dcc3b5aa765d61d8327deb882cf99</pre><pre>First name: gordonb<br />Surname: e99a18c428cb38d5f260853678922e03</pre>";
+        let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(plain).unwrap();
+        let gz = enc.finish().unwrap();
+        let headers = vec![
+            HeaderPair { name: "Content-Type".into(), value: "text/html".into() },
+            HeaderPair { name: "Content-Encoding".into(), value: "gzip".into() },
+        ];
+        let mut flow = input_on(
+            "/vulnerabilities/sqli/",
+            "id=-1'+UNION+SELECT+user,+password+FROM+users%23&Submit=Submit",
+            200,
+            &headers,
+            "unused",
+        );
+        flow.resp_body = &gz;
+        let ids: Vec<_> = scan_flow(&flow).into_iter().map(|x| x.check_id).collect();
+        assert!(ids.contains(&"sqli-data".to_string()), "{ids:?}");
+    }
+
 }

@@ -67,7 +67,7 @@ export function TabStrip({ state }: { state: AppSnapshot }) {
           className="strip-btn"
           aria-label="List all tabs"
           onClick={(event) =>
-            openAnchoredPanel("alltabs", event.currentTarget, { width: 280, height: 360 })
+            openAnchoredPanel("alltabs", event.currentTarget, { width: 420, height: 440 })
           }
         >
           <ChevronDown size={16} />

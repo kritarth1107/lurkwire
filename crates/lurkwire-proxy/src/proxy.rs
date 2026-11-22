@@ -444,6 +444,13 @@ async fn intercept(
 
 
 fn record_scan(state: &AppState, flow: &crate::store::NewFlow) {
+    let opts = state.store.scanner_options().unwrap_or_default();
+    if !opts.enabled {
+        return;
+    }
+    if opts.in_scope_only && !flow.in_scope {
+        return;
+    }
     let input = crate::scanner::ScanInput {
         id: &flow.id,
         project_id: &flow.project_id,
