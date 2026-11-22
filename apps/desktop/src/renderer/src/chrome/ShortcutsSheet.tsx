@@ -6,7 +6,7 @@ export function ShortcutsSheet({ open, onClose }: { open: boolean; onClose: () =
   }
   const groups = ["Tools", "Editor", "Browser"] as const;
   return (
-    <div className="palette-backdrop" onMouseDown={onClose} role="presentation">
+    <div className="palette-backdrop" data-lw-overlay="" onMouseDown={onClose} role="presentation">
       <div className="shortcuts-sheet" role="dialog" aria-label="Keyboard shortcuts" onMouseDown={(event) => event.stopPropagation()}>
         <div className="shortcuts-head">
           <strong>Keyboard shortcuts</strong>

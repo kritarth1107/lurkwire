@@ -103,6 +103,7 @@ export function PanelHost({ state }: { state: AppSnapshot }) {
       <div
         ref={panelRef}
         className={`anchored-popover${leaving ? " is-leaving" : ""}`}
+        data-lw-overlay=""
         data-testid="anchored-popover"
         data-kind={request.kind}
         role="menu"

@@ -774,13 +774,13 @@ input, textarea, select {
 .anchored-popover-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 70;
+  z-index: var(--z-popover);
   background: transparent;
 }
 
 .anchored-popover {
   position: fixed;
-  z-index: 71;
+  z-index: var(--z-popover);
   background: var(--panel);
   color: var(--text);
   border-radius: var(--radius-m);
@@ -1234,7 +1234,7 @@ tr.hl-magenta, .logger-line.hl-magenta { box-shadow: inset 3px 0 #e879f9; }
 tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
 .ctx-menu {
   position: fixed;
-  z-index: 80;
+  z-index: var(--z-popover);
   min-width: 200px;
   background: var(--content);
   border: 1px solid var(--border);
@@ -1627,7 +1627,7 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.28);
-  z-index: 80;
+  z-index: var(--z-modal);
   display: flex;
   justify-content: center;
   padding: 12vh 16px 0;
@@ -1867,7 +1867,7 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
 .lw-tooltip-wrap { display: inline-flex; vertical-align: stretch; }
 .lw-tooltip {
   position: fixed;
-  z-index: 90;
+  z-index: var(--z-tooltip);
   max-width: 280px;
   padding: 6px 10px;
   border-radius: 6px;
@@ -1910,7 +1910,7 @@ tr.hl-pink, .logger-line.hl-pink { box-shadow: inset 3px 0 #f472b6; }
   border-radius: var(--radius-m);
   box-shadow: var(--panel-shadow);
   padding: 6px;
-  z-index: 30;
+  z-index: var(--z-dropdown);
   max-height: min(420px, 60vh);
   overflow: auto;
   animation: lw-popover-in var(--motion-fast) var(--motion-ease) both;
@@ -2746,22 +2746,7 @@ button.primary:hover, .primary:hover { background: var(--accent-hover); filter: 
   flex-direction: column;
   flex: 0 0 auto;
   background: var(--toolbar);
-  z-index: var(--z-dropdown);
-}
-.tools-menu-slot {
-  padding: 0 10px 8px;
-  background: var(--toolbar);
-  border-bottom: 1px solid var(--border);
-  animation: dock-open var(--motion-fast) var(--motion-ease-out) both;
-}
-.tool-menu.in-slot {
-  position: relative;
-  left: 0;
-  top: 0;
-  width: min(320px, calc(100% - 16px));
-  max-height: 360px;
-  margin: 0;
-  z-index: auto;
+  z-index: var(--z-toolbar);
 }
 
 
@@ -3525,7 +3510,7 @@ button.primary:active, .primary:active { transform: translateY(1px); }
   flex-direction: column;
   background: var(--toolbar);
   position: relative;
-  z-index: 32;
+  z-index: var(--z-toolbar);
   overflow: visible;
 }
 .navbar-cluster.suggest-open {

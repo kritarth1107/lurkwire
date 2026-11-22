@@ -23,8 +23,11 @@ const REQUIRED = [
   "--radius-l",
   "--shadow-sm",
   "--shadow-md",
+  "--z-toolbar",
   "--z-dropdown",
+  "--z-popover",
   "--z-modal",
+  "--z-tooltip",
   "--font",
   "--fs-xs",
   "--fs-md",
@@ -53,6 +56,10 @@ describe("design tokens", () => {
     expect(styles).toContain('@import "./tokens.css"');
     expect(styles).toContain("font-variant-numeric: tabular-nums");
     expect(styles).toContain("var(--shadow-md)");
+    expect(styles).toContain("var(--z-toolbar)");
     expect(styles).toContain("var(--z-dropdown)");
+    expect(styles).toContain("var(--z-popover)");
+    expect(styles).toContain("var(--z-modal)");
+    expect(styles).toContain("var(--z-tooltip)");
   });
 });

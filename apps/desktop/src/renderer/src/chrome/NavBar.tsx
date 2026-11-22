@@ -27,13 +27,11 @@ export function NavBar({
   omnibox,
   setOmnibox,
   urlRef,
-  onSuggestLayout,
 }: {
   state: AppSnapshot;
   omnibox: string;
   setOmnibox: (value: string) => void;
   urlRef: React.RefObject<HTMLInputElement | null>;
-  onSuggestLayout?: (open: boolean) => void;
 }) {
   const active = state.tabs.find((tab) => tab.id === state.activeTabId);
   const [intercept, setIntercept] = useState<InterceptState | null>(null);
@@ -84,10 +82,6 @@ export function NavBar({
   useEffect(() => {
     setActiveIndex(0);
   }, [omnibox]);
-
-  useEffect(() => {
-    onSuggestLayout?.(open);
-  }, [open, suggestions.length, onSuggestLayout]);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -413,6 +407,7 @@ function OmniboxDropdown({
   return (
     <div
       className="omnibox-dropdown omnibox-fixed"
+      data-lw-overlay=""
       id="omnibox-suggestions"
       role="listbox"
       style={{ top: style.top, left: style.left, width: style.width }}
