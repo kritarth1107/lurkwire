@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Bookmark } from "../../../shared/types";
 
@@ -12,7 +13,10 @@ export function BookmarksBar() {
   return (
     <div className="bookmarks-bar">
       {items.length === 0 ? (
-        <span className="bm-empty">Right-click the star in the address bar to save a bookmark.</span>
+        <span className="bm-empty">
+          <Star size={12} strokeWidth={2} />
+          Star a page to pin it here
+        </span>
       ) : (
         items.map((item) => (
           <button

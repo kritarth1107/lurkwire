@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { AppSnapshot, ToolId } from "../../../shared/types";
 import { PENTEST_TOOLS } from "../../../shared/toolsCatalog";
@@ -140,7 +141,9 @@ export function CommandPalette({
         aria-label="Command palette"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <input
+        <div className="palette-search">
+          <Search size={16} strokeWidth={2} aria-hidden="true" />
+          <input
           autoFocus
           value={query}
           placeholder="Open a tool, page, or command…"
@@ -170,6 +173,7 @@ export function CommandPalette({
             }
           }}
         />
+        </div>
         <div className="palette-list">
           {filtered.length === 0 ? <div className="palette-empty">No matching commands</div> : null}
           {filtered.map((item, index) => (

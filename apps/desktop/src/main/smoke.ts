@@ -303,6 +303,68 @@ async function captureWithPanel(
 }
 
 
+
+async function captureOmnibox(
+  window: BrowserWindow,
+  out: string,
+  paths: string[],
+  tabs: TabManager | null,
+): Promise<void> {
+  window.focus();
+  window.webContents.focus();
+  const point = (await window.webContents.executeJavaScript(`(() => {
+    const input = document.querySelector(".urlbar input");
+    if (!(input instanceof HTMLInputElement)) return null;
+    const r = input.getBoundingClientRect();
+    return { x: Math.round(r.left + Math.min(48, r.width * 0.4)), y: Math.round(r.top + r.height / 2) };
+  })()`)) as { x: number; y: number } | null;
+  if (point) {
+    window.webContents.sendInputEvent({ type: "mouseDown", x: point.x, y: point.y, button: "left", clickCount: 1 });
+    window.webContents.sendInputEvent({ type: "mouseUp", x: point.x, y: point.y, button: "left", clickCount: 1 });
+  }
+  await sleep(150);
+  await window.webContents.executeJavaScript(`(() => {
+    const input = document.querySelector(".urlbar input");
+    if (!(input instanceof HTMLInputElement)) return false;
+    input.focus();
+    input.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
+    input.dispatchEvent(new Event("focusin", { bubbles: true }));
+    input.select();
+    return true;
+  })()`);
+  window.webContents.sendInputEvent({ type: "keyDown", keyCode: "A", modifiers: ["control"] });
+  window.webContents.sendInputEvent({ type: "keyUp", keyCode: "A", modifiers: ["control"] });
+  for (const ch of "iana") {
+    window.webContents.sendInputEvent({ type: "char", keyCode: ch });
+  }
+  await sleep(800);
+  const info = (await window.webContents.executeJavaScript(`(() => {
+    const input = document.querySelector(".urlbar input");
+    const dropdown = document.querySelector(".omnibox-dropdown");
+    return {
+      open: Boolean(dropdown),
+      expanded: input instanceof HTMLInputElement ? input.getAttribute("aria-expanded") : null,
+      value: input instanceof HTMLInputElement ? input.value : "",
+      items: document.querySelectorAll(".omnibox-item").length,
+      active: document.activeElement === input,
+    };
+  })()`)) as { open: boolean; expanded: string | null; value: string; items: number; active: boolean };
+  console.log(`SMOKE omnibox ${JSON.stringify(info)}`);
+  if (info.open) {
+    paths.push(await captureWindow(window, out, "omnibox.png", tabs));
+  } else {
+    console.log("SMOKE omnibox dropdown missing");
+  }
+  await window.webContents.executeJavaScript(`document.querySelector(".urlbar input")?.blur()`);
+  const current = tabs?.activeInfo();
+  if (tabs && current?.id && current.url) {
+    await tabs.navigate(current.id, current.url);
+    await sleep(400);
+  } else {
+    await sleep(200);
+  }
+}
+
 async function captureCategorizedMenus(
   window: BrowserWindow,
   out: string,
@@ -721,6 +783,7 @@ message HelloReply { string message = 1; }
   hooks.setPrefs({ theme: "light", sidebarOpen: false, llmSidebarOpen: false });
   await sleep(700);
   paths.push(await captureWindow(window, out, "main-light.png", tabs));
+  await captureOmnibox(window, out, paths, tabs);
   await captureCategorizedMenus(window, out, paths, tabs);
 
   hooks.setPrefs({ theme: "dark", sidebarOpen: false });
@@ -836,6 +899,11 @@ message HelloReply { string message = 1; }
   });
   await sleep(700);
   paths.push(await captureWindow(window, out, "newtab.png", hooks.tabs()));
+  hooks.setPrefs({ theme: "dark" });
+  await sleep(500);
+  paths.push(await captureWindow(window, out, "newtab-dark.png", hooks.tabs()));
+  hooks.setPrefs({ theme: "light" });
+  await sleep(200);
 
   await hooks.openNewTab("lurkwire://about");
   await waitFor("about", () => {

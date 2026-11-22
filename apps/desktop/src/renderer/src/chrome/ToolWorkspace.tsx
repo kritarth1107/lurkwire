@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Wrench, X } from "lucide-react";
 import type { AppSnapshot, FlowDetail, SidebarPanel } from "../../../shared/types";
 import { pentestTool } from "../../../shared/toolsCatalog";
 import { takeIntruderDraft, takeRepeaterDraft } from "../workbench/pendingSend";
@@ -29,6 +30,7 @@ import { SmugglingView } from "../SmugglingView";
 import { ReportView } from "../ReportView";
 import { WebSocketView } from "../WebSocketView";
 import { CorsView } from "../CorsView";
+import { TOOL_ICONS } from "./ToolsTopBar";
 
 export function ToolWorkspace({
   state,
@@ -96,9 +98,19 @@ export function ToolWorkspace({
   return (
     <div className="tool-workspace">
       <div className="tool-workspace-head">
-        <div>
-          <strong>{tool?.label ?? "Tool"}</strong>
-          {tool?.hint ? <span className="tool-workspace-hint">{tool.hint}</span> : null}
+        <div className="tool-workspace-title">
+          {(() => {
+            const Icon = TOOL_ICONS[panel] ?? Wrench;
+            return (
+              <span className="tool-workspace-icon" aria-hidden="true">
+                <Icon size={16} strokeWidth={2} />
+              </span>
+            );
+          })()}
+          <div>
+            <strong>{tool?.label ?? "Tool"}</strong>
+            {tool?.hint ? <span className="tool-workspace-hint">{tool.hint}</span> : null}
+          </div>
         </div>
         <button
           type="button"
@@ -106,7 +118,7 @@ export function ToolWorkspace({
           aria-label="Close tools"
           onClick={() => void window.lurkwire.setPrefs({ sidebarOpen: false })}
         >
-          ×
+          <X size={16} />
         </button>
       </div>
       <div className="tool-workspace-body">
