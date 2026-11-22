@@ -17,8 +17,10 @@ pub struct ScanInput<'a> {
 
 pub fn scan_flow(flow: &ScanInput<'_>) -> Vec<FindingDraft> {
     let mut out = Vec::new();
-    let req_text = text_preview(&flow.req_body);
-    let resp_text = text_preview(&flow.resp_body);
+    let req_decoded = crate::body_decode::decode_http_body(flow.req_body, flow.req_headers);
+    let resp_decoded = crate::body_decode::decode_http_body(flow.resp_body, flow.resp_headers);
+    let req_text = text_preview(&req_decoded);
+    let resp_text = text_preview(&resp_decoded);
     let mime = header(&flow.resp_headers, "content-type").unwrap_or("");
 
     missing_security_headers(flow, &mut out);
@@ -409,7 +411,7 @@ fn injection_signals(
     out: &mut Vec<FindingDraft>,
 ) {
     let query = urlencoding_decode(&flow.query);
-    let blob = format!("{} {} {}", query, req_text, String::from_utf8_lossy(flow.req_body));
+    let blob = format!("{} {}", query, req_text);
     let blob_l = blob.to_ascii_lowercase();
     let looks_inject = blob_l.contains("union select")
         || blob_l.contains("' or '")
@@ -819,6 +821,31 @@ mod tests {
         .map(|x| x.check_id)
         .collect();
         assert!(!ids.contains(&"reflected-xss".to_string()), "encoded reflection must not flag");
+    }
+
+    #[test]
+    fn decodes_gzip_before_sql_dump_check() {
+        use flate2::write::GzEncoder;
+        use flate2::Compression;
+        use std::io::Write;
+        let plain = b"<pre>First name: admin<br />Surname: 5f4dcc3b5aa765d61d8327deb882cf99</pre><pre>First name: gordonb<br />Surname: e99a18c428cb38d5f260853678922e03</pre>";
+        let mut enc = GzEncoder::new(Vec::new(), Compression::default());
+        enc.write_all(plain).unwrap();
+        let gz = enc.finish().unwrap();
+        let headers = vec![
+            HeaderPair { name: "Content-Type".into(), value: "text/html".into() },
+            HeaderPair { name: "Content-Encoding".into(), value: "gzip".into() },
+        ];
+        let mut flow = input_on(
+            "/vulnerabilities/sqli/",
+            "id=-1'+UNION+SELECT+user,+password+FROM+users%23&Submit=Submit",
+            200,
+            &headers,
+            "unused",
+        );
+        flow.resp_body = &gz;
+        let ids: Vec<_> = scan_flow(&flow).into_iter().map(|x| x.check_id).collect();
+        assert!(ids.contains(&"sqli-data".to_string()), "{ids:?}");
     }
 
 }
