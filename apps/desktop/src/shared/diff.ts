@@ -56,3 +56,13 @@ export function lineDiff(a: string, b: string): DiffLine[] {
   }
   return out;
 }
+
+export function normalizeDiffText(text: string, ignoreWhitespace: boolean): string {
+  if (!ignoreWhitespace) {
+    return text;
+  }
+  return text
+    .split("\n")
+    .map((line) => line.replace(/\s+/g, " ").trim())
+    .join("\n");
+}

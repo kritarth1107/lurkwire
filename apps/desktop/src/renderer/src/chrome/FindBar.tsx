@@ -4,6 +4,7 @@ import type { FindResult } from "../../../shared/types";
 
 export function FindBar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [query, setQuery] = useState("");
+  const [matchCase, setMatchCase] = useState(false);
   const [result, setResult] = useState<FindResult | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -26,7 +27,7 @@ export function FindBar({ open, onClose }: { open: boolean; onClose: () => void 
   }
 
   const find = (findNext: boolean, forward = true) => {
-    void window.lurkwire.findInPage(query, { findNext, forward });
+    void window.lurkwire.findInPage(query, { findNext, forward, matchCase });
   };
 
   return (
@@ -37,7 +38,7 @@ export function FindBar({ open, onClose }: { open: boolean; onClose: () => void 
         placeholder="Find in page"
         onChange={(event) => {
           setQuery(event.target.value);
-          void window.lurkwire.findInPage(event.target.value, { findNext: false, forward: true });
+          void window.lurkwire.findInPage(event.target.value, { findNext: false, forward: true, matchCase });
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
@@ -55,6 +56,20 @@ export function FindBar({ open, onClose }: { open: boolean; onClose: () => void 
             : "No matches"
           : ""}
       </span>
+      <label className="find-case">
+        <input
+          type="checkbox"
+          checked={matchCase}
+          onChange={(event) => {
+            const next = event.target.checked;
+            setMatchCase(next);
+            if (query) {
+              void window.lurkwire.findInPage(query, { findNext: false, forward: true, matchCase: next });
+            }
+          }}
+        />
+        Match case
+      </label>
       <button type="button" className="tb" aria-label="Previous" onClick={() => find(true, false)}>
         <ChevronUp size={16} />
       </button>

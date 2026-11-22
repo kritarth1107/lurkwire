@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FlowDetail } from "../../shared/types";
-import { lineDiff } from "../../shared/diff";
+import { lineDiff, normalizeDiffText } from "../../shared/diff";
 import { formatHeaders, headerMime, prettyBody } from "../../shared/httpFormat";
 import { addComparerItem, clearComparer, removeComparerItem, useComparerItems } from "./workbench";
 import type { FlowSendHandlers } from "./FlowActions";
@@ -27,6 +27,7 @@ export function ComparerView({ handlers }: { handlers: FlowSendHandlers }) {
   const [side, setSide] = useState<Side>("resp");
   const [view, setView] = useState<View>("pretty");
   const [manual, setManual] = useState("");
+  const [ignoreWhitespace, setIgnoreWhitespace] = useState(false);
 
   useEffect(() => {
     if (!leftId && items[0]) {
@@ -57,8 +58,11 @@ export function ComparerView({ handlers }: { handlers: FlowSendHandlers }) {
     if (!left || !right) {
       return [];
     }
-    return lineDiff(textOf(left, side, view), textOf(right, side, view));
-  }, [left, right, side, view]);
+    return lineDiff(
+      normalizeDiffText(textOf(left, side, view), ignoreWhitespace),
+      normalizeDiffText(textOf(right, side, view), ignoreWhitespace),
+    );
+  }, [left, right, side, view, ignoreWhitespace]);
 
   return (
     <div className="workbench comparer-workbench">
@@ -94,6 +98,14 @@ export function ComparerView({ handlers }: { handlers: FlowSendHandlers }) {
             </button>
           ))}
         </div>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={ignoreWhitespace}
+            onChange={(event) => setIgnoreWhitespace(event.target.checked)}
+          />
+          Ignore whitespace
+        </label>
         <button type="button" onClick={() => clearComparer()}>
           Clear
         </button>

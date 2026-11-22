@@ -157,6 +157,23 @@ function AppMenu({ state }: { state: AppSnapshot }) {
             close();
           }}
         />
+        <MenuItem
+          label="Search tabs"
+          shortcut="Ctrl+Shift+A"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("lurkwire:open-all-tabs"));
+            close();
+          }}
+        />
+        <MenuItem
+          label="Reader view"
+          onClick={() => {
+            void window.lurkwire.openReaderMode().catch((err: unknown) => {
+              window.alert(err instanceof Error ? err.message : String(err));
+            });
+            close();
+          }}
+        />
       </SubMenu>
     );
   }
@@ -422,9 +439,20 @@ function DownloadsMenu() {
             </div>
             <div>
               {item.state === "progressing" ? (
-                <button type="button" className="menu-item" onClick={() => void window.lurkwire.cancelDownload(item.id)}>
-                  Cancel
-                </button>
+                <>
+                  {item.paused ? (
+                    <button type="button" className="menu-item" onClick={() => void window.lurkwire.resumeDownload(item.id)}>
+                      Resume
+                    </button>
+                  ) : (
+                    <button type="button" className="menu-item" onClick={() => void window.lurkwire.pauseDownload(item.id)}>
+                      Pause
+                    </button>
+                  )}
+                  <button type="button" className="menu-item" onClick={() => void window.lurkwire.cancelDownload(item.id)}>
+                    Cancel
+                  </button>
+                </>
               ) : item.path ? (
                 <button type="button" className="menu-item" onClick={() => void window.lurkwire.showDownload(item.id)}>
                   Show
@@ -445,37 +473,79 @@ function DownloadsMenu() {
 
 function AllTabs({ state }: { state: AppSnapshot }) {
   const [q, setQ] = useState("");
+  const [active, setActive] = useState(0);
   const filtered = state.tabs.filter((tab) =>
     (tab.title + tab.url).toLowerCase().includes(q.toLowerCase()),
   );
+  const current = filtered[Math.min(active, Math.max(filtered.length - 1, 0))];
   return (
     <>
       <div style={{ padding: "4px 10px 8px" }}>
         <input
           style={{ width: "100%", height: 28, border: "1px solid var(--separator)", borderRadius: 4, background: "var(--field)", padding: "0 8px" }}
           value={q}
-          onChange={(event) => setQ(event.target.value)}
+          onChange={(event) => {
+            setQ(event.target.value);
+            setActive(0);
+          }}
           placeholder="Search tabs"
           autoFocus
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setActive((index) => Math.min(index + 1, Math.max(filtered.length - 1, 0)));
+            }
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setActive((index) => Math.max(index - 1, 0));
+            }
+            if (event.key === "Enter" && current) {
+              event.preventDefault();
+              void window.lurkwire.switchTab(current.id);
+              close();
+            }
+            if ((event.key === "Backspace" && event.shiftKey && current) || (event.key === "Delete" && current && q === "")) {
+              event.preventDefault();
+              void window.lurkwire.closeTab(current.id);
+            }
+          }}
         />
       </div>
-      {filtered.map((tab) => (
-        <button
+      {filtered.map((tab, index) => (
+        <div
           key={tab.id}
-          type="button"
-          className="menu-item"
-          onClick={() => {
-            void window.lurkwire.switchTab(tab.id);
-            close();
-          }}
+          className={index === active ? "menu-item alltabs-row active" : "menu-item alltabs-row"}
+          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%" }}
         >
-          <span
-            style={{ width: 8, height: 8, borderRadius: 8, background: projectColor(tab.projectId), flex: "0 0 8px" }}
-          />
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {tab.title || "New Tab"}
-          </span>
-        </button>
+          <button
+            type="button"
+            className="menu-item"
+            style={{ flex: 1, minWidth: 0, background: "transparent", boxShadow: "none" }}
+            onClick={() => {
+              void window.lurkwire.switchTab(tab.id);
+              close();
+            }}
+          >
+            <span
+              style={{ width: 8, height: 8, borderRadius: 8, background: projectColor(tab.projectId), flex: "0 0 8px" }}
+            />
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "flex", flexDirection: "column", minWidth: 0, alignItems: "flex-start" }}>
+              <span>{tab.title || "New Tab"}</span>
+              <span className="muted" style={{ fontSize: 11, opacity: 0.7 }}>{tab.url}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className="tb"
+            aria-label={`Close ${tab.title || "tab"}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              void window.lurkwire.closeTab(tab.id);
+            }}
+          >
+            ×
+          </button>
+        </div>
       ))}
       {filtered.length === 0 ? <div className="placeholder">No tabs match.</div> : null}
     </>

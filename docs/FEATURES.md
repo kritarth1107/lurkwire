@@ -1,7 +1,7 @@
 # Lurkwire feature catalog
 
 This is the product roadmap expressed as concrete features, not slogans.
-Each item is either **done** in the current tree or **planned**. Counts in this revision: **1000** items, **186** done, **814** planned.
+Each item is either **done** in the current tree or **planned**. Counts in this revision: **1000** items, **204** done, **796** planned.
 
 Honesty rules:
 
@@ -60,7 +60,7 @@ Visual language so the chrome reads like Firefox Proton or Chrome. _41 items: 28
 
 ## Browser chrome and tabs
 
-Daily-driver tab strip, windows, and session behavior. _59 items: 18 done, 41 planned._
+Daily-driver tab strip, windows, and session behavior. _59 items: 20 done, 39 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
@@ -85,7 +85,7 @@ Daily-driver tab strip, windows, and session behavior. _59 items: 18 done, 41 pl
 | 60 | planned | Drag-and-drop tab reorder within a window |
 | 61 | planned | Detach a tab into a new window by dragging it off the strip |
 | 62 | planned | Tear-off tab preview while dragging |
-| 63 | planned | Tab search (Ctrl+Shift+A) with type-ahead across open tabs |
+| 63 | done | Tab search (Ctrl+Shift+A) with type-ahead across open tabs |
 | 64 | planned | Sleep unused background tabs to reclaim memory |
 | 65 | planned | Memory usage chip per tab |
 | 66 | planned | Duplicate tab |
@@ -122,7 +122,7 @@ Daily-driver tab strip, windows, and session behavior. _59 items: 18 done, 41 pl
 | 97 | planned | Tab groups saved and named for later |
 | 98 | planned | Auto-group tabs by site |
 | 99 | planned | Send tab to another signed-in device |
-| 100 | planned | Reader-view tab that strips chrome from an article |
+| 100 | done | Reader-view tab that strips chrome from an article |
 
 ## Navigation and omnibox
 
@@ -218,7 +218,7 @@ Bookmarks bar, manager, and import. _34 items: 5 done, 29 planned._
 
 ## History, downloads, find, zoom, and print
 
-Everyday browser utilities. _37 items: 6 done, 31 planned._
+Everyday browser utilities. _37 items: 11 done, 26 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
@@ -228,7 +228,7 @@ Everyday browser utilities. _37 items: 6 done, 31 planned._
 | 182 | done | Downloads page at lurkwire://downloads |
 | 183 | done | Downloads toolbar popover (in-window) |
 | 184 | done | Find in page (Ctrl+F) |
-| 185 | planned | History search with date filters |
+| 185 | done | History search with date filters |
 | 186 | planned | History grouped by day and by site |
 | 187 | planned | Delete a single history entry |
 | 188 | planned | Delete history for a site |
@@ -238,14 +238,14 @@ Everyday browser utilities. _37 items: 6 done, 31 planned._
 | 192 | planned | Most visited tiles on the new tab page |
 | 193 | planned | Recently closed on the new tab page |
 | 194 | planned | Download progress in the toolbar button |
-| 195 | planned | Pause, resume, and cancel a download |
-| 196 | planned | Open the downloaded file |
-| 197 | planned | Show the downloaded file in the folder |
+| 195 | done | Pause, resume, and cancel a download |
+| 196 | done | Open the downloaded file |
+| 197 | done | Show the downloaded file in the folder |
 | 198 | planned | Always ask where to save files |
 | 199 | planned | Set a default download directory |
 | 200 | planned | Dangerous-file download warning |
 | 201 | planned | Download history persisted across restarts |
-| 202 | planned | Find in page match count, previous, next, highlight all |
+| 202 | done | Find in page match count, previous, next, highlight all |
 | 203 | planned | Find in page case-sensitive and regex modes |
 | 204 | planned | Zoom in, zoom out, reset (Ctrl+Plus / Minus / 0) |
 | 205 | planned | Per-site remembered zoom |
@@ -336,7 +336,7 @@ Separate work and keep an engagement tidy. _27 items: 5 done, 22 planned._
 
 ## Proxy and traffic
 
-The live HTTP(S) history a practitioner expects. _61 items: 23 done, 38 planned._
+The live HTTP(S) history a practitioner expects. _61 items: 25 done, 36 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
@@ -363,8 +363,8 @@ The live HTTP(S) history a practitioner expects. _61 items: 23 done, 38 planned.
 | 296 | done | Request metadata (method, host, path, status, length) |
 | 297 | done | In-scope indicator on a flow |
 | 298 | done | WebSocket, SSE, and gRPC frame capture surfaced in the Sockets tool |
-| 299 | planned | Live filter language (method, status, mime, host, path, regex, highlight color) |
-| 300 | planned | Saved filter presets |
+| 299 | done | Live filter language (method, status, mime, host, path, regex, highlight color) |
+| 300 | done | Saved filter presets |
 | 301 | planned | Hide images, CSS, fonts, and analytics with one click |
 | 302 | planned | Show only in-scope, only annotated, or only with findings |
 | 303 | planned | Column picker and persisted column widths |
@@ -449,7 +449,7 @@ Items under the Proxy menu. _38 items: 14 done, 24 planned._
 
 ## Attack tools
 
-Repeater, Intruder, Scanner, smuggling, CORS, param miner, Autorize. _59 items: 20 done, 39 planned._
+Repeater, Intruder, Scanner, smuggling, CORS, param miner, Autorize. _59 items: 24 done, 35 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
@@ -473,8 +473,8 @@ Repeater, Intruder, Scanner, smuggling, CORS, param miner, Autorize. _59 items: 
 | 392 | done | Autorize: replay a request as other sessions |
 | 393 | done | CORS tester: Origin and preflight probes with a triage verdict |
 | 394 | done | CORS menu entry under Attack |
-| 395 | planned | Repeater tabs for multiple requests in the same dock |
-| 396 | planned | Repeater request history with pin and comment |
+| 395 | done | Repeater tabs for multiple requests in the same dock |
+| 396 | done | Repeater request history with pin and comment |
 | 397 | planned | Repeater environment variables and a project-level base URL |
 | 398 | planned | Repeater send in a loop with a delay |
 | 399 | planned | Repeater follow redirects with a hop inspector |
@@ -484,12 +484,12 @@ Repeater, Intruder, Scanner, smuggling, CORS, param miner, Autorize. _59 items: 
 | 403 | planned | Request inspector: parsed query, cookies, multipart, JSON paths |
 | 404 | planned | Response diff against the previous send automatically |
 | 405 | planned | Intruder extract (regex, JSONPath, CSS selector, XPath) |
-| 406 | planned | Intruder match and payload grep |
+| 406 | done | Intruder match and payload grep |
 | 407 | planned | Intruder resource pool and concurrency slider |
 | 408 | planned | Intruder attack scheduler with start, pause, and resume |
 | 409 | planned | Intruder payload processors: hash, encode, prefix, skip, cut, case |
 | 410 | planned | Intruder character, number, date, and null payload generators |
-| 411 | planned | Intruder CSV and wordlist import |
+| 411 | done | Intruder CSV and wordlist import |
 | 412 | planned | Intruder result charts (status histogram, length outliers) |
 | 413 | planned | Cluster-bomb safety cap and an estimated request count |
 | 414 | planned | Scanner crawl and audit pipeline with a visible queue |
@@ -557,7 +557,7 @@ Site map, content discovery, intel, GraphQL, and out-of-band. _35 items: 6 done,
 
 ## Decode, JWT, comparer, sequencer, and cookies
 
-Items under the Decode menu. _35 items: 12 done, 23 planned._
+Items under the Decode menu. _35 items: 14 done, 21 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
@@ -582,8 +582,8 @@ Items under the Decode menu. _35 items: 12 done, 23 planned._
 | 487 | planned | JWT JWKS fetch (in-scope) and key inventory |
 | 488 | planned | Encrypted JWE support |
 | 489 | planned | Paseto and other typed-token helpers |
-| 490 | planned | Comparer: request versus request and header-only diffs |
-| 491 | planned | Comparer: ignore whitespace and volatile fields |
+| 490 | done | Comparer: request versus request and header-only diffs |
+| 491 | done | Comparer: ignore whitespace and volatile fields |
 | 492 | planned | Comparer: more than two items in a set, with a baseline |
 | 493 | planned | Comparer: image / pixel diff for visual responses |
 | 494 | planned | Sequencer: larger sample sizes and a chart of entropy over time |
@@ -637,7 +637,7 @@ Items under the Report menu. _31 items: 5 done, 26 planned._
 
 ## Assistant, workbench, and platform
 
-LLM sidebar, API workbench, packaging, and quality. _75 items: 21 done, 54 planned._
+LLM sidebar, API workbench, packaging, and quality. _75 items: 22 done, 53 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
@@ -665,7 +665,7 @@ LLM sidebar, API workbench, packaging, and quality. _75 items: 21 done, 54 plann
 | 556 | planned | Assistant: tool-use that can quote a flow, draft a Repeater request, or open a finding (always with a confirm) |
 | 557 | planned | Assistant: local-only models via Ollama or llama.cpp |
 | 558 | planned | Assistant: project memory that stays on disk and is never used as training data |
-| 559 | planned | Assistant: explain this finding and draft a remediation actions |
+| 559 | done | Assistant: explain this finding and draft a remediation actions |
 | 560 | planned | Workbench: environments, secrets vault, and chainable scripts |
 | 561 | planned | Workbench: Postman / Insomnia import |
 | 562 | planned | Workbench: OpenAPI import that scaffolds a collection |
@@ -719,13 +719,13 @@ LLM sidebar, API workbench, packaging, and quality. _75 items: 21 done, 54 plann
 
 ## Shortcuts, viewers, settings, checks, interop, and onboarding
 
-Concrete remaining work generated from structured lists so the roadmap stays specific. _391 items: 0 done, 391 planned._
+Concrete remaining work generated from structured lists so the roadmap stays specific. _391 items: 2 done, 389 planned._
 
 | # | Status | Feature |
 | --- | --- | --- |
 | 610 | planned | Keyboard shortcut: Ctrl+Shift+B to toggle the bookmarks bar |
 | 611 | planned | Keyboard shortcut: Ctrl+Shift+O to open the bookmark manager |
-| 612 | planned | Keyboard shortcut: Ctrl+J to open downloads |
+| 612 | done | Keyboard shortcut: Ctrl+J to open downloads |
 | 613 | planned | Keyboard shortcut: Ctrl+Shift+Delete to open clear-history |
 | 614 | planned | Keyboard shortcut: Alt+Home to open the homepage |
 | 615 | planned | Keyboard shortcut: Alt+Left to go back |
@@ -748,7 +748,7 @@ Concrete remaining work generated from structured lists so the roadmap stays spe
 | 632 | planned | Keyboard shortcut: Ctrl+D to bookmark this tab |
 | 633 | planned | Keyboard shortcut: Ctrl+Shift+K to focus the Logger quick filter |
 | 634 | planned | Keyboard shortcut: Ctrl+Shift+E to toggle the tool dock |
-| 635 | planned | Keyboard shortcut: Ctrl+Shift+A to open tab search |
+| 635 | done | Keyboard shortcut: Ctrl+Shift+A to open tab search |
 | 636 | planned | Keyboard shortcut: Ctrl+Shift+M to toggle the Assistant |
 | 637 | planned | Keyboard shortcut: Ctrl+Alt+R to open Repeater without sending a request |
 | 638 | planned | Keyboard shortcut: Ctrl+Alt+I to open Intruder without sending a request |

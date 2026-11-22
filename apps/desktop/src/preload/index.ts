@@ -20,10 +20,12 @@ import type {
   FindingQuery,
   IntruderStart,
   RepeaterSendRequest,
+  ScannerOptions,
   ToolId,
   Visit,
 } from "../shared/types";
-import type { SiteCookie, SiteInfo, SiteStorage } from "../shared/siteInfo";
+import type { SessionCookieInput, SiteCookie, SiteInfo, SiteStorage } from "../shared/siteInfo";
+import type { ReaderArticle } from "../shared/readerExtract";
 import type { InstalledExtension } from "../shared/extensions";
 import type { AiMemoryEntry, AiMemoryStore } from "../shared/aiMemory";
 import type { ReconRequest, ReconResult } from "../shared/recon";
@@ -126,6 +128,14 @@ const api = {
     ipcRenderer.invoke("lurkwire:removeTabStorage", input),
   removeSessionCookie: (cookie: SiteCookie) => ipcRenderer.invoke("lurkwire:removeSessionCookie", cookie),
   clearSessionCookies: (url: string) => ipcRenderer.invoke("lurkwire:clearSessionCookies", url),
+  setSessionCookies: (cookies: SessionCookieInput[]) =>
+    ipcRenderer.invoke("lurkwire:setSessionCookies", cookies),
+  getScannerSettings: (): Promise<ScannerOptions> => ipcRenderer.invoke("lurkwire:getScannerSettings"),
+  setScannerSettings: (opts: ScannerOptions): Promise<ScannerOptions> =>
+    ipcRenderer.invoke("lurkwire:setScannerSettings", opts),
+  openReaderMode: (): Promise<ReaderArticle> => ipcRenderer.invoke("lurkwire:openReaderMode"),
+  getReaderArticle: (): Promise<(ReaderArticle & { url?: string }) | null> =>
+    ipcRenderer.invoke("lurkwire:getReaderArticle"),
   listVisits: (query?: string): Promise<Visit[]> => ipcRenderer.invoke("lurkwire:listVisits", query),
   searchSuggest: (query: string): Promise<string[]> => ipcRenderer.invoke("lurkwire:searchSuggest", query),
   getTabMemory: (tabId: string): Promise<{ bytes: number }> =>
@@ -155,6 +165,9 @@ const api = {
   cancelDownload: (id: string) => ipcRenderer.invoke("lurkwire:cancelDownload", id),
   showDownload: (id: string) => ipcRenderer.invoke("lurkwire:showDownload", id),
   openDownload: (id: string) => ipcRenderer.invoke("lurkwire:openDownload", id),
+  pauseDownload: (id: string) => ipcRenderer.invoke("lurkwire:pauseDownload", id),
+  resumeDownload: (id: string) => ipcRenderer.invoke("lurkwire:resumeDownload", id),
+  clearCompletedDownloads: () => ipcRenderer.invoke("lurkwire:clearCompletedDownloads"),
   onDownloads: (callback: (items: DownloadInfo[]) => void) => listen("lurkwire:downloads", callback),
   findInPage: (text: string, options?: { forward?: boolean; findNext?: boolean; matchCase?: boolean }) =>
     ipcRenderer.invoke("lurkwire:findInPage", text, options),
@@ -192,6 +205,7 @@ const api = {
   requestFind: () => ipcRenderer.invoke("lurkwire:requestFind"),
   onFocusUrl: (callback: () => void) => listen("lurkwire:focus-url", callback),
   onOpenFind: (callback: () => void) => listen("lurkwire:open-find", callback),
+  onOpenAllTabs: (callback: () => void) => listen("lurkwire:open-all-tabs", callback),
   onEscape: (callback: () => void) => listen("lurkwire:escape", callback),
   onCommandPalette: (callback: () => void) => listen("lurkwire:command-palette", callback),
   onToolHotkey: (callback: (id: string) => void) => listen("lurkwire:tool-hotkey", callback),

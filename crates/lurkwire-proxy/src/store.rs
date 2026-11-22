@@ -373,10 +373,33 @@ impl Store {
             bind.push(Box::new(max as i64));
             next += 1;
         }
-        if let Some(source) = query.source.as_ref() {
+        if let Some(source) = parsed.source.as_ref().or(query.source.as_ref()) {
             where_sql.push_str(&format!(" AND f.source = ?{next}"));
             bind.push(Box::new(source.clone()));
             next += 1;
+        }
+        if let Some(path) = parsed.path.as_ref() {
+            where_sql.push_str(&format!(" AND f.path LIKE ?{next}"));
+            bind.push(Box::new(format!("%{path}%")));
+            next += 1;
+        }
+        if let Some(mime) = parsed.mime.as_ref() {
+            where_sql.push_str(&format!(" AND lower(COALESCE(f.mime, '')) LIKE ?{next}"));
+            bind.push(Box::new(format!("%{}%", mime.to_ascii_lowercase())));
+            next += 1;
+        }
+        if let Some(scheme) = parsed.scheme.as_ref() {
+            where_sql.push_str(&format!(" AND f.scheme = ?{next}"));
+            bind.push(Box::new(scheme.to_ascii_lowercase()));
+            next += 1;
+        }
+        if let Some(in_scope) = parsed.in_scope {
+            where_sql.push_str(&format!(" AND f.in_scope = ?{next}"));
+            bind.push(Box::new(if in_scope { 1i64 } else { 0i64 }));
+            next += 1;
+        }
+        if parsed.has_note {
+            where_sql.push_str(" AND f.note IS NOT NULL AND f.note != ''");
         }
         if query.hide_static.unwrap_or(false) {
             where_sql.push_str(
@@ -913,6 +936,48 @@ impl Store {
         .optional()
         .map_err(Into::into)
     }
+
+    pub fn get_meta(&self, key: &str) -> Result<Option<String>> {
+        let conn = self.conn.lock().expect("store lock");
+        let value = conn
+            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |row| row.get(0))
+            .optional()?;
+        Ok(value)
+    }
+
+    pub fn set_meta(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self.conn.lock().expect("store lock");
+        conn.execute(
+            "INSERT INTO meta(key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn scanner_options(&self) -> Result<crate::types::ScannerOptions> {
+        let enabled = self
+            .get_meta("scanner_enabled")?
+            .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+            .unwrap_or(true);
+        let in_scope_only = self
+            .get_meta("scanner_in_scope_only")?
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        Ok(crate::types::ScannerOptions {
+            enabled,
+            in_scope_only,
+        })
+    }
+
+    pub fn set_scanner_options(&self, opts: &crate::types::ScannerOptions) -> Result<crate::types::ScannerOptions> {
+        self.set_meta("scanner_enabled", if opts.enabled { "1" } else { "0" })?;
+        self.set_meta(
+            "scanner_in_scope_only",
+            if opts.in_scope_only { "1" } else { "0" },
+        )?;
+        self.scanner_options()
+    }
 }
 
 
@@ -920,9 +985,15 @@ struct ParsedSearch {
     fts: Option<String>,
     method: Option<String>,
     host: Option<String>,
+    path: Option<String>,
+    mime: Option<String>,
+    source: Option<String>,
+    scheme: Option<String>,
     status: Option<u16>,
     status_min: Option<u16>,
     status_max: Option<u16>,
+    in_scope: Option<bool>,
+    has_note: bool,
 }
 
 fn parse_search(query: &FlowQuery) -> ParsedSearch {
@@ -930,21 +1001,42 @@ fn parse_search(query: &FlowQuery) -> ParsedSearch {
         fts: None,
         method: None,
         host: None,
+        path: None,
+        mime: None,
+        source: None,
+        scheme: None,
         status: None,
         status_min: None,
         status_max: None,
+        in_scope: None,
+        has_note: false,
     };
     let Some(raw) = query.q.as_deref() else {
         return parsed;
     };
     let mut fts = Vec::new();
     for token in tokenize(raw) {
+        let lower = token.to_ascii_lowercase();
+        if lower == "in-scope" {
+            parsed.in_scope = Some(true);
+            continue;
+        }
+        if lower == "out-of-scope" {
+            parsed.in_scope = Some(false);
+            continue;
+        }
         if let Some((key, value)) = token.split_once(':') {
             let key = key.to_ascii_lowercase();
             match key.as_str() {
                 "host" => parsed.host = Some(value.to_string()),
                 "method" => parsed.method = Some(value.to_string()),
                 "status" => apply_status(&mut parsed, value),
+                "path" => parsed.path = Some(value.to_string()),
+                "mime" => parsed.mime = Some(value.to_string()),
+                "source" => parsed.source = Some(value.to_string()),
+                "scheme" => parsed.scheme = Some(value.to_string()),
+                "scope" => parsed.in_scope = parse_scope_flag(value),
+                "has" if value.eq_ignore_ascii_case("note") => parsed.has_note = true,
                 _ => fts.push(token),
             }
         } else {
@@ -952,12 +1044,34 @@ fn parse_search(query: &FlowQuery) -> ParsedSearch {
         }
     }
     if !fts.is_empty() {
-        parsed.fts = Some(fts.join(" "));
+        parsed.fts = Some(escape_fts(&fts.join(" ")));
     }
     parsed
 }
 
+fn parse_scope_flag(value: &str) -> Option<bool> {
+    match value.to_ascii_lowercase().as_str() {
+        "yes" | "in" | "true" | "1" => Some(true),
+        "no" | "out" | "false" | "0" => Some(false),
+        _ => None,
+    }
+}
+
 fn apply_status(parsed: &mut ParsedSearch, value: &str) {
+    let lower = value.to_ascii_lowercase();
+    let class = match lower.as_str() {
+        "1xx" => Some((100, 199)),
+        "2xx" => Some((200, 299)),
+        "3xx" => Some((300, 399)),
+        "4xx" => Some((400, 499)),
+        "5xx" => Some((500, 599)),
+        _ => None,
+    };
+    if let Some((min, max)) = class {
+        parsed.status_min = Some(min);
+        parsed.status_max = Some(max);
+        return;
+    }
     if let Some(rest) = value.strip_prefix(">=") {
         parsed.status_min = rest.parse().ok();
         return;
@@ -972,6 +1086,22 @@ fn apply_status(parsed: &mut ParsedSearch, value: &str) {
         return;
     }
     parsed.status = value.parse().ok();
+}
+
+/// Quote FTS5 tokens that would otherwise be treated as operators (/, :, *, etc.).
+fn escape_fts(input: &str) -> String {
+    tokenize(input)
+        .into_iter()
+        .map(|token| {
+            if token.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                token
+            } else {
+                let escaped = token.replace('"', "\u{22}\u{22}");
+                format!("\u{22}{escaped}\u{22}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn tokenize(input: &str) -> Vec<String> {
@@ -1315,6 +1445,7 @@ pub fn now_ms() -> i64 {
         .unwrap_or(0)
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1427,5 +1558,97 @@ mod tests {
         let detail = store.get_flow(&flow.id).unwrap().unwrap();
         assert!(detail.req_preview.as_deref().unwrap().contains("password"));
         assert!(detail.req_blob.is_some());
+    }
+
+    #[test]
+    fn filter_dsl_path_status_class_slash_fts_and_scope() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        let project = store.ensure_default_project().unwrap();
+
+        let ok = NewFlow {
+            id: uuid::Uuid::new_v4().to_string(),
+            project_id: project.id.clone(),
+            ts: now_ms(),
+            method: "GET".into(),
+            scheme: "http".into(),
+            host: "127.0.0.1".into(),
+            port: 4280,
+            path: "/vulnerabilities/sqli/".into(),
+            query: "id=1".into(),
+            http_version: "HTTP/1.1".into(),
+            status: Some(200),
+            req_headers: vec![],
+            resp_headers: vec![HeaderPair {
+                name: "Content-Type".into(),
+                value: "text/html".into(),
+            }],
+            req_body: vec![],
+            resp_body: b"<html>sqli ok</html>".to_vec(),
+            req_len: 0,
+            resp_len: 20,
+            duration_ms: Some(3),
+            source: "browser".into(),
+            truncated: false,
+            in_scope: true,
+        };
+        store.insert_flow(&ok).unwrap();
+
+        let mut denied = ok.clone();
+        denied.id = uuid::Uuid::new_v4().to_string();
+        denied.path = "/products/search".into();
+        denied.query = "q=test".into();
+        denied.status = Some(404);
+        denied.in_scope = false;
+        denied.source = "repeater".into();
+        denied.resp_body = b"not found".to_vec();
+        store.insert_flow(&denied).unwrap();
+
+        let (items, total) = store
+            .list_flows(
+                &FlowQuery {
+                    q: Some("path:/vulnerabilities status:2xx".into()),
+                    ..FlowQuery::default()
+                },
+                &project.id,
+            )
+            .unwrap();
+        assert_eq!(total, 1);
+        assert_eq!(items[0].path, "/vulnerabilities/sqli/");
+
+        let (items, total) = store
+            .list_flows(
+                &FlowQuery {
+                    q: Some("products/search".into()),
+                    ..FlowQuery::default()
+                },
+                &project.id,
+            )
+            .unwrap();
+        assert_eq!(total, 1, "slash in q must not 500 and should match path text");
+        assert_eq!(items[0].path, "/products/search");
+
+        let (items, _) = store
+            .list_flows(
+                &FlowQuery {
+                    q: Some("scope:no source:repeater".into()),
+                    ..FlowQuery::default()
+                },
+                &project.id,
+            )
+            .unwrap();
+        assert_eq!(items.len(), 1);
+        assert!(!items[0].in_scope);
+
+        let opts = store.scanner_options().unwrap();
+        assert!(opts.enabled);
+        assert!(!opts.in_scope_only);
+        store
+            .set_scanner_options(&crate::types::ScannerOptions {
+                enabled: true,
+                in_scope_only: true,
+            })
+            .unwrap();
+        assert!(store.scanner_options().unwrap().in_scope_only);
     }
 }

@@ -17,6 +17,7 @@ import type {
   IntruderJob,
   IntruderStart,
   RepeaterSendRequest,
+  ScannerOptions,
   ScopeRule,
   ProxyMatchRule,
   NewProxyMatchRule,
@@ -173,6 +174,14 @@ export class ControlClient {
 
   getFinding(id: string): Promise<Finding> {
     return this.json("GET", `/findings/${encodeURIComponent(id)}`);
+  }
+
+  getScannerSettings(): Promise<ScannerOptions> {
+    return this.json("GET", "/scanner/settings");
+  }
+
+  setScannerSettings(opts: ScannerOptions): Promise<ScannerOptions> {
+    return this.json("PUT", "/scanner/settings", opts);
   }
 
   private url(path: string): string {

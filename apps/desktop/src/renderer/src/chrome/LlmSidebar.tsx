@@ -1,6 +1,8 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { AppSnapshot, FlowDetail, FlowSummary, LlmAction, LlmResult } from "../../../shared/types";
 import { Tooltip } from "./Tooltip";
+import { takeLlm } from "../workbench/pendingLlm";
+import { localFindingBrief } from "../../../shared/llmFinding";
 
 type ChatTurn = {
   id: string;
@@ -32,6 +34,8 @@ export function LlmSidebar({
   const width = state.prefs.llmSidebarWidth ?? 340;
   const [flows, setFlows] = useState<FlowSummary[]>([]);
   const [flowId, setFlowId] = useState("");
+  const [findingId, setFindingId] = useState("");
+  const [findingLabel, setFindingLabel] = useState("");
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +57,46 @@ export function LlmSidebar({
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
 
-  const run = async (action: LlmAction, prompt?: string) => {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const consume = async () => {
+      const pending = takeLlm();
+      if (!pending) {
+        return;
+      }
+      if (pending.flowId) {
+        setFlowId(pending.flowId);
+      }
+      if (pending.findingId) {
+        setFindingId(pending.findingId);
+        setFindingLabel(pending.title ?? pending.findingId);
+        try {
+          const finding = await window.lurkwire.getFinding(pending.findingId);
+          const kind = pending.action === "suggest" ? "suggest" : "explain";
+          const brief = localFindingBrief(finding, kind);
+          setTurns((current) => [
+            ...current,
+            { id: crypto.randomUUID(), role: "user", text: pending.title || finding.title, action: pending.action },
+            { id: crypto.randomUUID(), role: "assistant", text: brief, action: pending.action, provider: "local", model: "finding-brief" },
+          ]);
+        } catch {
+          // Fall through to the model call.
+        }
+      }
+      const keyReady = await window.lurkwire.hasLlmKey();
+      if (keyReady) {
+        void run(pending.action, pending.raw, { flowId: pending.flowId, findingId: pending.findingId });
+      }
+    };
+    void consume();
+    window.addEventListener("lurkwire:llm-pending", consume);
+    return () => window.removeEventListener("lurkwire:llm-pending", consume);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const run = async (action: LlmAction, prompt?: string, ids?: { flowId?: string; findingId?: string }) => {
     const raw = (prompt ?? input).trim();
     if (!raw && !flowId && action === "chat") {
       return;
@@ -75,7 +118,8 @@ export function LlmSidebar({
     try {
       const next = await window.lurkwire.llmComplete({
         action,
-        flowId: flowId || undefined,
+        flowId: ids?.flowId || flowId || undefined,
+        findingId: ids?.findingId || findingId || undefined,
         raw: raw || undefined,
       });
       setTurns((current) => [
@@ -140,6 +184,7 @@ export function LlmSidebar({
 
   return (
     <aside className="llm-sidebar" style={{ width }} aria-label="AI assistant">
+      {findingLabel ? <div className="llm-finding">Finding: {findingLabel}</div> : null}
       <div
         className="llm-resizer"
         role="separator"

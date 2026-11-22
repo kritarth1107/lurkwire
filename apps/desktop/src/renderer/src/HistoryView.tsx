@@ -7,6 +7,8 @@ import { AnnotationBar, addFlowHostToScope, copyClickjackPoc, copyCsrfPoc, copyF
 import { flowsToHar, harToString, type HarBody, type HarFlowInput } from "../../shared/harExport";
 import { downloadText } from "./downloadText";
 import { HttpViewer } from "./HttpViewer";
+import { FILTER_DSL_HINT, describeFlowFilter, parseFlowFilter } from "../../shared/flowFilter";
+import { deleteFilterPreset, listFilterPresets, saveFilterPreset, type SavedFilterPreset } from "../../shared/filterPresets";
 
 type ColId = "#" | "host" | "method" | "url" | "status" | "length" | "mime" | "title" | "tls" | "time";
 
@@ -89,6 +91,8 @@ export function HistoryView({ projectId, handlers }: Props) {
   const [tableHeight, setTableHeight] = useState(240);
   const { menu, setMenu } = useFlowContextMenu();
   const [exporting, setExporting] = useState(false);
+  const [presets, setPresets] = useState<SavedFilterPreset[]>(() => listFilterPresets());
+  const chips = describeFlowFilter(parseFlowFilter(query));
 
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(query), 200);
@@ -239,10 +243,60 @@ export function HistoryView({ projectId, handlers }: Props) {
       <div className="workbench-toolbar">
         <input
           type="search"
-          placeholder="Filter host, path, method…"
+          placeholder={FILTER_DSL_HINT}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          title={FILTER_DSL_HINT}
+          aria-label="Filter traffic with a query or DSL"
         />
+        <select
+          value=""
+          aria-label="Saved filters"
+          onChange={(event) => {
+            const id = event.target.value;
+            if (!id) {
+              return;
+            }
+            const preset = presets.find((item) => item.id === id);
+            if (preset) {
+              setQuery(preset.query);
+            }
+          }}
+        >
+          <option value="">Saved filters…</option>
+          {presets.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={!query.trim()}
+          onClick={() => {
+            const name = window.prompt("Name this filter", query.trim().slice(0, 40) || "Filter");
+            if (!name) {
+              return;
+            }
+            setPresets(saveFilterPreset(name, query));
+          }}
+        >
+          Save filter
+        </button>
+        {presets.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => {
+              const current = presets[0];
+              if (current && window.confirm(`Delete saved filter “${current.name}”?`)) {
+                setPresets(deleteFilterPreset(current.id));
+              }
+            }}
+            title="Delete the most recently saved filter"
+          >
+            Delete filter
+          </button>
+        ) : null}
         <label className="check">
           <input type="checkbox" checked={hideStatic} onChange={(event) => setHideStatic(event.target.checked)} />
           Hide static
@@ -251,6 +305,15 @@ export function HistoryView({ projectId, handlers }: Props) {
           {items.length}
           {total > items.length ? ` of ${total}` : ""} flows
         </span>
+        {chips.length > 0 ? (
+          <span className="filter-chips">
+            {chips.map((chip) => (
+              <span key={chip} className="chip">
+                {chip}
+              </span>
+            ))}
+          </span>
+        ) : null}
         <button type="button" disabled={exporting || items.length === 0} onClick={() => void exportHar()} title="Export the visible history (up to 250 flows) as a HAR 1.2 file">
           {exporting ? "Exporting HAR…" : "Export HAR"}
         </button>

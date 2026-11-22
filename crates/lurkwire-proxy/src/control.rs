@@ -21,7 +21,7 @@ use crate::intruder::{self, IntruderJob, IntruderStart};
 use crate::proxy::{send_active, send_repeater};
 use crate::scope::{NewScopeRule, ScopeKind, ScopeRule};
 use crate::store::AuditEntry;
-use crate::types::{Finding, FindingQuery, FlowQuery, Project, RepeaterSendRequest};
+use crate::types::{Finding, FindingQuery, FlowQuery, Project, RepeaterSendRequest, ScannerOptions};
 use crate::AppState;
 
 pub async fn run_control(listener: TcpListener, state: Arc<AppState>) -> anyhow::Result<()> {
@@ -57,6 +57,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/intruder", get(list_intruder).post(start_intruder))
         .route("/findings", get(list_findings))
         .route("/findings/{id}", get(get_finding))
+        .route("/scanner/settings", get(get_scanner_settings).put(put_scanner_settings))
         .route("/intruder/{id}", get(get_intruder))
         .route("/intruder/{id}/stop", post(stop_intruder))
         .layer(middleware::from_fn_with_state(state.clone(), require_token))
@@ -434,6 +435,13 @@ impl ApiError {
             message: message.to_string(),
         }
     }
+
+    fn internal(message: String) -> Self {
+        Self {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message,
+        }
+    }
 }
 
 impl From<GuardError> for ApiError {
@@ -740,3 +748,25 @@ fn kind_json(kind: &ScopeKind) -> &'static str {
         ScopeKind::Exclude => "exclude",
     }
 }
+
+async fn get_scanner_settings(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<ScannerOptions>, ApiError> {
+    state
+        .store
+        .scanner_options()
+        .map(Json)
+        .map_err(|err| ApiError::internal(err.to_string()))
+}
+
+async fn put_scanner_settings(
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<ScannerOptions>,
+) -> Result<Json<ScannerOptions>, ApiError> {
+    state
+        .store
+        .set_scanner_options(&body)
+        .map(Json)
+        .map_err(|err| ApiError::internal(err.to_string()))
+}
+

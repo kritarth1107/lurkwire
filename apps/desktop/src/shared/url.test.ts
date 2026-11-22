@@ -43,6 +43,7 @@ describe("internal pages", () => {
 
   it("parses every lurkwire:// host", () => {
     expect(parseInternalPage("lurkwire://downloads")).toBe("downloads");
+    expect(parseInternalPage("lurkwire://reader")).toBe("reader");
     expect(parseInternalPage("lurkwire://history#today")).toBe("history");
     expect(parseInternalPage("lurkwire://bookmarks/")).toBe("bookmarks");
     expect(parseInternalPage("lurkwire://extensions")).toBe("extensions");

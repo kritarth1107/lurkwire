@@ -77,6 +77,27 @@ pub struct FlowQuery {
     pub offset: Option<u32>,
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScannerOptions {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub in_scope_only: bool,
+}
+
+impl Default for ScannerOptions {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            in_scope_only: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RepeaterSendRequest {
     pub project_id: Option<String>,

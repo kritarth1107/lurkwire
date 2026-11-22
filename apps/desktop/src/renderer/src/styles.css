@@ -2763,3 +2763,114 @@ button.primary:hover, .primary:hover { background: var(--accent-hover); filter: 
   margin: 0;
   z-index: auto;
 }
+
+
+.find-case {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.filter-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+
+.filter-chips .chip {
+  font-size: var(--fs-xs);
+  padding: 2px 8px;
+}
+
+.repeater-history {
+  list-style: none;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  max-height: 140px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+}
+
+.repeater-history li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 6px;
+  font-size: var(--fs-xs);
+}
+
+.repeater-history li.active {
+  background: var(--surface-elevated);
+}
+
+.repeater-history li button:first-child {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.download-bar,
+.download-row .progress {
+  height: 4px;
+  margin-top: 4px;
+  background: var(--border-subtle);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.download-bar span,
+.download-row .progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.history-day {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-600);
+  margin: var(--space-4) 0 var(--space-2);
+  color: var(--text-secondary);
+}
+
+.reader-article {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-10);
+  font-size: 1.15rem;
+  line-height: 1.7;
+}
+
+.reader-article h2 {
+  font-size: 2rem;
+  line-height: 1.25;
+  margin: 0 0 var(--space-3);
+}
+
+.reader-byline {
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4);
+}
+
+.llm-finding {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.finding-brief {
+  white-space: pre-wrap;
+}
+
+.alltabs-row.active {
+  background: var(--surface-sunken);
+}
