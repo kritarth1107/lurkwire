@@ -28,6 +28,7 @@ import { ParamMinerView } from "../ParamMinerView";
 import { SmugglingView } from "../SmugglingView";
 import { ReportView } from "../ReportView";
 import { WebSocketView } from "../WebSocketView";
+import { CorsView } from "../CorsView";
 
 export function ToolWorkspace({
   state,
@@ -162,6 +163,8 @@ export function ToolWorkspace({
           <SiteMapView projectId={state.currentProjectId} handlers={handlers} />
         ) : panel === "recon" ? (
           <ReconView initialHost={host} />
+        ) : panel === "cors" ? (
+          <CorsView projectId={state.currentProjectId} />
         ) : (
           <div className="placeholder">
             <h3>{tool?.label ?? panel}</h3>

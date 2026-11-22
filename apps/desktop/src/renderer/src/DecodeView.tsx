@@ -9,6 +9,7 @@ import {
   unsignedJwt,
   verifyJwt,
 } from "../../shared/jwt";
+import { takeToolIntent } from "./workbench/pendingToolIntent";
 import { takeJwt } from "./pendingJwt";
 import { decodeAll, identifyHash } from "../../shared/decodeAll";
 import { EmptyState } from "./EmptyState";
@@ -17,6 +18,12 @@ type Tab = "jwt" | "encode" | "recipe" | "magic";
 
 export function DecodeView() {
   const [tab, setTab] = useState<Tab>("jwt");
+  useEffect(() => {
+    const intent = takeToolIntent();
+    if (intent === "jwt") {
+      setTab("jwt");
+    }
+  }, []);
   return (
     <div className="decode">
       <div className="workbench-toolbar">

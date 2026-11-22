@@ -25,6 +25,7 @@ describe("send-to routing", () => {
       "Send to Comparer",
       "Send to Workbench",
       "Copy as curl",
+      "Copy as fetch",
       "Copy URL",
       "Add to scope",
     ]);

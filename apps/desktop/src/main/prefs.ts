@@ -28,7 +28,17 @@ const SIDEBAR_PANELS = new Set<SidebarPanel>([
   "smuggling",
   "report",
   "websocket",
+  "cors",
 ]);
+
+
+function sanitizePinned(value: unknown): SidebarPanel[] {
+  if (!Array.isArray(value)) {
+    return [...DEFAULT_PREFS.pinnedTools];
+  }
+  const next = value.filter((item): item is SidebarPanel => SIDEBAR_PANELS.has(item as SidebarPanel));
+  return next.length ? Array.from(new Set(next)) : [...DEFAULT_PREFS.pinnedTools];
+}
 
 export function prefsPath(): string {
   return join(app.getPath("userData"), "prefs.json");
@@ -58,6 +68,7 @@ export function loadPrefs(): AppPrefs {
         connectors: { ...DEFAULT_LLM.connectors, ...(parsed.llm?.connectors ?? {}) },
         routing: { ...DEFAULT_LLM.routing, ...(parsed.llm?.routing ?? {}) },
       },
+      pinnedTools: sanitizePinned(parsed.pinnedTools),
     };
   } catch {
     return { ...DEFAULT_PREFS };

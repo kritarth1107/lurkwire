@@ -139,3 +139,23 @@ export function flowToCurl(flow: Pick<FlowDetail, "method" | "url" | "req_header
   }
   return parts.join(" ");
 }
+
+
+export function flowToFetch(flow: Pick<FlowDetail, "method" | "url" | "req_headers">, body?: string): string {
+  const headers: Record<string, string> = {};
+  for (const header of flow.req_headers) {
+    if (header.name.toLowerCase() === "content-length") {
+      continue;
+    }
+    headers[header.name] = header.value;
+  }
+  const lines = [`  method: ${JSON.stringify(flow.method)}`];
+  if (Object.keys(headers).length) {
+    const rendered = JSON.stringify(headers, null, 2).replace(/^/gm, "  ").trimStart();
+    lines.push(`  headers: ${rendered}`);
+  }
+  if (body) {
+    lines.push(`  body: ${JSON.stringify(body)}`);
+  }
+  return `fetch(${JSON.stringify(flow.url)}, {\n${lines.join(",\n")}\n});`;
+}

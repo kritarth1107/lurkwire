@@ -21,6 +21,7 @@ export const SEND_TO_ACTIONS: SendToAction[] = [
 export const FLOW_CONTEXT_ACTIONS = [
   ...SEND_TO_ACTIONS,
   { id: "copy-curl", label: "Copy as curl", shortcut: undefined },
+  { id: "copy-fetch", label: "Copy as fetch", shortcut: undefined },
   { id: "copy-url", label: "Copy URL", shortcut: undefined },
   { id: "add-scope", label: "Add to scope", shortcut: undefined },
 ] as const;

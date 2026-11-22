@@ -5,7 +5,7 @@ import { addComparerItem } from "./workbench";
 import { buildCsrfPoc } from "../../shared/csrf";
 import { buildClickjackPoc } from "../../shared/clickjack";
 import { base64ToBytes, fromBytes } from "../../shared/codec";
-import { flowToCurl } from "../../shared/http";
+import { flowToCurl, flowToFetch } from "../../shared/http";
 import { analyzeCors, corsProbeHeaders } from "../../shared/corsProbe";
 import { extractJwts } from "../../shared/jwt";
 import { queueJwt } from "./pendingJwt";
@@ -67,6 +67,17 @@ export async function copyCsrfPoc(id: string): Promise<void> {
 
 
 export async function copyFlowCurl(id: string): Promise<void> {
+  await copyFlowAs(id, flowToCurl);
+}
+
+export async function copyFlowFetch(id: string): Promise<void> {
+  await copyFlowAs(id, flowToFetch);
+}
+
+async function copyFlowAs(
+  id: string,
+  render: (flow: FlowDetail, body?: string) => string,
+): Promise<void> {
   const flow = await window.lurkwire.getFlow(id);
   let body = flow.req_preview ?? "";
   try {
@@ -77,7 +88,7 @@ export async function copyFlowCurl(id: string): Promise<void> {
   } catch {
     /* preview is enough */
   }
-  await window.lurkwire.copyText(flowToCurl(flow, body || undefined));
+  await window.lurkwire.copyText(render(flow, body || undefined));
 }
 
 
@@ -250,6 +261,9 @@ export function FlowContextMenu({
       </button>
       <button type="button" onClick={() => void copyFlowCurl(menu.flow.id)}>
         Copy as curl
+      </button>
+      <button type="button" onClick={() => void copyFlowFetch(menu.flow.id)}>
+        Copy as fetch
       </button>
       <button type="button" onClick={() => void addFlowHostToScope(menu.flow.id)}>
         Add to scope
