@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import type { Bookmark } from "../../../shared/types";
-import { BrandWordmark, BrandMark } from "../Brand";
+import { BrandWordmark } from "../Brand";
 
 export function NewTabPage({ product, theme }: { product: string; theme: "light" | "dark" }) {
   const [query, setQuery] = useState("");
@@ -21,8 +21,7 @@ export function NewTabPage({ product, theme }: { product: string; theme: "light"
 
   return (
     <div className="newtab">
-      <div className="newtab-brand">
-        <BrandMark className="mark-lg" title={product} />
+      <div className="newtab-brand" aria-label={product}>
         <BrandWordmark className="newtab-wordmark" theme={theme} />
       </div>
       <form className="newtab-search" onSubmit={onSubmit}>

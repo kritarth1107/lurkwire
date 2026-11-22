@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import type { AppSnapshot, FlowDetail, FlowSummary, LlmAction, LlmResult } from "../../../shared/types";
+import { Settings, Sparkles, X } from "lucide-react";
 import { Tooltip } from "./Tooltip";
 import { takeLlm } from "../workbench/pendingLlm";
 import { localFindingBrief } from "../../../shared/llmFinding";
@@ -206,14 +207,19 @@ export function LlmSidebar({
         }}
       />
       <div className="llm-head">
-        <div>
-          <strong>Assistant</strong>
-          <span className="meta">{hasKey ? "Key saved" : "BYO key or local Ollama"}</span>
+        <div className="llm-head-title">
+          <span className="llm-mark" aria-hidden="true">
+            <Sparkles size={16} strokeWidth={2} />
+          </span>
+          <div>
+            <strong>Assistant</strong>
+            <span className="meta">{hasKey ? "Key saved" : "BYO key or local Ollama"}</span>
+          </div>
         </div>
         <div className="llm-head-actions">
           <Tooltip label="AI settings">
             <button type="button" className="tb" aria-label="AI settings" onClick={() => void window.lurkwire.navigate("lurkwire://settings")}>
-              ⚙
+              <Settings size={16} />
             </button>
           </Tooltip>
           <button
@@ -222,7 +228,7 @@ export function LlmSidebar({
             aria-label="Close assistant"
             onClick={() => void window.lurkwire.setPrefs({ llmSidebarOpen: false })}
           >
-            ×
+            <X size={16} />
           </button>
         </div>
       </div>

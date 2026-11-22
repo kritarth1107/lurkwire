@@ -125,6 +125,7 @@ export function NavBar({
         : "insecure";
 
   return (
+    <div className={`navbar-cluster${open ? " suggest-open" : ""}`}>
     <div className="navbar">
       <Tooltip label="Back">
         <button
@@ -357,6 +358,14 @@ export function NavBar({
           <Menu size={16} />
         </button>
       </Tooltip>
+    </div>
+      {open ? (
+        <div
+          className="omnibox-slot"
+          style={{ height: Math.min(suggestions.length, 8) * 44 + 16 }}
+          aria-hidden="true"
+        />
+      ) : null}
     </div>
   );
 }
