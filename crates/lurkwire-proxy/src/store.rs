@@ -711,7 +711,7 @@ impl Store {
         let conn = self.conn.lock().expect("store lock");
         let prev_hash: String = conn
             .query_row(
-                "SELECT hash FROM audit_log ORDER BY ts DESC, id DESC LIMIT 1",
+                "SELECT hash FROM audit_log ORDER BY rowid DESC LIMIT 1",
                 [],
                 |row| row.get(0),
             )
@@ -757,7 +757,7 @@ impl Store {
                 "SELECT id, ts, actor, action, project_id, detail, prev_hash, hash
                  FROM audit_log
                  WHERE project_id IS NULL OR project_id = ?1
-                 ORDER BY ts ASC, id ASC
+                 ORDER BY rowid ASC
                  LIMIT ?2 OFFSET ?3",
             )?;
             let rows = stmt.query_map(params![pid, limit as i64, offset as i64], row_audit)?;
@@ -766,7 +766,7 @@ impl Store {
             let mut stmt = conn.prepare(
                 "SELECT id, ts, actor, action, project_id, detail, prev_hash, hash
                  FROM audit_log
-                 ORDER BY ts ASC, id ASC
+                 ORDER BY rowid ASC
                  LIMIT ?1 OFFSET ?2",
             )?;
             let rows = stmt.query_map(params![limit as i64, offset as i64], row_audit)?;
